@@ -46,8 +46,14 @@ export default async function ConfirmationPage({
 
               <dl className="mt-5 divide-y divide-latte overflow-hidden rounded-xl border border-latte">
                 <Item label="Package" value={booking.package_name} />
+                {booking.event_type && (
+                  <Item label="Event type" value={booking.event_type} />
+                )}
                 <Item label="Event date" value={formatDate(booking.event_date)} />
                 <Item label="Location" value={booking.event_location} />
+                {booking.guest_count && (
+                  <Item label="Guests" value={String(booking.guest_count)} />
+                )}
                 <Item
                   label="Amount paid"
                   value={formatMoney(booking.amount_paid_cents)}

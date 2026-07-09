@@ -3,6 +3,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { getSettings } from "@/lib/data";
 import { getPaymentProvider } from "@/lib/payments";
 import { generateReference } from "@/lib/reference";
+import { computeQuote } from "@/lib/pricing";
 import type { PaymentMethod } from "@/lib/types";
 
 export const runtime = "nodejs";
@@ -19,74 +20,113 @@ export async function POST(req: Request) {
   try {
     payload = await req.json();
   } catch {
-    return NextResponse.json({ error: "Invalid request." }, { status: 400 });
+    return bad("Invalid request.");
   }
 
   const {
-    package_id,
+    package_ids,
+    extra_hours,
     method,
-    event_date,
-    event_time,
-    event_location,
-    guest_count,
+    date,
+    time,
+    venue_city,
+    venue_name,
+    venue_address,
+    maps_link,
+    event_type,
+    guests,
     customer_name,
-    customer_email,
     customer_phone,
+    customer_email,
     notes,
   } = payload ?? {};
 
   // ---- validate ----
-  if (!package_id) return bad("Missing package.");
-  if (!event_date) return bad("Missing event date.");
-  if (!event_location?.trim()) return bad("Missing event location.");
+  if (!Array.isArray(package_ids) || package_ids.length === 0)
+    return bad("Please select at least one package.");
+  if (!date) return bad("Missing event date.");
+  if (!venue_city) return bad("Missing city.");
+  if (!venue_name?.trim()) return bad("Missing venue name.");
+  if (!venue_address?.trim()) return bad("Missing venue address.");
   if (!customer_name?.trim()) return bad("Missing name.");
-  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(customer_email ?? ""))
+  if (!/^[0-9+\-\s()]{7,}$/.test((customer_phone ?? "").trim()))
+    return bad("Invalid contact number.");
+  if (customer_email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(customer_email))
     return bad("Invalid email.");
-  if (!customer_phone?.trim()) return bad("Missing contact number.");
+  const guestCount = Number(guests);
+  if (!guestCount || guestCount < 20 || guestCount > 500)
+    return bad("Estimated guests must be between 20 and 500.");
+  if (!event_type) return bad("Missing event type.");
 
   const supabase = createAdminClient();
 
-  // ---- load package (server-trusted pricing) ----
-  const { data: pkg, error: pkgErr } = await supabase
+  // ---- ensure the date is still available ----
+  const { data: clash } = await supabase
+    .from("bookings")
+    .select("id")
+    .eq("event_date", date)
+    .in("status", ["confirmed", "paid", "completed"])
+    .limit(1);
+  if (clash && clash.length > 0)
+    return bad("Sorry, that date was just booked. Please choose another.");
+
+  // ---- load packages (server-trusted pricing) ----
+  const { data: pkgs, error: pkgErr } = await supabase
     .from("packages")
     .select("*")
-    .eq("id", package_id)
-    .eq("is_active", true)
-    .maybeSingle();
+    .in("id", package_ids)
+    .eq("is_active", true);
 
-  if (pkgErr) return bad("Could not load package.", 500);
-  if (!pkg) return bad("Selected package is unavailable.");
-
-  if (pkg.max_guests && guest_count && Number(guest_count) > pkg.max_guests) {
-    return bad(`This package serves up to ${pkg.max_guests} guests.`);
-  }
+  if (pkgErr) return bad("Could not load packages.", 500);
+  if (!pkgs || pkgs.length === 0)
+    return bad("Selected packages are unavailable.");
 
   const settings = await getSettings();
+  const quote = computeQuote(pkgs, Number(extra_hours) || 0, settings);
+
   const chosenMethod: PaymentMethod = settings.payment_methods.includes(method)
     ? method
-    : settings.payment_methods[0] ?? "gcash";
+    : (settings.payment_methods[0] ?? "gcash");
 
-  const dueCents = pkg.deposit_cents > 0 ? pkg.deposit_cents : pkg.price_cents;
   const reference = generateReference();
+  const combinedName = pkgs.map((p) => p.name).join(" + ");
+  const snapshot = pkgs.map((p) => ({
+    id: p.id,
+    name: p.name,
+    price_cents: p.price_cents,
+  }));
+  const totalHours =
+    pkgs.reduce((max, p) => Math.max(max, Number(p.duration_hours)), 0) +
+    (Number(extra_hours) || 0);
 
   // ---- create booking ----
   const { data: booking, error: bookErr } = await supabase
     .from("bookings")
     .insert({
       reference,
-      package_id: pkg.id,
-      package_name: pkg.name,
-      package_price_cents: pkg.price_cents,
+      package_id: pkgs[0].id,
+      package_ids: pkgs.map((p) => p.id),
+      packages_snapshot: snapshot,
+      package_name: combinedName,
+      package_price_cents: quote.totalCents,
+      extra_hours: Number(extra_hours) || 0,
+      extra_hours_cents: quote.extraHoursCents,
+      combo_discount_cents: quote.comboDiscountCents,
       customer_name: customer_name.trim(),
-      customer_email: customer_email.trim(),
+      customer_email: (customer_email ?? "").trim(),
       customer_phone: customer_phone.trim(),
-      event_date,
-      event_time: event_time || null,
-      event_duration_hours: pkg.duration_hours,
-      event_location: event_location.trim(),
-      guest_count: guest_count ? Number(guest_count) : null,
+      event_date: date,
+      event_time: time || null,
+      event_duration_hours: totalHours,
+      event_location: `${venue_name.trim()}, ${venue_address.trim()}, ${venue_city}`,
+      venue_city,
+      venue_name: venue_name.trim(),
+      venue_address: venue_address.trim(),
+      maps_link: maps_link || null,
+      event_type,
+      guest_count: guestCount,
       notes: (notes ?? "").trim(),
-      amount_due_cents: dueCents,
+      amount_due_cents: quote.depositCents,
       status: "pending",
     })
     .select("*")
@@ -96,17 +136,17 @@ export async function POST(req: Request) {
     return bad("Could not create booking. Please try again.", 500);
   }
 
-  // ---- create payment + provider checkout ----
+  // ---- create payment + provider checkout for the deposit ----
   try {
     const provider = getPaymentProvider(settings.payment_provider);
     const checkout = await provider.createCheckout({
       bookingId: booking.id,
       reference: booking.reference,
-      amountCents: dueCents,
+      amountCents: quote.depositCents,
       currency: settings.currency,
-      description: `Still Café — ${pkg.name} (${booking.reference})`,
+      description: `Still Café deposit — ${combinedName} (${booking.reference})`,
       customerName: booking.customer_name,
-      customerEmail: booking.customer_email,
+      customerEmail: booking.customer_email || "noreply@example.com",
       customerPhone: booking.customer_phone,
       methods: [chosenMethod],
       successUrl: `${siteUrl()}/book/confirmation?ref=${booking.reference}`,
@@ -117,7 +157,7 @@ export async function POST(req: Request) {
       booking_id: booking.id,
       provider: checkout.provider,
       method: chosenMethod,
-      amount_cents: dueCents,
+      amount_cents: quote.depositCents,
       currency: settings.currency,
       status: "pending",
       provider_ref: checkout.providerRef,
@@ -128,13 +168,11 @@ export async function POST(req: Request) {
       checkoutUrl: checkout.checkoutUrl,
     });
   } catch (e) {
-    // Roll the booking back to a clean state so it isn't left orphaned.
     await supabase
       .from("bookings")
       .update({ status: "cancelled" })
       .eq("id", booking.id);
-    const message =
-      e instanceof Error ? e.message : "Could not start payment.";
+    const message = e instanceof Error ? e.message : "Could not start payment.";
     return bad(message, 502);
   }
 }

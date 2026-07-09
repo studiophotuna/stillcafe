@@ -48,6 +48,7 @@ export default async function BookingsPage() {
                   <div className="mt-1 text-sm text-espresso/70">
                     {b.package_name} · {formatDate(b.event_date)}
                     {b.event_time ? ` at ${b.event_time}` : ""}
+                    {b.event_type ? ` · ${b.event_type}` : ""}
                   </div>
                   <div className="mt-1 text-sm text-espresso/60">
                     📍 {b.event_location}

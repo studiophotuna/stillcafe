@@ -102,7 +102,44 @@ export async function getSettings(): Promise<Settings> {
       business_name: "Still Café",
       business_email: null,
       currency: "PHP",
+      deposit_percent: 50,
+      combo_discount_cents: 250000,
+      combo_min_packages: 2,
+      extra_hour_cents: 150000,
+      standard_hours: 3,
+      service_area: "Metro Manila",
+      service_cities: [
+        "Manila",
+        "Makati",
+        "Taguig",
+        "Pasig",
+        "Quezon City",
+        "Mandaluyong",
+        "San Juan",
+        "Pasay",
+        "Paranaque",
+        "Muntinlupa",
+        "Las Pinas",
+        "Marikina",
+        "Caloocan",
+      ],
       updated_at: new Date().toISOString(),
     }
   );
+}
+
+/**
+ * Dates that already have a reserved booking (confirmed/paid/completed), so the
+ * availability calendar can mark them as unavailable. Only future dates.
+ */
+export async function getBookedDates(): Promise<string[]> {
+  const supabase = createAdminClient();
+  const today = new Date().toISOString().split("T")[0];
+  const { data, error } = await supabase
+    .from("bookings")
+    .select("event_date")
+    .in("status", ["confirmed", "paid", "completed"])
+    .gte("event_date", today);
+  if (error) throw error;
+  return Array.from(new Set((data ?? []).map((r) => r.event_date as string)));
 }

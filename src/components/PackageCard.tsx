@@ -52,15 +52,8 @@ export function PackageCard({
         </div>
 
         <div className="mt-5 flex items-center justify-between border-t border-latte pt-5">
-          <div>
-            <div className="text-lg font-semibold text-espresso">
-              {formatMoney(pkg.price_cents)}
-            </div>
-            {pkg.deposit_cents > 0 && (
-              <div className="text-xs text-espresso/60">
-                {formatMoney(pkg.deposit_cents)} deposit to book
-              </div>
-            )}
+          <div className="text-lg font-semibold text-espresso">
+            {formatMoney(pkg.price_cents)}
           </div>
           <Link href={href} className="btn-primary">
             {cta}

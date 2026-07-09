@@ -6,6 +6,17 @@ import { requireUser } from "@/lib/auth";
 import { toCents } from "@/lib/format";
 import type { BookingStatus, PaymentMethod } from "@/lib/types";
 
+function clampInt(
+  value: FormDataEntryValue | null,
+  fallback: number,
+  min: number,
+  max: number
+): number {
+  const n = Number(value);
+  if (!isFinite(n)) return fallback;
+  return Math.min(max, Math.max(min, Math.round(n)));
+}
+
 function slugify(input: string): string {
   return input
     .toLowerCase()
@@ -113,6 +124,12 @@ export async function saveSettings(formData: FormData) {
       payment_methods: methods.length ? methods : ["gcash"],
       business_name: (formData.get("business_name") as string) || "Still Café",
       business_email: (formData.get("business_email") as string) || null,
+      deposit_percent: clampInt(formData.get("deposit_percent"), 50, 1, 100),
+      standard_hours: Number(formData.get("standard_hours")) || 3,
+      combo_discount_cents: toCents((formData.get("combo_discount") as string) || "0"),
+      combo_min_packages: clampInt(formData.get("combo_min_packages"), 2, 1, 10),
+      extra_hour_cents: toCents((formData.get("extra_hour_price") as string) || "0"),
+      service_area: (formData.get("service_area") as string) || "Metro Manila",
     })
     .eq("id", 1);
 

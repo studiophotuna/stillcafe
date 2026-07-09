@@ -14,16 +14,23 @@ Built with **Next.js (App Router)**, **Supabase** (Postgres + Auth + Storage),
 
 **Customer**
 - Landing page with packages and a "How it works" section
-- Multi-step **Book an Event** flow: choose package → event details → your
-  details → review & pay
-- Online payment via PayMongo (GCash, card, GrabPay, Maya) — deposit or full
+- A **7-step Book-an-Event wizard** with a sidebar (what to expect, FAQ,
+  support), modeled on the reference site's flow:
+  1. Policies → 2. FAQ → 3. **Availability calendar** (booked dates disabled) →
+  4. **Multi-select packages** + extra hours (with combo discount) →
+  5. Event schedule (city, venue, address, maps) → 6. Contact + headcount +
+  event type → 7. Terms
+- A **live quote summary** that totals packages + overtime − combo discount and
+  shows the deposit due now
+- Online **deposit payment** via PayMongo (GCash, card, GrabPay, Maya)
 - Booking confirmation with a reference number
 
 **Admin** (`/admin`, Supabase email/password auth)
 - Overview with booking stats and upcoming events
 - Bookings list with status management
 - **Packages CRUD** with image upload
-- Settings: pick the payment provider and enabled methods
+- Settings: payment provider & methods, **deposit %, extra-hour price, combo
+  discount, service area, standard coverage**
 
 ---
 
@@ -42,7 +49,8 @@ order (SQL Editor, or the Supabase CLI):
 
 1. `supabase/migrations/0001_init.sql` — tables, RLS, triggers
 2. `supabase/migrations/0002_storage.sql` — package-images storage bucket
-3. `supabase/seed.sql` — *(optional)* sample packages
+3. `supabase/migrations/0003_wizard.sql` — multi-package / wizard fields
+4. `supabase/seed.sql` — *(optional)* sample packages
 
 Create your admin user under **Authentication → Users → Add user** (email +
 password). Anyone with a Supabase auth account can access `/admin`.
@@ -125,10 +133,16 @@ supabase/
 
 ## Data model
 
-- **packages** — the coffee-cart offerings (price, deposit, inclusions, image)
-- **bookings** — customer event bookings with status + snapshot of package price
+- **packages** — the coffee-cart offerings (price, duration, inclusions, image)
+- **bookings** — event bookings with one or more packages (`packages_snapshot`),
+  extra hours, combo discount, venue/city/event-type, status, and a snapshot of
+  the grand total
 - **payments** — payment attempts per booking (provider ref, method, status)
-- **settings** — single row: active provider, enabled methods, business info
+- **settings** — single row: active provider, enabled methods, business info,
+  deposit %, extra-hour price, combo discount, service area
+
+Pricing is computed in one place (`src/lib/pricing.ts`) shared by the client's
+live quote and the server's authoritative total, so they can never diverge.
 
 Prices are stored in **centavos** (integers) to avoid floating-point issues.
 

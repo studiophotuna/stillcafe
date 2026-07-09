@@ -44,6 +44,78 @@ export default async function SettingsPage() {
                 className="field-input"
               />
             </div>
+            <div>
+              <label className="field-label">Service area</label>
+              <input
+                name="service_area"
+                defaultValue={settings.service_area}
+                className="field-input"
+              />
+            </div>
+            <div>
+              <label className="field-label">Standard coverage (hours)</label>
+              <input
+                name="standard_hours"
+                type="number"
+                step="0.5"
+                min="1"
+                defaultValue={settings.standard_hours}
+                className="field-input"
+              />
+            </div>
+          </div>
+        </div>
+
+        <div className="card p-6">
+          <h2 className="font-serif text-lg font-semibold text-espresso">
+            Pricing rules
+          </h2>
+          <div className="mt-4 grid gap-4 sm:grid-cols-2">
+            <div>
+              <label className="field-label">Deposit (%)</label>
+              <input
+                name="deposit_percent"
+                type="number"
+                min="1"
+                max="100"
+                defaultValue={settings.deposit_percent}
+                className="field-input"
+              />
+            </div>
+            <div>
+              <label className="field-label">Extra hour price (₱)</label>
+              <input
+                name="extra_hour_price"
+                type="number"
+                step="0.01"
+                min="0"
+                defaultValue={settings.extra_hour_cents / 100}
+                className="field-input"
+              />
+            </div>
+            <div>
+              <label className="field-label">Combo discount (₱)</label>
+              <input
+                name="combo_discount"
+                type="number"
+                step="0.01"
+                min="0"
+                defaultValue={settings.combo_discount_cents / 100}
+                className="field-input"
+              />
+            </div>
+            <div>
+              <label className="field-label">
+                Min. packages for combo discount
+              </label>
+              <input
+                name="combo_min_packages"
+                type="number"
+                min="1"
+                defaultValue={settings.combo_min_packages}
+                className="field-input"
+              />
+            </div>
           </div>
         </div>
 

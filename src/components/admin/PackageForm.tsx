@@ -65,18 +65,6 @@ export function PackageForm({
           />
         </div>
         <div>
-          <label className="field-label">Deposit (₱) — 0 for full payment</label>
-          <input
-            name="deposit"
-            type="number"
-            step="0.01"
-            min="0"
-            defaultValue={pkg ? pkg.deposit_cents / 100 : "0"}
-            className="field-input"
-          />
-        </div>
-
-        <div>
           <label className="field-label">Duration (hours)</label>
           <input
             name="duration_hours"

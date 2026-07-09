@@ -22,12 +22,23 @@ export type BookingStatus =
   | "completed"
   | "cancelled";
 
+export type PackageSnapshot = {
+  id: string;
+  name: string;
+  price_cents: number;
+};
+
 export type Booking = {
   id: string;
   reference: string;
   package_id: string | null;
+  package_ids: string[];
+  packages_snapshot: PackageSnapshot[];
   package_name: string;
   package_price_cents: number;
+  extra_hours: number;
+  extra_hours_cents: number;
+  combo_discount_cents: number;
   customer_name: string;
   customer_email: string;
   customer_phone: string;
@@ -35,6 +46,11 @@ export type Booking = {
   event_time: string | null;
   event_duration_hours: number | null;
   event_location: string;
+  venue_city: string | null;
+  venue_name: string | null;
+  venue_address: string | null;
+  maps_link: string | null;
+  event_type: string | null;
   guest_count: number | null;
   notes: string;
   amount_due_cents: number;
@@ -74,5 +90,12 @@ export type Settings = {
   business_name: string;
   business_email: string | null;
   currency: string;
+  deposit_percent: number;
+  combo_discount_cents: number;
+  combo_min_packages: number;
+  extra_hour_cents: number;
+  standard_hours: number;
+  service_area: string;
+  service_cities: string[];
   updated_at: string;
 };
