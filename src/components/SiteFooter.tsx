@@ -1,23 +1,14 @@
-import Link from "next/link";
-
 export function SiteFooter() {
   return (
-    <footer className="border-t border-latte bg-cream">
-      <div className="mx-auto flex max-w-6xl flex-col items-center justify-between gap-4 px-5 py-8 text-sm text-espresso/70 sm:flex-row">
+    <footer className="border-t border-latte/40 bg-sand/50">
+      <div className="mx-auto flex max-w-6xl items-center justify-between px-5 py-6 text-xs text-espresso/50">
         <div className="flex items-center gap-2">
-          <span>☕</span>
-          <span className="font-serif font-semibold">Still Café</span>
-          <span className="text-espresso/40">·</span>
-          <span>Mobile coffee cart</span>
+          <div className="flex h-5 w-5 items-center justify-center rounded-full bg-espresso/10 text-[8px] font-bold text-espresso/60">
+            SC
+          </div>
+          <span>Still Caf&eacute; &middot; Mobile Coffee Cart</span>
         </div>
-        <div className="flex items-center gap-5">
-          <Link href="/book" className="hover:text-mocha">
-            Book an Event
-          </Link>
-          <Link href="/admin" className="hover:text-mocha">
-            Admin
-          </Link>
-        </div>
+        <span>&copy; {new Date().getFullYear()}</span>
       </div>
     </footer>
   );

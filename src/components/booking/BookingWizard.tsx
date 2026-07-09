@@ -15,10 +15,10 @@ type Props = {
 
 const STEP_TITLES = [
   "Before you book",
-  "Booking FAQ",
+  "FAQ",
   "Choose date",
   "Packages",
-  "Event schedule",
+  "Event details",
   "Contact",
   "Confirm",
 ];
@@ -170,58 +170,57 @@ export function BookingWizard({
   const showQuote = selectedPackages.length > 0 && step >= 3;
 
   return (
-    <div className="overflow-hidden rounded-3xl border border-latte bg-white shadow-sm">
-      {/* Dark header */}
-      <div className="relative overflow-hidden bg-espresso p-6">
-        <div className="pointer-events-none absolute inset-0 bg-gradient-to-br from-mocha/30 via-transparent to-caramel/10" />
-        <div className="relative z-10 flex items-center justify-between gap-4">
-          <div>
-            <h2 className="text-2xl font-extrabold leading-tight text-cream">
-              Request a booking quote
-            </h2>
-            <p className="mt-1 text-xs text-cream/60">
-              Read the rules, pick a date, and configure your cart in one flow.
-            </p>
-          </div>
-          <div className="hidden shrink-0 grid-cols-2 gap-2 sm:grid">
-            <Stat value={`${settings.standard_hours} hrs`} label="Standard" />
-            <Stat value={`${settings.deposit_percent}%`} label="Deposit" />
+    <div className="card overflow-hidden">
+      {/* Header */}
+      <div className="relative overflow-hidden bg-espresso px-6 py-5 sm:px-8">
+        <div className="absolute inset-0 bg-gradient-to-br from-mocha/20 via-transparent to-caramel/10" />
+        <div className="relative z-10">
+          <div className="flex items-start justify-between gap-4">
+            <div>
+              <h2 className="font-serif text-xl font-semibold text-cream sm:text-2xl">
+                Booking Form
+              </h2>
+              <p className="mt-1 text-[11px] text-cream/40">
+                Step {step + 1} of {STEP_TITLES.length} &middot;{" "}
+                {STEP_TITLES[step]}
+              </p>
+            </div>
+            <div className="hidden gap-2 sm:flex">
+              <StatPill value={`${settings.standard_hours}h`} label="Standard" />
+              <StatPill
+                value={`${settings.deposit_percent}%`}
+                label="Deposit"
+              />
+            </div>
           </div>
         </div>
       </div>
 
+      {/* Progress bar */}
+      <div className="flex gap-1 bg-espresso/5 px-6 py-3 sm:px-8">
+        {STEP_TITLES.map((t, i) => (
+          <div key={t} className="flex-1">
+            <div
+              className={`h-1 rounded-full transition-all duration-300 ${
+                i < step
+                  ? "bg-caramel"
+                  : i === step
+                    ? "bg-mocha"
+                    : "bg-latte/60"
+              }`}
+            />
+          </div>
+        ))}
+      </div>
+
       {/* Body */}
       <div className="p-6 sm:p-8">
-        {/* Progress dots */}
-        <div className="mb-6 grid grid-cols-7 gap-2">
-          {STEP_TITLES.map((t, i) => (
-            <div key={t} className="flex flex-col items-center gap-1">
-              <div
-                className={`h-2 w-full rounded-full ${
-                  i < step
-                    ? "bg-caramel"
-                    : i === step
-                      ? "bg-mocha"
-                      : "bg-latte"
-                }`}
-              />
-              <span
-                className={`hidden text-[9px] font-bold uppercase sm:block ${
-                  i === step ? "text-mocha" : "text-espresso/40"
-                }`}
-              >
-                {t}
-              </span>
-            </div>
-          ))}
-        </div>
-
-        <div className="min-h-[280px] space-y-4">
+        <div className="min-h-[300px] animate-fade-in">
           {step === 0 && <PoliciesStep settings={settings} />}
           {step === 1 && <FaqStep settings={settings} />}
           {step === 2 && (
             <div>
-              <StepTitle>1. Choose an available date</StepTitle>
+              <StepTitle>Choose an available date</StepTitle>
               <AvailabilityCalendar
                 bookedDates={bookedDates}
                 selected={date}
@@ -286,54 +285,59 @@ export function BookingWizard({
 
         {/* Live quote summary */}
         {showQuote && (
-          <div
-            className="mt-4 space-y-3 rounded-xl border border-espresso/10 bg-espresso p-4 text-cream"
-            aria-live="polite"
-          >
-            <h4 className="border-b border-cream/15 pb-2 text-sm font-bold">
-              Estimated Total
-            </h4>
-            <ul className="space-y-1 text-xs">
-              {quote.lines.map((l, i) => (
-                <li key={i} className="flex justify-between">
-                  <span className="text-cream/70">{l.label}</span>
-                  <span
-                    className={l.amountCents < 0 ? "text-caramel" : "text-cream"}
+          <div className="mt-6 overflow-hidden rounded-xl border border-espresso/10 bg-espresso">
+            <div className="p-4">
+              <h4 className="text-[10px] font-bold uppercase tracking-widest text-cream/40">
+                Estimated Total
+              </h4>
+              <ul className="mt-3 space-y-1.5">
+                {quote.lines.map((l, i) => (
+                  <li
+                    key={i}
+                    className="flex items-center justify-between text-xs"
                   >
-                    {l.amountCents < 0 ? "−" : ""}
-                    {formatMoney(Math.abs(l.amountCents))}
-                  </span>
-                </li>
-              ))}
-            </ul>
-            <div className="flex items-baseline justify-between border-t border-cream/15 pt-2 font-bold">
-              <span className="text-xs">Estimated invoice</span>
-              <strong className="text-2xl text-caramel">
-                {formatMoney(quote.totalCents)}
-              </strong>
+                    <span className="text-cream/50">{l.label}</span>
+                    <span
+                      className={
+                        l.amountCents < 0 ? "text-caramel" : "text-cream/80"
+                      }
+                    >
+                      {l.amountCents < 0 ? "-" : ""}
+                      {formatMoney(Math.abs(l.amountCents))}
+                    </span>
+                  </li>
+                ))}
+              </ul>
             </div>
-            <div className="flex items-baseline justify-between text-xs text-cream/70">
-              <span>{settings.deposit_percent}% deposit due now</span>
-              <span className="font-bold text-cream">
-                {formatMoney(quote.depositCents)}
+            <div className="flex items-center justify-between border-t border-cream/10 bg-cream/5 px-4 py-3">
+              <div>
+                <span className="text-[10px] font-bold uppercase tracking-wider text-cream/40">
+                  {settings.deposit_percent}% deposit due now
+                </span>
+                <strong className="ml-3 text-lg font-bold text-caramel">
+                  {formatMoney(quote.depositCents)}
+                </strong>
+              </div>
+              <span className="text-xs text-cream/30">
+                Total: {formatMoney(quote.totalCents)}
               </span>
             </div>
           </div>
         )}
 
         {error && (
-          <div className="mt-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-center text-xs font-bold text-red-700">
+          <div className="mt-4 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-center text-xs font-medium text-red-600">
             {error}
           </div>
         )}
 
         {/* Actions */}
-        <div className="flex gap-3 pt-4">
+        <div className="mt-6 flex gap-3">
           <button
             type="button"
             onClick={back}
             disabled={step === 0 || submitting}
-            className="btn w-1/3 border border-latte py-3 font-extrabold text-espresso hover:bg-cream disabled:opacity-40"
+            className="btn-secondary w-1/3 py-3 disabled:opacity-30"
           >
             Back
           </button>
@@ -341,20 +345,20 @@ export function BookingWizard({
             <button
               type="button"
               onClick={next}
-              className="btn-primary w-2/3 py-3 font-extrabold"
+              className="btn-primary w-2/3 py-3"
             >
-              Next
+              Continue
             </button>
           ) : (
             <button
               type="button"
               onClick={submit}
               disabled={submitting}
-              className="btn w-2/3 bg-sage py-3 font-extrabold text-white hover:opacity-90 disabled:opacity-50"
+              className="btn w-2/3 bg-sage py-3 font-bold text-white shadow-soft hover:opacity-90 active:scale-[0.98] disabled:opacity-50"
             >
               {submitting
-                ? "Redirecting to payment…"
-                : `Reserve & pay ${formatMoney(quote.depositCents)} deposit`}
+                ? "Redirecting to payment..."
+                : `Pay ${formatMoney(quote.depositCents)} deposit`}
             </button>
           )}
         </div>
@@ -363,28 +367,38 @@ export function BookingWizard({
   );
 }
 
-function Stat({ value, label }: { value: string; label: string }) {
+function StatPill({ value, label }: { value: string; label: string }) {
   return (
-    <div className="rounded-xl border border-cream/10 bg-cream/5 p-3 text-center">
-      <strong className="block text-base font-bold text-cream">{value}</strong>
-      <span className="text-[10px] text-cream/50">{label}</span>
+    <div className="rounded-lg border border-cream/10 bg-cream/5 px-3 py-1.5 text-center">
+      <strong className="block text-sm font-bold text-cream">{value}</strong>
+      <span className="text-[9px] text-cream/40">{label}</span>
     </div>
   );
 }
 
 function StepTitle({ children }: { children: React.ReactNode }) {
   return (
-    <h4 className="mb-3 text-sm font-extrabold uppercase tracking-wider text-espresso">
+    <h4 className="mb-4 text-xs font-bold uppercase tracking-wider text-espresso/50">
       {children}
     </h4>
   );
 }
 
-function InfoCard({ title, children }: { title: string; children: React.ReactNode }) {
+function InfoCard({
+  title,
+  children,
+}: {
+  title: string;
+  children: React.ReactNode;
+}) {
   return (
-    <div className="rounded-xl border border-latte bg-cream/40 p-3">
-      <strong className="block text-espresso">{title}</strong>
-      <span className="text-espresso/70">{children}</span>
+    <div className="rounded-xl border border-latte/60 bg-sand/40 p-4">
+      <strong className="block text-sm font-semibold text-espresso">
+        {title}
+      </strong>
+      <span className="mt-1 block text-xs leading-relaxed text-espresso/60">
+        {children}
+      </span>
     </div>
   );
 }
@@ -393,7 +407,10 @@ function PoliciesStep({ settings }: { settings: Settings }) {
   return (
     <div>
       <StepTitle>Before you book</StepTitle>
-      <div className="space-y-3 text-xs text-espresso/70">
+      <p className="mb-4 text-sm text-espresso/60">
+        Please review these important details before proceeding.
+      </p>
+      <div className="space-y-3">
         <InfoCard title={`${settings.service_area} Area`}>
           {settings.business_name} currently services {settings.service_area}{" "}
           bookings exclusively.
@@ -406,6 +423,10 @@ function PoliciesStep({ settings }: { settings: Settings }) {
           We typically arrive 1 to 2 hours before the event start time for
           assembly and testing.
         </InfoCard>
+        <InfoCard title="What We Bring">
+          A beautiful mobile espresso bar, premium beans, a friendly barista, and
+          all equipment needed. Setup and teardown included.
+        </InfoCard>
       </div>
     </div>
   );
@@ -414,8 +435,8 @@ function PoliciesStep({ settings }: { settings: Settings }) {
 function FaqStep({ settings }: { settings: Settings }) {
   return (
     <div>
-      <StepTitle>Booking FAQ</StepTitle>
-      <div className="space-y-3 text-xs text-espresso/70">
+      <StepTitle>Frequently Asked Questions</StepTitle>
+      <div className="space-y-3">
         <InfoCard title="Does this form confirm my reservation?">
           No. Reservation is secured only after the {settings.deposit_percent}%
           deposit is paid and verified.
@@ -423,6 +444,14 @@ function FaqStep({ settings }: { settings: Settings }) {
         <InfoCard title="How many guests can I input?">
           Expected headcount from 20 to 500 can be validated for smooth cart
           operations.
+        </InfoCard>
+        <InfoCard title="Can I cancel after paying the deposit?">
+          The deposit is non-refundable, but you can reschedule to another
+          available date subject to availability.
+        </InfoCard>
+        <InfoCard title="What if my event runs overtime?">
+          Extra hours can be added during booking or coordinated before the event
+          day.
         </InfoCard>
       </div>
     </div>
@@ -448,18 +477,16 @@ function PackagesStep({
 }) {
   return (
     <div>
-      <StepTitle>2. Select packages and coverage</StepTitle>
-      <div className="mb-3 flex items-center justify-between">
-        <p className="text-xs font-bold text-espresso/70">
-          Select one or more packages
-        </p>
-        <p className="text-[10px] font-bold text-mocha">
-          Combo discount: {formatMoney(settings.combo_discount_cents)} off when{" "}
+      <StepTitle>Select packages and coverage</StepTitle>
+      <div className="mb-4 flex items-center justify-between">
+        <p className="text-xs text-espresso/50">Select one or more packages</p>
+        <p className="text-[10px] font-medium text-caramel">
+          {formatMoney(settings.combo_discount_cents)} off when{" "}
           {settings.combo_min_packages}+ selected
         </p>
       </div>
 
-      <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
         {packages.map((p) => {
           const active = selectedIds.includes(p.id);
           return (
@@ -467,40 +494,47 @@ function PackagesStep({
               key={p.id}
               type="button"
               onClick={() => onToggle(p.id)}
-              className={`rounded-xl border p-3 text-left transition ${
+              className={`group rounded-xl border p-4 text-left transition-all duration-200 ${
                 active
-                  ? "border-mocha bg-mocha/10 ring-1 ring-mocha/30"
-                  : "border-latte bg-white hover:border-mocha/40"
+                  ? "border-mocha bg-mocha/5 shadow-soft"
+                  : "border-latte/60 bg-white hover:border-mocha/30 hover:shadow-soft"
               }`}
             >
-              <div className="flex items-center justify-between gap-2">
-                <span className="text-sm font-bold text-espresso">{p.name}</span>
-                <span
-                  className={`flex h-5 w-5 items-center justify-center rounded-full border text-[10px] ${
+              <div className="flex items-start justify-between gap-2">
+                <div className="min-w-0">
+                  <span className="block text-sm font-semibold text-espresso">
+                    {p.name}
+                  </span>
+                  <span className="mt-1 block text-xs text-espresso/50">
+                    {formatMoney(p.price_cents)} &middot; {p.duration_hours}h
+                  </span>
+                </div>
+                <div
+                  className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-full border text-[10px] transition-all ${
                     active
                       ? "border-mocha bg-mocha text-cream"
-                      : "border-latte text-transparent"
+                      : "border-latte text-transparent group-hover:border-mocha/30"
                   }`}
                 >
                   ✓
-                </span>
+                </div>
               </div>
-              <div className="mt-1 text-xs text-espresso/60">
-                {formatMoney(p.price_cents)} · {p.duration_hours}h
-              </div>
+              {p.description && (
+                <p className="mt-2 text-[11px] leading-relaxed text-espresso/40">
+                  {p.description}
+                </p>
+              )}
             </button>
           );
         })}
       </div>
 
-      <div className="mt-4">
-        <label className="mb-2 block text-xs font-extrabold uppercase text-espresso">
-          Extra hours
-        </label>
+      <div className="mt-5">
+        <label className="field-label">Extra hours</label>
         <select
           value={extraHours}
           onChange={(e) => onExtraHours(Number(e.target.value))}
-          className="w-full rounded-xl border border-latte px-4 py-3 text-xs outline-none focus:border-mocha"
+          className="field-input"
         >
           <option value={0}>No extra hours</option>
           {[1, 2, 3].map((h) => (
@@ -512,30 +546,29 @@ function PackagesStep({
         </select>
       </div>
 
-      <div className="mt-4 space-y-1.5 rounded-xl border border-latte bg-cream/40 p-4">
-        {quote.lines.length === 0 ? (
-          <h4 className="text-sm font-bold text-espresso">
-            Select packages to see inclusions
+      {selectedIds.length > 0 && (
+        <div className="mt-5 space-y-2 rounded-xl border border-latte/40 bg-sand/30 p-4">
+          <h4 className="text-[10px] font-bold uppercase tracking-wider text-espresso/40">
+            Your selection
           </h4>
-        ) : (
-          <>
-            <h4 className="text-sm font-bold text-espresso">Your selection</h4>
-            {packages
-              .filter((p) => selectedIds.includes(p.id))
-              .map((p) => (
-                <div key={p.id} className="text-xs text-espresso/70">
-                  <span className="font-bold text-espresso">{p.name}</span>
-                  {p.inclusions.length > 0 && (
-                    <span> — {p.inclusions.join(", ")}</span>
-                  )}
-                </div>
-              ))}
-          </>
-        )}
-      </div>
+          {packages
+            .filter((p) => selectedIds.includes(p.id))
+            .map((p) => (
+              <div key={p.id} className="text-xs text-espresso/60">
+                <span className="font-semibold text-espresso">{p.name}</span>
+                {p.inclusions.length > 0 && (
+                  <span> — {p.inclusions.join(", ")}</span>
+                )}
+              </div>
+            ))}
+        </div>
+      )}
     </div>
   );
 }
+
+const inputCls =
+  "field-input";
 
 function Field({
   label,
@@ -545,17 +578,12 @@ function Field({
   children: React.ReactNode;
 }) {
   return (
-    <div className="space-y-2">
-      <label className="block text-xs font-extrabold uppercase text-espresso">
-        {label}
-      </label>
+    <div>
+      <label className="field-label">{label}</label>
       {children}
     </div>
   );
 }
-
-const inputCls =
-  "w-full rounded-xl border border-latte px-4 py-3 text-xs outline-none focus:border-mocha";
 
 function ScheduleStep({
   settings,
@@ -586,15 +614,15 @@ function ScheduleStep({
 }) {
   return (
     <div className="space-y-4">
-      <StepTitle>3. Event schedule</StepTitle>
+      <StepTitle>Event schedule &amp; venue</StepTitle>
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
         <Field label="Date of event">
           <input
             type="text"
             readOnly
             value={date ?? ""}
-            placeholder="Select on calendar (Step 1)"
-            className={`${inputCls} bg-cream/60`}
+            placeholder="Selected in previous step"
+            className={`${inputCls} bg-sand/40`}
           />
         </Field>
         <Field label="Start time">
@@ -622,7 +650,7 @@ function ScheduleStep({
         <input
           value={venueName}
           onChange={(e) => onVenueName(e.target.value)}
-          placeholder="Example: The Blue Leaf Events Pavilion"
+          placeholder="e.g. The Blue Leaf Events Pavilion"
           className={inputCls}
         />
       </Field>
@@ -634,12 +662,12 @@ function ScheduleStep({
           className={inputCls}
         />
       </Field>
-      <Field label="Google Maps Link (Optional)">
+      <Field label="Google Maps link (optional)">
         <input
           type="url"
           value={mapsLink}
           onChange={(e) => onMapsLink(e.target.value)}
-          placeholder="Optional pinned location url"
+          placeholder="Optional pinned location URL"
           className={inputCls}
         />
       </Field>
@@ -676,16 +704,17 @@ function ContactStep({
 }) {
   return (
     <div className="space-y-4">
-      <StepTitle>4. Contact and event details</StepTitle>
+      <StepTitle>Contact &amp; event details</StepTitle>
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-        <Field label="Full Name">
+        <Field label="Full name">
           <input
             value={name}
             onChange={(e) => onName(e.target.value)}
+            placeholder="Your complete name"
             className={inputCls}
           />
         </Field>
-        <Field label="Contact Number">
+        <Field label="Contact number">
           <input
             value={phone}
             onChange={(e) => onPhone(e.target.value)}
@@ -695,15 +724,16 @@ function ContactStep({
         </Field>
       </div>
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-        <Field label="Email Address">
+        <Field label="Email address">
           <input
             type="email"
             value={email}
             onChange={(e) => onEmail(e.target.value)}
+            placeholder="you@email.com"
             className={inputCls}
           />
         </Field>
-        <Field label="Estimated Guests">
+        <Field label="Estimated guests">
           <input
             type="number"
             min={20}
@@ -715,7 +745,7 @@ function ContactStep({
           />
         </Field>
       </div>
-      <Field label="Type of Event">
+      <Field label="Type of event">
         <select
           value={eventType}
           onChange={(e) => onEventType(e.target.value)}
@@ -727,11 +757,11 @@ function ContactStep({
           ))}
         </select>
       </Field>
-      <Field label="Event Theme / Notes">
+      <Field label="Event theme / notes (optional)">
         <textarea
           value={notes}
           onChange={(e) => onNotes(e.target.value)}
-          placeholder="Tell us about your event theme, styling, and any special requests…"
+          placeholder="Tell us about your event theme, styling, and any special requests..."
           className={`${inputCls} h-20 resize-none`}
         />
       </Field>
@@ -756,34 +786,20 @@ function ConfirmStep({
 }) {
   return (
     <div>
-      <StepTitle>5. Confirm understanding</StepTitle>
-      <label className="flex items-start gap-2.5 text-xs font-bold text-espresso">
-        <input
-          type="checkbox"
-          checked={terms}
-          onChange={(e) => onTerms(e.target.checked)}
-          className="mt-0.5"
-        />
-        <span>
-          I have read and understood the service area restrictions, cancellation
-          rules, setup times, and overtime parameters.
-        </span>
-      </label>
+      <StepTitle>Confirm &amp; pay</StepTitle>
 
-      <div className="mt-4">
-        <label className="mb-2 block text-xs font-extrabold uppercase text-espresso">
-          Deposit payment method
-        </label>
+      <div className="mb-5">
+        <label className="field-label">Deposit payment method</label>
         <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
           {methods.map((m) => (
             <button
               key={m}
               type="button"
               onClick={() => onMethod(m)}
-              className={`rounded-lg border px-3 py-2.5 text-xs font-medium transition ${
+              className={`rounded-xl border px-3 py-3 text-xs font-medium transition-all ${
                 method === m
-                  ? "border-mocha bg-mocha/10 text-mocha"
-                  : "border-latte bg-white text-espresso/70 hover:border-mocha/40"
+                  ? "border-mocha bg-mocha/5 text-mocha shadow-soft"
+                  : "border-latte/60 bg-white text-espresso/50 hover:border-mocha/30"
               }`}
             >
               {methodLabel(m)}
@@ -792,11 +808,24 @@ function ConfirmStep({
         </div>
       </div>
 
-      <div className="mt-4 rounded-xl border border-latte bg-cream/40 p-3 text-xs font-medium leading-relaxed text-espresso/70">
+      <div className="mb-5 rounded-xl border border-latte/40 bg-sand/30 p-4 text-xs leading-relaxed text-espresso/50">
         The {settings.deposit_percent}% deposit is paid securely online to
         reserve your date. The balance is payable on or before the event day
         unless coordinated otherwise. A confirmation will be sent to your email.
       </div>
+
+      <label className="flex items-start gap-3 rounded-xl border border-latte/40 bg-white p-4 text-xs text-espresso transition-colors hover:bg-sand/20">
+        <input
+          type="checkbox"
+          checked={terms}
+          onChange={(e) => onTerms(e.target.checked)}
+          className="mt-0.5 accent-mocha"
+        />
+        <span className="leading-relaxed">
+          I have read and understood the service area restrictions, cancellation
+          rules, setup times, and overtime parameters.
+        </span>
+      </label>
     </div>
   );
 }

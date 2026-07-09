@@ -12,21 +12,28 @@ body {
 
 @layer components {
   .btn {
-    @apply inline-flex items-center justify-center rounded-full px-6 py-3 text-sm font-semibold transition-colors disabled:cursor-not-allowed disabled:opacity-50;
+    @apply inline-flex items-center justify-center rounded-full px-6 py-3 text-sm font-semibold tracking-wide transition-all duration-200 disabled:cursor-not-allowed disabled:opacity-50;
   }
   .btn-primary {
-    @apply btn bg-mocha text-cream hover:bg-espresso;
+    @apply btn bg-espresso text-cream shadow-soft hover:bg-mocha hover:shadow-glow active:scale-[0.98];
   }
   .btn-secondary {
-    @apply btn border border-mocha/30 bg-transparent text-mocha hover:bg-mocha/10;
+    @apply btn border border-espresso/15 bg-white text-espresso hover:border-espresso/30 hover:bg-sand active:scale-[0.98];
+  }
+  .btn-ghost {
+    @apply btn text-espresso/70 hover:bg-espresso/5 hover:text-espresso;
   }
   .field-label {
-    @apply mb-1.5 block text-sm font-medium text-espresso/80;
+    @apply mb-1.5 block text-xs font-semibold uppercase tracking-wider text-espresso/60;
   }
   .field-input {
-    @apply w-full rounded-lg border border-latte bg-white px-3.5 py-2.5 text-espresso shadow-sm outline-none transition focus:border-mocha focus:ring-2 focus:ring-mocha/20;
+    @apply w-full rounded-xl border border-latte bg-white px-4 py-3 text-sm text-espresso shadow-sm outline-none transition-all duration-200 placeholder:text-espresso/30 focus:border-mocha focus:ring-2 focus:ring-mocha/15;
   }
   .card {
-    @apply rounded-2xl border border-latte bg-white shadow-sm;
+    @apply rounded-2xl border border-latte/60 bg-white shadow-card;
   }
+}
+
+::selection {
+  @apply bg-caramel/20 text-espresso;
 }
