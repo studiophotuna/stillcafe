@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { revalidatePath } from "next/cache";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getSettings } from "@/lib/data";
 import { getPaymentProvider } from "@/lib/payments";
@@ -162,6 +163,9 @@ export async function POST(req: Request) {
       status: "pending",
       provider_ref: checkout.providerRef,
     });
+
+    revalidatePath("/admin", "layout");
+    revalidatePath("/book");
 
     return NextResponse.json({
       reference: booking.reference,

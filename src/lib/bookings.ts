@@ -1,3 +1,4 @@
+import { revalidatePath } from "next/cache";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getPaymentProvider } from "@/lib/payments";
 import type { Booking } from "@/lib/types";
@@ -49,6 +50,8 @@ export async function syncBookingPayment(
         .from("bookings")
         .update({ status: "paid", amount_paid_cents: paidCents })
         .eq("id", booking.id);
+
+      revalidatePath("/admin", "layout");
 
       return { ...booking, status: "paid", amount_paid_cents: paidCents };
     }

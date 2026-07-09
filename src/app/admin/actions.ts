@@ -83,8 +83,9 @@ export async function savePackage(formData: FormData) {
     if (error) throw new Error(error.message);
   }
 
-  revalidatePath("/admin/packages");
+  revalidatePath("/admin", "layout");
   revalidatePath("/");
+  revalidatePath("/book");
 }
 
 export async function deletePackage(formData: FormData) {
@@ -93,8 +94,9 @@ export async function deletePackage(formData: FormData) {
   const id = formData.get("id") as string;
   const { error } = await supabase.from("packages").delete().eq("id", id);
   if (error) throw new Error(error.message);
-  revalidatePath("/admin/packages");
+  revalidatePath("/admin", "layout");
   revalidatePath("/");
+  revalidatePath("/book");
 }
 
 export async function updateBookingStatus(formData: FormData) {
@@ -107,7 +109,7 @@ export async function updateBookingStatus(formData: FormData) {
     .update({ status })
     .eq("id", id);
   if (error) throw new Error(error.message);
-  revalidatePath("/admin/bookings");
+  revalidatePath("/admin", "layout");
 }
 
 export async function saveSettings(formData: FormData) {
@@ -134,6 +136,6 @@ export async function saveSettings(formData: FormData) {
     .eq("id", 1);
 
   if (error) throw new Error(error.message);
-  revalidatePath("/admin/settings");
+  revalidatePath("/admin", "layout");
   revalidatePath("/book");
 }

@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { AdminNav } from "@/components/admin/AdminNav";
+import { AdminAutoRefresh } from "@/components/admin/AdminAutoRefresh";
 import { SignOutButton } from "@/components/admin/SignOutButton";
 
 export const dynamic = "force-dynamic";
@@ -30,6 +31,7 @@ export default function AdminLayout({
           </div>
         </div>
       </header>
+      <AdminAutoRefresh />
       <main className="mx-auto max-w-6xl px-5 py-8">{children}</main>
     </div>
   );
