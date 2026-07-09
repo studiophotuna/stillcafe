@@ -16,10 +16,9 @@ export default async function ConfirmationPage({
 
   return (
     <div className="flex min-h-screen flex-col bg-cream">
-      {/* Minimal header */}
-      <header className="border-b border-latte/40 bg-white/80 backdrop-blur-md">
+      <header className="border-b border-latte/30 bg-white/70 backdrop-blur-sm">
         <div className="mx-auto flex max-w-7xl items-center px-5 py-3">
-          <Link href="/" className="flex items-center gap-2.5">
+          <Link href="/" className="flex items-center gap-2">
             <div className="flex h-7 w-7 items-center justify-center rounded-full bg-espresso text-[10px] font-bold text-cream">
               SC
             </div>
@@ -32,49 +31,37 @@ export default async function ConfirmationPage({
 
       <main className="mx-auto flex w-full max-w-xl flex-1 items-start px-5 py-12">
         <div className="card w-full overflow-hidden">
-          {/* Status header */}
           <div
-            className={`px-6 py-6 text-center ${paid ? "bg-sage/10" : "bg-sand/60"}`}
+            className={`px-6 py-6 text-center ${paid ? "bg-sage/10" : "bg-sand/50"}`}
           >
-            <div
-              className={`mx-auto flex h-14 w-14 items-center justify-center rounded-2xl text-2xl ${
-                paid
-                  ? "bg-sage/20 text-sage"
-                  : "bg-espresso/10 text-espresso/40"
-              }`}
-            >
-              {paid ? "✓" : "..."}
-            </div>
-            <h1 className="mt-4 font-serif text-xl font-semibold text-espresso">
-              {paid ? "Booking confirmed!" : "Thank you for your booking!"}
+            <h1 className="font-serif text-xl font-semibold text-espresso">
+              {paid ? "You're all set!" : "Thanks for booking!"}
             </h1>
-            <p className="mt-1.5 text-sm text-espresso/50">
+            <p className="mt-2 text-sm text-espresso/50">
               {paid
-                ? "Your payment was received and your date is reserved."
-                : "We've received your booking. If you've just paid, your confirmation will update shortly."}
+                ? "Payment received — your date is locked in."
+                : "We got your booking. If you just paid, give it a moment to update."}
             </p>
           </div>
 
           {booking ? (
             <div className="p-6">
-              {/* Reference */}
-              <div className="rounded-xl bg-sand/50 p-4 text-center">
-                <span className="text-[10px] font-bold uppercase tracking-widest text-espresso/30">
-                  Booking reference
+              <div className="rounded-xl bg-sand/40 p-4 text-center">
+                <span className="text-[11px] text-espresso/30">
+                  Your reference
                 </span>
                 <div className="mt-1 font-mono text-xl font-bold text-espresso">
                   {booking.reference}
                 </div>
               </div>
 
-              {/* Details */}
-              <dl className="mt-5 divide-y divide-latte/40 overflow-hidden rounded-xl border border-latte/40">
+              <dl className="mt-5 divide-y divide-latte/30 overflow-hidden rounded-xl border border-latte/30">
                 <Item label="Package" value={booking.package_name} />
                 {booking.event_type && (
-                  <Item label="Event type" value={booking.event_type} />
+                  <Item label="Event" value={booking.event_type} />
                 )}
                 <Item
-                  label="Event date"
+                  label="Date"
                   value={formatDate(booking.event_date)}
                 />
                 <Item label="Location" value={booking.event_location} />
@@ -82,12 +69,12 @@ export default async function ConfirmationPage({
                   <Item label="Guests" value={String(booking.guest_count)} />
                 )}
                 <Item
-                  label="Amount paid"
+                  label="Paid"
                   value={formatMoney(booking.amount_paid_cents)}
                 />
                 {booking.amount_paid_cents < booking.package_price_cents && (
                   <Item
-                    label="Balance"
+                    label="Remaining"
                     value={formatMoney(
                       booking.package_price_cents - booking.amount_paid_cents
                     )}
@@ -102,23 +89,26 @@ export default async function ConfirmationPage({
                 />
               </dl>
 
-              <p className="mt-5 text-center text-xs text-espresso/40">
-                A copy of your booking has been sent to{" "}
-                <strong className="text-espresso/60">
-                  {booking.customer_email}
-                </strong>
-                . We&apos;ll be in touch to finalize the details.
-              </p>
+              {booking.customer_email && (
+                <p className="mt-5 text-center text-xs text-espresso/40">
+                  We sent a copy to{" "}
+                  <strong className="text-espresso/60">
+                    {booking.customer_email}
+                  </strong>
+                  . We&apos;ll reach out to finalize everything.
+                </p>
+              )}
             </div>
           ) : (
             <div className="p-6 text-center">
               <p className="text-sm text-espresso/50">
-                We couldn&apos;t find that booking reference.
+                We couldn&apos;t find that booking. Double-check your reference
+                or get in touch with us.
               </p>
             </div>
           )}
 
-          <div className="border-t border-latte/40 px-6 py-4 text-center">
+          <div className="border-t border-latte/30 px-6 py-4 text-center">
             <Link href="/" className="btn-primary px-8">
               Back to home
             </Link>
@@ -126,10 +116,8 @@ export default async function ConfirmationPage({
         </div>
       </main>
 
-      {/* Minimal footer */}
-      <footer className="border-t border-latte/30 px-5 py-5 text-center text-xs text-espresso/30">
-        Still Caf&eacute; &middot; Mobile Coffee Cart &middot; &copy;{" "}
-        {new Date().getFullYear()}
+      <footer className="border-t border-latte/20 px-5 py-5 text-center text-xs text-espresso/25">
+        &copy; {new Date().getFullYear()} Still Caf&eacute;
       </footer>
     </div>
   );
