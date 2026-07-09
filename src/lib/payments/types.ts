@@ -32,6 +32,13 @@ export type WebhookResult = {
   raw: unknown;
 };
 
+export type CheckoutStatus = {
+  /** Normalized payment status for a checkout, fetched live from the provider. */
+  status: "paid" | "unpaid" | "expired" | "unknown";
+  method?: string | null;
+  amountCents?: number;
+};
+
 /**
  * A payment provider. Implement this interface to add support for a new
  * gateway; the rest of the app only depends on these methods.
@@ -43,4 +50,10 @@ export interface PaymentProvider {
     rawBody: string,
     headers: Record<string, string>
   ): Promise<WebhookResult>;
+  /**
+   * Fetch the current status of a checkout directly from the provider. Used to
+   * confirm payment when the customer returns, so we don't depend solely on the
+   * webhook being configured.
+   */
+  retrieveCheckoutStatus(providerRef: string): Promise<CheckoutStatus>;
 }

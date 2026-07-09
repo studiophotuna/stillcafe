@@ -1,6 +1,7 @@
 import crypto from "crypto";
 import type {
   CheckoutResult,
+  CheckoutStatus,
   CreateCheckoutInput,
   PaymentProvider,
   WebhookResult,
@@ -88,6 +89,31 @@ export const paymongoProvider: PaymentProvider = {
       providerRef: json.data.id,
       checkoutUrl: json.data.attributes.checkout_url,
     };
+  },
+
+  async retrieveCheckoutStatus(providerRef: string): Promise<CheckoutStatus> {
+    const res = await fetch(
+      `${PAYMONGO_API}/checkout_sessions/${providerRef}`,
+      {
+        headers: { Authorization: authHeader() },
+      }
+    );
+    const json = await res.json();
+    if (!res.ok) {
+      return { status: "unknown" };
+    }
+    const attrs = json?.data?.attributes ?? {};
+    const payments: any[] = attrs.payments ?? [];
+    const paid = payments.find((p) => p?.attributes?.status === "paid");
+    if (paid) {
+      return {
+        status: "paid",
+        method: paid.attributes?.source?.type ?? null,
+        amountCents: paid.attributes?.amount,
+      };
+    }
+    if (attrs.status === "expired") return { status: "expired" };
+    return { status: "unpaid" };
   },
 
   async verifyAndParseWebhook(

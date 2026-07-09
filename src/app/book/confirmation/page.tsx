@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { SiteHeader } from "@/components/SiteHeader";
 import { SiteFooter } from "@/components/SiteFooter";
-import { getBookingByReference } from "@/lib/data";
+import { syncBookingPayment } from "@/lib/bookings";
 import { formatDate, formatMoney } from "@/lib/format";
 
 export const dynamic = "force-dynamic";
@@ -12,7 +12,8 @@ export default async function ConfirmationPage({
   searchParams: { ref?: string };
 }) {
   const ref = searchParams.ref;
-  const booking = ref ? await getBookingByReference(ref).catch(() => null) : null;
+  // Confirm payment live with the provider on return (works without a webhook).
+  const booking = ref ? await syncBookingPayment(ref).catch(() => null) : null;
 
   const paid = booking?.status === "paid";
 
