@@ -171,9 +171,9 @@ export function BookingWizard({
   const showQuote = selectedPackages.length > 0 && step >= 3;
 
   return (
-    <div className="card overflow-hidden">
+    <div className="overflow-hidden rounded-3xl border border-latte/30 bg-white/80 shadow-elevated backdrop-blur-sm">
       {/* Header */}
-      <div className="bg-maroon px-6 py-5 sm:px-8">
+      <div className="bg-gradient-to-r from-maroon via-[#7a2e28] to-mocha px-6 py-6 sm:px-8">
         <h2 className="font-serif text-lg font-semibold text-cream sm:text-xl">
           {STEP_TITLES[step]}
         </h2>
@@ -183,16 +183,16 @@ export function BookingWizard({
       </div>
 
       {/* Progress */}
-      <div className="flex gap-1 px-6 py-3 sm:px-8">
+      <div className="flex gap-1.5 px-6 py-3 sm:px-8">
         {STEP_TITLES.map((t, i) => (
           <div key={t} className="flex-1">
             <div
-              className={`h-1 rounded-full transition-all duration-300 ${
+              className={`h-1.5 rounded-full transition-all duration-500 ${
                 i < step
-                  ? "bg-mocha"
+                  ? "bg-gradient-to-r from-mocha to-caramel"
                   : i === step
-                    ? "bg-maroon"
-                    : "bg-latte/50"
+                    ? "bg-gradient-to-r from-maroon to-mocha"
+                    : "bg-latte/30"
               }`}
             />
           </div>
@@ -272,8 +272,8 @@ export function BookingWizard({
         </div>
 
         {showQuote && (
-          <div className="mt-6 overflow-hidden rounded-xl border border-maroon/10 bg-maroon">
-            <div className="p-4">
+          <div className="mt-6 overflow-hidden rounded-2xl border border-white/10 bg-gradient-to-br from-espresso via-maroon to-mocha shadow-elevated">
+            <div className="p-5">
               <h4 className="text-xs font-medium text-cream/40">
                 Your estimate
               </h4>
@@ -296,7 +296,7 @@ export function BookingWizard({
                 ))}
               </ul>
             </div>
-            <div className="flex items-center justify-between border-t border-cream/10 bg-cream/5 px-4 py-3">
+            <div className="flex items-center justify-between border-t border-cream/10 bg-cream/5 px-5 py-4">
               <div>
                 <span className="text-xs text-cream/40">
                   {settings.deposit_percent}% deposit
@@ -323,7 +323,7 @@ export function BookingWizard({
             type="button"
             onClick={back}
             disabled={step === 0 || submitting}
-            className="btn-secondary w-1/3 py-3 disabled:opacity-30"
+            className="btn w-1/3 rounded-full border-2 border-latte/40 bg-white/80 py-3 text-espresso/60 backdrop-blur-sm transition hover:border-latte hover:bg-white hover:text-espresso disabled:opacity-30"
           >
             Back
           </button>
@@ -331,7 +331,7 @@ export function BookingWizard({
             <button
               type="button"
               onClick={next}
-              className="btn-primary w-2/3 py-3"
+              className="btn w-2/3 rounded-full bg-gradient-to-r from-maroon to-mocha py-3 font-bold text-cream shadow-soft transition hover:scale-[1.01] hover:shadow-glow active:scale-[0.98]"
             >
               Continue
             </button>
@@ -340,7 +340,7 @@ export function BookingWizard({
               type="button"
               onClick={submit}
               disabled={submitting}
-              className="btn w-2/3 bg-sage py-3 font-bold text-white hover:opacity-90 active:scale-[0.98] disabled:opacity-50"
+              className="btn w-2/3 rounded-full bg-gradient-to-r from-sage to-[#6a8360] py-3 font-bold text-white shadow-soft transition hover:scale-[1.01] hover:shadow-glow active:scale-[0.98] disabled:opacity-50"
             >
               {submitting
                 ? "Redirecting to payment..."
@@ -355,7 +355,7 @@ export function BookingWizard({
 
 function Tip({ children }: { children: React.ReactNode }) {
   return (
-    <div className="rounded-xl border border-latte/50 bg-sand/30 p-4">
+    <div className="rounded-2xl border border-latte/30 bg-white/60 p-5 backdrop-blur-sm">
       <span className="text-sm leading-relaxed text-espresso/60">
         {children}
       </span>
@@ -464,10 +464,10 @@ function PackagesStep({
               key={p.id}
               type="button"
               onClick={() => onToggle(p.id)}
-              className={`group overflow-hidden rounded-xl border text-left transition-all ${
+              className={`group overflow-hidden rounded-2xl border-2 text-left transition-all duration-200 hover:scale-[1.01] hover:shadow-soft ${
                 active
-                  ? "border-mocha bg-mocha/5"
-                  : "border-latte/60 bg-white hover:border-mocha/30"
+                  ? "border-mocha bg-mocha/5 shadow-soft"
+                  : "border-latte/40 bg-white/80 hover:border-mocha/30"
               }`}
             >
               {p.image_url && (
@@ -492,10 +492,10 @@ function PackagesStep({
                     </span>
                   </div>
                   <div
-                    className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-full border text-[10px] ${
+                    className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-full border-2 text-[10px] transition-all duration-200 ${
                       active
-                        ? "border-mocha bg-mocha text-cream"
-                        : "border-latte text-transparent group-hover:border-mocha/30"
+                        ? "border-mocha bg-gradient-to-br from-mocha to-maroon text-cream"
+                        : "border-latte/60 text-transparent group-hover:border-mocha/40"
                     }`}
                   >
                     ✓
@@ -530,7 +530,7 @@ function PackagesStep({
       </div>
 
       {selectedIds.length > 0 && (
-        <div className="mt-5 space-y-2 rounded-xl border border-latte/40 bg-sand/30 p-4">
+        <div className="mt-5 space-y-2 rounded-2xl border border-latte/30 bg-white/60 p-5 backdrop-blur-sm">
           <h4 className="text-xs font-medium text-espresso/40">
             What&apos;s included
           </h4>
@@ -784,10 +784,10 @@ function ConfirmStep({
               key={m}
               type="button"
               onClick={() => onMethod(m)}
-              className={`rounded-xl border px-3 py-3 text-xs font-medium transition-all ${
+              className={`rounded-2xl border-2 px-3 py-3.5 text-xs font-medium transition-all duration-200 ${
                 method === m
-                  ? "border-mocha bg-mocha/5 text-mocha"
-                  : "border-latte/60 bg-white text-espresso/50 hover:border-mocha/30"
+                  ? "border-mocha bg-gradient-to-br from-mocha/10 to-mocha/5 text-mocha shadow-sm"
+                  : "border-latte/40 bg-white/80 text-espresso/50 hover:border-mocha/30 hover:bg-white"
               }`}
             >
               {methodLabel(m)}
@@ -796,13 +796,13 @@ function ConfirmStep({
         </div>
       </div>
 
-      <div className="mb-5 rounded-xl border border-latte/40 bg-sand/30 p-4 text-xs leading-relaxed text-espresso/50">
+      <div className="mb-5 rounded-2xl border border-latte/30 bg-white/60 p-5 text-xs leading-relaxed text-espresso/50 backdrop-blur-sm">
         You&apos;re paying {settings.deposit_percent}% now to lock your date. The
         rest is due on or before the event day. We&apos;ll send a confirmation
         to your email.
       </div>
 
-      <label className="flex items-start gap-3 rounded-xl border border-latte/40 bg-white p-4 text-xs text-espresso hover:bg-sand/20">
+      <label className="flex items-start gap-3 rounded-2xl border-2 border-latte/30 bg-white/80 p-5 text-xs text-espresso transition hover:border-latte/50 hover:bg-white">
         <input
           type="checkbox"
           checked={terms}
