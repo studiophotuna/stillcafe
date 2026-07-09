@@ -27,10 +27,9 @@ export default async function BookPage({
 
   return (
     <div className="min-h-screen bg-cream">
-      {/* Minimal branded bar — no navigation links */}
-      <header className="border-b border-latte/40 bg-white/80 backdrop-blur-md">
+      <header className="border-b border-latte/30 bg-white/70 backdrop-blur-sm">
         <div className="mx-auto flex max-w-7xl items-center justify-between px-5 py-3">
-          <Link href="/" className="flex items-center gap-2.5">
+          <Link href="/" className="flex items-center gap-2">
             <div className="flex h-7 w-7 items-center justify-center rounded-full bg-espresso text-[10px] font-bold text-cream">
               SC
             </div>
@@ -40,40 +39,33 @@ export default async function BookPage({
           </Link>
           <Link
             href="/"
-            className="text-xs font-medium text-espresso/40 transition-colors hover:text-espresso/70"
+            className="text-xs text-espresso/40 hover:text-espresso/70"
           >
             &larr; Back
           </Link>
         </div>
       </header>
 
-      {/* Page hero */}
-      <div className="relative overflow-hidden bg-espresso">
-        <div className="absolute inset-0 bg-gradient-to-r from-espresso via-mocha/80 to-clay/60" />
-        <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top_right,_rgba(192,132,87,0.2)_0%,_transparent_60%)]" />
-        <div className="relative z-10 mx-auto max-w-7xl px-5 py-10 text-center sm:py-14">
+      <div className="bg-espresso">
+        <div className="mx-auto max-w-7xl px-5 py-10 sm:py-12">
           <h1 className="font-serif text-2xl font-semibold text-cream sm:text-3xl">
-            Book Your Event
+            Let&apos;s get your event booked
           </h1>
-          <p className="mx-auto mt-2 max-w-lg text-sm text-cream/50">
-            Complete the form below to check availability, choose your package,
-            and reserve your date with a secure deposit.
+          <p className="mt-2 max-w-md text-sm text-cream/50">
+            Pick a date, choose your setup, and we&apos;ll handle the rest.
+            Takes about 5 minutes.
           </p>
         </div>
       </div>
 
-      {/* Main content */}
       <main className="mx-auto w-full max-w-7xl px-5 py-8 sm:py-10">
         {loadError || !settings ? (
           <div className="card mx-auto max-w-lg p-10 text-center">
-            <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-latte/50 text-xl">
-              !
-            </div>
-            <p className="font-medium text-espresso">
-              We couldn&apos;t start the booking flow right now.
+            <p className="text-lg font-medium text-espresso">
+              Something went wrong on our end.
             </p>
             <p className="mt-2 text-sm text-espresso/50">
-              Please try again later or contact us directly.
+              Try refreshing, or send us a message and we&apos;ll sort it out.
             </p>
             <Link href="/" className="btn-secondary mt-6">
               Go back
@@ -81,8 +73,11 @@ export default async function BookPage({
           </div>
         ) : packages.length === 0 ? (
           <div className="card mx-auto max-w-lg p-10 text-center">
-            <p className="font-medium text-espresso">
-              No packages are available for booking yet.
+            <p className="text-lg font-medium text-espresso">
+              We&apos;re still setting up our packages.
+            </p>
+            <p className="mt-2 text-sm text-espresso/50">
+              Check back soon or reach out to us directly.
             </p>
             <Link href="/" className="btn-secondary mt-6">
               Go back
@@ -105,10 +100,8 @@ export default async function BookPage({
         )}
       </main>
 
-      {/* Minimal footer */}
-      <footer className="border-t border-latte/30 px-5 py-5 text-center text-xs text-espresso/30">
-        Still Caf&eacute; &middot; Mobile Coffee Cart &middot; &copy;{" "}
-        {new Date().getFullYear()}
+      <footer className="border-t border-latte/20 px-5 py-5 text-center text-xs text-espresso/25">
+        &copy; {new Date().getFullYear()} Still Caf&eacute;
       </footer>
     </div>
   );
