@@ -112,7 +112,7 @@ export function AvailabilityCalendar({
               onClick={() => onSelect(key)}
               className={`flex aspect-square items-center justify-center rounded-lg text-xs font-medium transition-colors ${
                 isSel
-                  ? "bg-espresso text-cream"
+                  ? "bg-maroon text-cream"
                   : disabled
                     ? "cursor-not-allowed text-espresso/20 line-through"
                     : "text-espresso hover:bg-sand"
@@ -127,7 +127,7 @@ export function AvailabilityCalendar({
 
       <div className="mt-3 flex items-center gap-4 border-t border-latte/30 pt-3 text-[10px] text-espresso/30">
         <span className="flex items-center gap-1">
-          <span className="inline-block h-2 w-2 rounded-sm bg-espresso" />
+          <span className="inline-block h-2 w-2 rounded-sm bg-maroon" />
           Your pick
         </span>
         <span className="flex items-center gap-1">

@@ -13,6 +13,7 @@ const config: Config = {
         latte: "#e8ddd0",
         mocha: "#6f4e37",
         espresso: "#2c1e14",
+        maroon: "#5c1f1a",
         caramel: "#c08457",
         sage: "#7d9171",
         amber: "#d4a853",

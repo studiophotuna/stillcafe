@@ -4,7 +4,7 @@ export function BookingSidebar({ settings }: { settings: Settings }) {
   return (
     <div className="space-y-5">
       <div className="card overflow-hidden">
-        <div className="bg-espresso px-5 py-4">
+        <div className="bg-maroon px-5 py-4">
           <h3 className="font-serif text-base font-semibold text-cream">
             What you get
           </h3>

@@ -173,7 +173,7 @@ export function BookingWizard({
   return (
     <div className="card overflow-hidden">
       {/* Header */}
-      <div className="bg-espresso px-6 py-5 sm:px-8">
+      <div className="bg-maroon px-6 py-5 sm:px-8">
         <h2 className="font-serif text-lg font-semibold text-cream sm:text-xl">
           {STEP_TITLES[step]}
         </h2>
@@ -191,7 +191,7 @@ export function BookingWizard({
                 i < step
                   ? "bg-mocha"
                   : i === step
-                    ? "bg-espresso"
+                    ? "bg-maroon"
                     : "bg-latte/50"
               }`}
             />
@@ -272,7 +272,7 @@ export function BookingWizard({
         </div>
 
         {showQuote && (
-          <div className="mt-6 overflow-hidden rounded-xl border border-espresso/10 bg-espresso">
+          <div className="mt-6 overflow-hidden rounded-xl border border-maroon/10 bg-maroon">
             <div className="p-4">
               <h4 className="text-xs font-medium text-cream/40">
                 Your estimate

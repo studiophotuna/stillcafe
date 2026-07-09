@@ -15,7 +15,7 @@ body {
     @apply inline-flex items-center justify-center rounded-full px-6 py-3 text-sm font-semibold tracking-wide transition-all duration-200 disabled:cursor-not-allowed disabled:opacity-50;
   }
   .btn-primary {
-    @apply btn bg-espresso text-cream shadow-soft hover:bg-mocha hover:shadow-glow active:scale-[0.98];
+    @apply btn bg-maroon text-cream shadow-soft hover:bg-mocha hover:shadow-glow active:scale-[0.98];
   }
   .btn-secondary {
     @apply btn border border-espresso/15 bg-white text-espresso hover:border-espresso/30 hover:bg-sand active:scale-[0.98];

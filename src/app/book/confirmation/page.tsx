@@ -19,7 +19,7 @@ export default async function ConfirmationPage({
       <header className="border-b border-latte/30 bg-white/70 backdrop-blur-sm">
         <div className="mx-auto flex max-w-7xl items-center px-5 py-3">
           <Link href="/" className="flex items-center gap-2">
-            <div className="flex h-7 w-7 items-center justify-center rounded-full bg-espresso text-[10px] font-bold text-cream">
+            <div className="flex h-7 w-7 items-center justify-center rounded-full bg-maroon text-[10px] font-bold text-cream">
               SC
             </div>
             <span className="font-serif text-base font-semibold text-espresso">

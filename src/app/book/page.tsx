@@ -30,7 +30,7 @@ export default async function BookPage({
       <header className="border-b border-latte/30 bg-white/70 backdrop-blur-sm">
         <div className="mx-auto flex max-w-7xl items-center justify-between px-5 py-3">
           <Link href="/" className="flex items-center gap-2">
-            <div className="flex h-7 w-7 items-center justify-center rounded-full bg-espresso text-[10px] font-bold text-cream">
+            <div className="flex h-7 w-7 items-center justify-center rounded-full bg-maroon text-[10px] font-bold text-cream">
               SC
             </div>
             <span className="font-serif text-base font-semibold text-espresso">
@@ -46,7 +46,7 @@ export default async function BookPage({
         </div>
       </header>
 
-      <div className="bg-espresso">
+      <div className="bg-maroon">
         <div className="mx-auto max-w-7xl px-5 py-10 sm:py-12">
           <p className="text-[10px] uppercase tracking-[0.2em] text-cream/25">
             Still Caf&eacute; &middot; Event Booking
