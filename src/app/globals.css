@@ -24,7 +24,7 @@ body {
     @apply btn text-espresso/70 hover:bg-espresso/5 hover:text-espresso;
   }
   .field-label {
-    @apply mb-1.5 block text-xs font-semibold uppercase tracking-wider text-espresso/60;
+    @apply mb-1.5 block text-xs font-medium text-espresso/60;
   }
   .field-input {
     @apply w-full rounded-xl border border-latte bg-white px-4 py-3 text-sm text-espresso shadow-sm outline-none transition-all duration-200 placeholder:text-espresso/30 focus:border-mocha focus:ring-2 focus:ring-mocha/15;

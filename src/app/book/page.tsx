@@ -48,10 +48,13 @@ export default async function BookPage({
 
       <div className="bg-espresso">
         <div className="mx-auto max-w-7xl px-5 py-10 sm:py-12">
-          <h1 className="font-serif text-2xl font-semibold text-cream sm:text-3xl">
+          <p className="text-[10px] uppercase tracking-[0.2em] text-cream/25">
+            Still Caf&eacute; &middot; Event Booking
+          </p>
+          <h1 className="mt-2 font-serif text-2xl font-semibold text-cream sm:text-3xl">
             Let&apos;s get your event booked
           </h1>
-          <p className="mt-2 max-w-md text-sm text-cream/50">
+          <p className="mt-2 max-w-md text-sm text-cream/40">
             Pick a date, choose your setup, and we&apos;ll handle the rest.
             Takes about 5 minutes.
           </p>

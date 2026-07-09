@@ -12,7 +12,8 @@ export function BookingSidebar({ settings }: { settings: Settings }) {
         <div className="space-y-3 p-5 text-sm text-espresso/70">
           <p>
             A full mobile espresso bar, premium beans, a friendly barista, and
-            all the gear. Setup and cleanup are on us.
+            all the gear &mdash; we&apos;re small, but we&apos;re intentional.
+            Setup and cleanup are on us.
           </p>
           <div className="space-y-2 text-xs">
             <div className="flex justify-between">

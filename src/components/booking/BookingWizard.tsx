@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import Image from "next/image";
 import type { Package, PaymentMethod, Settings } from "@/lib/types";
 import { formatMoney, methodLabel } from "@/lib/format";
 import { computeQuote } from "@/lib/pricing";
@@ -463,36 +464,49 @@ function PackagesStep({
               key={p.id}
               type="button"
               onClick={() => onToggle(p.id)}
-              className={`group rounded-xl border p-4 text-left transition-all ${
+              className={`group overflow-hidden rounded-xl border text-left transition-all ${
                 active
                   ? "border-mocha bg-mocha/5"
                   : "border-latte/60 bg-white hover:border-mocha/30"
               }`}
             >
-              <div className="flex items-start justify-between gap-2">
-                <div className="min-w-0">
-                  <span className="block text-sm font-semibold text-espresso">
-                    {p.name}
-                  </span>
-                  <span className="mt-1 block text-xs text-espresso/50">
-                    {formatMoney(p.price_cents)} &middot; {p.duration_hours}h
-                  </span>
+              {p.image_url && (
+                <div className="relative h-36 w-full overflow-hidden bg-sand/30">
+                  <Image
+                    src={p.image_url}
+                    alt={p.name}
+                    fill
+                    className="object-cover"
+                    sizes="(max-width: 640px) 100vw, 50vw"
+                  />
                 </div>
-                <div
-                  className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-full border text-[10px] ${
-                    active
-                      ? "border-mocha bg-mocha text-cream"
-                      : "border-latte text-transparent group-hover:border-mocha/30"
-                  }`}
-                >
-                  ✓
-                </div>
-              </div>
-              {p.description && (
-                <p className="mt-2 text-[11px] leading-relaxed text-espresso/40">
-                  {p.description}
-                </p>
               )}
+              <div className="p-4">
+                <div className="flex items-start justify-between gap-2">
+                  <div className="min-w-0">
+                    <span className="block text-sm font-semibold text-espresso">
+                      {p.name}
+                    </span>
+                    <span className="mt-1 block text-xs text-espresso/50">
+                      {formatMoney(p.price_cents)} &middot; {p.duration_hours}h
+                    </span>
+                  </div>
+                  <div
+                    className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-full border text-[10px] ${
+                      active
+                        ? "border-mocha bg-mocha text-cream"
+                        : "border-latte text-transparent group-hover:border-mocha/30"
+                    }`}
+                  >
+                    ✓
+                  </div>
+                </div>
+                {p.description && (
+                  <p className="mt-2 text-[11px] leading-relaxed text-espresso/40">
+                    {p.description}
+                  </p>
+                )}
+              </div>
             </button>
           );
         })}
