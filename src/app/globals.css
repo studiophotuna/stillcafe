@@ -32,6 +32,9 @@ body {
   .card {
     @apply rounded-2xl border border-latte/60 bg-white shadow-card;
   }
+  .glass {
+    @apply border border-white/30 bg-white/60 shadow-card backdrop-blur-xl;
+  }
 }
 
 ::selection {

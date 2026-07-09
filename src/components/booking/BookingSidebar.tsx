@@ -3,9 +3,9 @@ import type { Settings } from "@/lib/types";
 export function BookingSidebar({ settings }: { settings: Settings }) {
   return (
     <div className="space-y-5">
-      <div className="card overflow-hidden">
-        <div className="bg-maroon px-5 py-4">
-          <h3 className="font-serif text-base font-semibold text-cream">
+      <div className="overflow-hidden rounded-3xl border border-latte/30 bg-white/80 shadow-card backdrop-blur-sm">
+        <div className="bg-gradient-to-r from-maroon to-mocha px-5 py-5">
+          <h3 className="font-serif text-lg font-semibold text-cream">
             What you get
           </h3>
         </div>
@@ -15,20 +15,20 @@ export function BookingSidebar({ settings }: { settings: Settings }) {
             all the gear &mdash; we&apos;re small, but we&apos;re intentional.
             Setup and cleanup are on us.
           </p>
-          <div className="space-y-2 text-xs">
-            <div className="flex justify-between">
+          <div className="space-y-2.5 text-xs">
+            <div className="flex justify-between rounded-xl bg-sand/30 px-3 py-2.5">
               <span className="text-espresso/40">Service area</span>
               <span className="font-medium text-espresso">
                 {settings.service_area}
               </span>
             </div>
-            <div className="flex justify-between">
+            <div className="flex justify-between rounded-xl bg-sand/30 px-3 py-2.5">
               <span className="text-espresso/40">Standard hours</span>
               <span className="font-medium text-espresso">
                 {settings.standard_hours} hours
               </span>
             </div>
-            <div className="flex justify-between">
+            <div className="flex justify-between rounded-xl bg-sand/30 px-3 py-2.5">
               <span className="text-espresso/40">Deposit to reserve</span>
               <span className="font-medium text-espresso">
                 {settings.deposit_percent}%
@@ -38,7 +38,7 @@ export function BookingSidebar({ settings }: { settings: Settings }) {
         </div>
       </div>
 
-      <div className="card p-5">
+      <div className="rounded-3xl border border-latte/30 bg-white/80 p-5 shadow-card backdrop-blur-sm">
         <h3 className="text-sm font-semibold text-espresso">
           Common questions
         </h3>
@@ -59,7 +59,7 @@ export function BookingSidebar({ settings }: { settings: Settings }) {
       </div>
 
       {settings.business_email && (
-        <div className="rounded-2xl border border-latte/40 bg-sand/30 p-5">
+        <div className="rounded-3xl border border-latte/30 bg-gradient-to-br from-sand/40 to-sand/20 p-5 backdrop-blur-sm">
           <p className="text-sm font-medium text-espresso/70">
             Questions before booking?
           </p>
@@ -83,7 +83,7 @@ function FaqItem({
   children: React.ReactNode;
 }) {
   return (
-    <li className="text-xs">
+    <li className="rounded-xl bg-sand/20 p-3 text-xs">
       <p className="font-semibold text-espresso">{q}</p>
       <p className="mt-0.5 leading-relaxed text-espresso/50">{children}</p>
     </li>

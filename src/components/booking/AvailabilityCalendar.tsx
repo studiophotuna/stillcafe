@@ -64,7 +64,7 @@ export function AvailabilityCalendar({
   }
 
   return (
-    <div className="rounded-xl border border-latte/60 bg-white p-4 sm:p-5">
+    <div className="rounded-2xl border border-latte/30 bg-white/80 p-5 backdrop-blur-sm">
       <div className="flex items-center justify-between">
         <strong className="text-sm font-semibold text-espresso">
           {MONTHS[view.getMonth()]} {view.getFullYear()}
@@ -112,7 +112,7 @@ export function AvailabilityCalendar({
               onClick={() => onSelect(key)}
               className={`flex aspect-square items-center justify-center rounded-lg text-xs font-medium transition-colors ${
                 isSel
-                  ? "bg-maroon text-cream"
+                  ? "bg-gradient-to-br from-maroon to-mocha text-cream shadow-sm"
                   : disabled
                     ? "cursor-not-allowed text-espresso/20 line-through"
                     : "text-espresso hover:bg-sand"
