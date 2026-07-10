@@ -112,7 +112,7 @@ export function AvailabilityCalendar({
               onClick={() => onSelect(key)}
               className={`flex aspect-square items-center justify-center rounded-lg text-xs font-medium transition-colors ${
                 isSel
-                  ? "bg-gradient-to-br from-maroon to-mocha text-cream shadow-sm"
+                  ? "bg-maroon text-cream shadow-sm"
                   : disabled
                     ? "cursor-not-allowed text-espresso/20 line-through"
                     : "text-espresso hover:bg-sand"

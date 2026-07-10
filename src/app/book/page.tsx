@@ -51,12 +51,8 @@ export default async function BookPage({
         </div>
       </header>
 
-      <div className="relative overflow-hidden bg-gradient-to-br from-maroon via-[#6b2520] to-mocha">
-        <div className="absolute inset-0 opacity-10">
-          <div className="absolute -right-20 -top-20 h-64 w-64 rounded-full bg-caramel blur-3xl" />
-          <div className="absolute -bottom-10 -left-10 h-48 w-48 rounded-full bg-amber blur-3xl" />
-        </div>
-        <div className="relative mx-auto max-w-7xl px-5 py-12 sm:py-16">
+      <div className="bg-maroon">
+        <div className="mx-auto max-w-7xl px-5 py-12 sm:py-16">
           <p className="text-[10px] uppercase tracking-[0.25em] text-cream/30">
             Still Caf&eacute; &middot; Event Booking
           </p>

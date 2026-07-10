@@ -173,7 +173,7 @@ export function BookingWizard({
   return (
     <div className="overflow-hidden rounded-3xl border border-latte/30 bg-white/80 shadow-elevated backdrop-blur-sm">
       {/* Header */}
-      <div className="bg-gradient-to-r from-maroon via-[#7a2e28] to-mocha px-6 py-6 sm:px-8">
+      <div className="bg-maroon px-6 py-6 sm:px-8">
         <h2 className="font-serif text-lg font-semibold text-cream sm:text-xl">
           {STEP_TITLES[step]}
         </h2>
@@ -189,9 +189,9 @@ export function BookingWizard({
             <div
               className={`h-1.5 rounded-full transition-all duration-500 ${
                 i < step
-                  ? "bg-gradient-to-r from-mocha to-caramel"
+                  ? "bg-mocha"
                   : i === step
-                    ? "bg-gradient-to-r from-maroon to-mocha"
+                    ? "bg-maroon"
                     : "bg-latte/30"
               }`}
             />
@@ -272,7 +272,7 @@ export function BookingWizard({
         </div>
 
         {showQuote && (
-          <div className="mt-6 overflow-hidden rounded-2xl border border-white/10 bg-gradient-to-br from-espresso via-maroon to-mocha shadow-elevated">
+          <div className="mt-6 overflow-hidden rounded-2xl border border-white/10 bg-maroon shadow-elevated">
             <div className="p-5">
               <h4 className="text-xs font-medium text-cream/40">
                 Your estimate
@@ -331,7 +331,7 @@ export function BookingWizard({
             <button
               type="button"
               onClick={next}
-              className="btn w-2/3 rounded-full bg-gradient-to-r from-maroon to-mocha py-3 font-bold text-cream shadow-soft transition hover:scale-[1.01] hover:shadow-glow active:scale-[0.98]"
+              className="btn w-2/3 rounded-full bg-maroon py-3 font-bold text-cream shadow-soft transition hover:scale-[1.01] hover:bg-mocha hover:shadow-glow active:scale-[0.98]"
             >
               Continue
             </button>
@@ -340,7 +340,7 @@ export function BookingWizard({
               type="button"
               onClick={submit}
               disabled={submitting}
-              className="btn w-2/3 rounded-full bg-gradient-to-r from-sage to-[#6a8360] py-3 font-bold text-white shadow-soft transition hover:scale-[1.01] hover:shadow-glow active:scale-[0.98] disabled:opacity-50"
+              className="btn w-2/3 rounded-full bg-sage py-3 font-bold text-white shadow-soft transition hover:scale-[1.01] hover:opacity-90 hover:shadow-glow active:scale-[0.98] disabled:opacity-50"
             >
               {submitting
                 ? "Redirecting to payment..."
@@ -494,7 +494,7 @@ function PackagesStep({
                   <div
                     className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-full border-2 text-[10px] transition-all duration-200 ${
                       active
-                        ? "border-mocha bg-gradient-to-br from-mocha to-maroon text-cream"
+                        ? "border-mocha bg-mocha text-cream"
                         : "border-latte/60 text-transparent group-hover:border-mocha/40"
                     }`}
                   >
@@ -786,7 +786,7 @@ function ConfirmStep({
               onClick={() => onMethod(m)}
               className={`rounded-2xl border-2 px-3 py-3.5 text-xs font-medium transition-all duration-200 ${
                 method === m
-                  ? "border-mocha bg-gradient-to-br from-mocha/10 to-mocha/5 text-mocha shadow-sm"
+                  ? "border-mocha bg-mocha/5 text-mocha shadow-sm"
                   : "border-latte/40 bg-white/80 text-espresso/50 hover:border-mocha/30 hover:bg-white"
               }`}
             >
