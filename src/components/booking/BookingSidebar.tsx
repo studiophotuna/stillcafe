@@ -4,7 +4,7 @@ export function BookingSidebar({ settings }: { settings: Settings }) {
   return (
     <div className="space-y-5">
       <div className="overflow-hidden rounded-3xl border border-latte/30 bg-white/80 shadow-card backdrop-blur-sm">
-        <div className="bg-gradient-to-r from-maroon to-mocha px-5 py-5">
+        <div className="bg-maroon px-5 py-5">
           <h3 className="font-serif text-lg font-semibold text-cream">
             What you get
           </h3>
@@ -59,7 +59,7 @@ export function BookingSidebar({ settings }: { settings: Settings }) {
       </div>
 
       {settings.business_email && (
-        <div className="rounded-3xl border border-latte/30 bg-gradient-to-br from-sand/40 to-sand/20 p-5 backdrop-blur-sm">
+        <div className="rounded-3xl border border-latte/30 bg-sand/30 p-5 backdrop-blur-sm">
           <p className="text-sm font-medium text-espresso/70">
             Questions before booking?
           </p>

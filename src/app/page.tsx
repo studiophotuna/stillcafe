@@ -29,7 +29,10 @@ export default function HomePage() {
             ))}
           </div>
         </div>
-        <div className="absolute inset-0 bg-gradient-to-b from-maroon/70 via-maroon/80 to-maroon/90" />
+        <div
+          className="absolute inset-0 bg-maroon/80"
+          style={{ boxShadow: "inset 0 0 250px 80px rgba(0, 0, 0, 0.55)" }}
+        />
       </div>
 
       <main className="relative z-10 flex flex-1 flex-col items-center justify-center px-6 py-20">
@@ -54,7 +57,7 @@ export default function HomePage() {
         </p>
         <Link
           href="/book"
-          className="mt-10 inline-block rounded-full bg-gradient-to-r from-cream to-white px-8 py-3.5 text-sm font-semibold text-maroon shadow-glow transition hover:scale-[1.02] hover:shadow-elevated active:scale-[0.98]"
+          className="mt-10 inline-block rounded-full bg-cream px-8 py-3.5 text-sm font-semibold text-maroon shadow-glow transition hover:scale-[1.02] hover:bg-white hover:shadow-elevated active:scale-[0.98]"
         >
           Book your event
         </Link>
