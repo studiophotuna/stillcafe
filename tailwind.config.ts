@@ -22,13 +22,17 @@ const config: Config = {
       },
       fontFamily: {
         serif: [
-          "var(--font-sans)",
-          "system-ui",
-          "sans-serif",
+          "Georgia",
+          "Cambria",
+          "Times New Roman",
+          "serif",
         ],
         sans: [
-          "var(--font-sans)",
+          "ui-sans-serif",
           "system-ui",
+          "-apple-system",
+          "Segoe UI",
+          "Roboto",
           "sans-serif",
         ],
       },

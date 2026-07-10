@@ -29,10 +29,7 @@ export default function HomePage() {
             ))}
           </div>
         </div>
-        <div
-          className="absolute inset-0 bg-maroon/80"
-          style={{ boxShadow: "inset 0 0 250px 80px rgba(0, 0, 0, 0.55)" }}
-        />
+        <div className="absolute inset-0 bg-maroon/80" />
       </div>
 
       <main className="relative z-10 flex flex-1 flex-col items-center justify-center px-6 py-20">
