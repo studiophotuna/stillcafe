@@ -9,36 +9,50 @@ const config: Config = {
   theme: {
     extend: {
       colors: {
-        cream: "#faf8f5",
-        latte: "#ede8e0",
+        cream: "#faf6f0",
+        latte: "#e8ddd0",
         mocha: "#6f4e37",
-        espresso: "#1a1210",
+        espresso: "#2c1e14",
         maroon: "#5c1f1a",
         caramel: "#c08457",
-        sage: "#5b8a5a",
+        sage: "#7d9171",
         amber: "#d4a853",
         clay: "#a07358",
-        sand: "#f2ece4",
+        sand: "#f0e6d8",
       },
       fontFamily: {
-        sans: ["var(--font-sans)", "system-ui", "sans-serif"],
-        serif: ["var(--font-serif)", "Georgia", "serif"],
+        serif: [
+          "Georgia",
+          "Cambria",
+          "Times New Roman",
+          "serif",
+        ],
+        sans: [
+          "ui-sans-serif",
+          "system-ui",
+          "-apple-system",
+          "Segoe UI",
+          "Roboto",
+          "sans-serif",
+        ],
       },
       boxShadow: {
-        soft: "0 1px 2px rgba(26, 18, 16, 0.04), 0 2px 8px rgba(26, 18, 16, 0.04)",
-        card: "0 1px 2px rgba(26, 18, 16, 0.03), 0 4px 16px rgba(26, 18, 16, 0.06)",
-        elevated: "0 4px 24px rgba(26, 18, 16, 0.10)",
-        glow: "0 0 0 3px rgba(92, 31, 26, 0.12)",
+        soft: "0 2px 20px -4px rgba(44, 30, 20, 0.08)",
+        glow: "0 4px 30px -6px rgba(44, 30, 20, 0.12)",
+        card: "0 1px 3px rgba(44, 30, 20, 0.06), 0 8px 24px -8px rgba(44, 30, 20, 0.08)",
+        elevated:
+          "0 2px 8px rgba(44, 30, 20, 0.06), 0 16px 40px -12px rgba(44, 30, 20, 0.14)",
       },
       borderRadius: {
         "2xl": "1rem",
-        "3xl": "1.25rem",
+        "3xl": "1.5rem",
+        "4xl": "2rem",
       },
       animation: {
-        "fade-in": "fadeIn 0.6s ease-out",
-        "slide-up": "slideUp 0.6s ease-out",
-        "slide-up-delay": "slideUp 0.6s ease-out 0.15s both",
-        "scale-in": "scaleIn 0.4s ease-out",
+        "fade-in": "fadeIn 0.5s ease-out",
+        "slide-up": "slideUp 0.5s ease-out",
+        collage: "collageScroll 50s ease-in-out infinite alternate",
+        float: "float 6s ease-in-out infinite",
       },
       keyframes: {
         fadeIn: {
@@ -46,12 +60,16 @@ const config: Config = {
           "100%": { opacity: "1" },
         },
         slideUp: {
-          "0%": { opacity: "0", transform: "translateY(16px)" },
+          "0%": { opacity: "0", transform: "translateY(12px)" },
           "100%": { opacity: "1", transform: "translateY(0)" },
         },
-        scaleIn: {
-          "0%": { opacity: "0", transform: "scale(0.96)" },
-          "100%": { opacity: "1", transform: "scale(1)" },
+        collageScroll: {
+          "0%": { transform: "translate(0, 0)" },
+          "100%": { transform: "translate(-6%, -4%)" },
+        },
+        float: {
+          "0%, 100%": { transform: "translateY(0px)" },
+          "50%": { transform: "translateY(-6px)" },
         },
       },
     },

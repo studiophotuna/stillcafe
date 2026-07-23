@@ -3,8 +3,18 @@
 import { useMemo, useState } from "react";
 
 const MONTHS = [
-  "January", "February", "March", "April", "May", "June",
-  "July", "August", "September", "October", "November", "December",
+  "January",
+  "February",
+  "March",
+  "April",
+  "May",
+  "June",
+  "July",
+  "August",
+  "September",
+  "October",
+  "November",
+  "December",
 ];
 
 function ymd(d: Date): string {
@@ -54,7 +64,7 @@ export function AvailabilityCalendar({
   }
 
   return (
-    <div className="rounded-xl border border-latte bg-white p-5">
+    <div className="rounded-2xl border border-latte/30 bg-white/80 p-5 backdrop-blur-sm">
       <div className="flex items-center justify-between">
         <strong className="text-sm font-semibold text-espresso">
           {MONTHS[view.getMonth()]} {view.getFullYear()}
@@ -64,21 +74,21 @@ export function AvailabilityCalendar({
             type="button"
             onClick={() => shift(-1)}
             disabled={!canGoPrev}
-            className="flex h-8 w-8 items-center justify-center rounded-lg border border-latte text-xs font-bold text-espresso transition hover:bg-sand disabled:opacity-25"
+            className="flex h-8 w-8 items-center justify-center rounded-lg border border-latte/60 bg-white text-xs font-bold text-espresso hover:bg-sand disabled:opacity-30"
           >
             &lt;
           </button>
           <button
             type="button"
             onClick={() => shift(1)}
-            className="flex h-8 w-8 items-center justify-center rounded-lg border border-latte text-xs font-bold text-espresso transition hover:bg-sand"
+            className="flex h-8 w-8 items-center justify-center rounded-lg border border-latte/60 bg-white text-xs font-bold text-espresso hover:bg-sand"
           >
             &gt;
           </button>
         </div>
       </div>
 
-      <div className="mt-4 grid grid-cols-7 text-center text-[11px] font-medium text-espresso/25">
+      <div className="mt-3 grid grid-cols-7 text-center text-[10px] font-medium text-espresso/30">
         {["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].map((d) => (
           <span key={d} className="py-1">
             {d}
@@ -86,7 +96,7 @@ export function AvailabilityCalendar({
         ))}
       </div>
 
-      <div className="mt-1 grid grid-cols-7 gap-0.5">
+      <div className="mt-1 grid grid-cols-7 gap-1">
         {cells.map((date, i) => {
           if (!date) return <span key={`e${i}`} />;
           const key = ymd(date);
@@ -100,11 +110,11 @@ export function AvailabilityCalendar({
               type="button"
               disabled={disabled}
               onClick={() => onSelect(key)}
-              className={`flex aspect-square items-center justify-center rounded-lg text-[13px] font-medium transition-colors ${
+              className={`flex aspect-square items-center justify-center rounded-lg text-xs font-medium transition-colors ${
                 isSel
-                  ? "bg-maroon text-cream"
+                  ? "bg-maroon text-cream shadow-sm"
                   : disabled
-                    ? "cursor-not-allowed text-espresso/15 line-through"
+                    ? "cursor-not-allowed text-espresso/20 line-through"
                     : "text-espresso hover:bg-sand"
               }`}
               title={isBooked ? "Booked" : isPast ? "Past date" : "Available"}
@@ -115,17 +125,17 @@ export function AvailabilityCalendar({
         })}
       </div>
 
-      <div className="mt-3 flex items-center gap-4 border-t border-latte pt-3 text-[11px] text-espresso/25">
-        <span className="flex items-center gap-1.5">
-          <span className="inline-block h-2.5 w-2.5 rounded-[3px] bg-maroon" />
+      <div className="mt-3 flex items-center gap-4 border-t border-latte/30 pt-3 text-[10px] text-espresso/30">
+        <span className="flex items-center gap-1">
+          <span className="inline-block h-2 w-2 rounded-sm bg-maroon" />
           Your pick
         </span>
-        <span className="flex items-center gap-1.5">
-          <span className="inline-block h-2.5 w-2.5 rounded-[3px] bg-espresso/8 line-through" />
+        <span className="flex items-center gap-1">
+          <span className="inline-block h-2 w-2 rounded-sm bg-latte/60 line-through" />
           Taken
         </span>
         {selected && !bookedSet.has(selected) && (
-          <span className="ml-auto text-[12px] font-medium text-sage">
+          <span className="ml-auto text-[11px] font-medium text-sage">
             {selected} is open
           </span>
         )}

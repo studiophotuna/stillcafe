@@ -1,85 +1,70 @@
 import Link from "next/link";
 import Image from "next/image";
 
+const COLLAGE_IMAGES = Array.from(
+  { length: 20 },
+  (_, i) => `/images/brand-${(i % 15) + 1}.jpg`
+);
+
 export default function HomePage() {
   return (
-    <div className="relative flex min-h-screen flex-col bg-espresso">
-      <header className="relative z-10 flex items-center justify-between px-6 py-5 sm:px-10">
-        <div className="flex items-center gap-3">
-          <Image
-            src="/logo.png"
-            alt="Still Café"
-            width={36}
-            height={36}
-            className="rounded-full"
-            priority
-          />
-          <span className="text-sm font-medium tracking-wide text-cream/70">
-            Still Café
-          </span>
+    <div className="relative flex min-h-screen flex-col overflow-hidden bg-maroon">
+      {/* Animated photo collage background */}
+      <div className="pointer-events-none absolute inset-0" aria-hidden="true">
+        <div className="absolute -inset-[50%] rotate-[-12deg]">
+          <div className="animate-collage grid h-full w-full grid-cols-5 grid-rows-4 gap-3 p-4">
+            {COLLAGE_IMAGES.map((src, i) => (
+              <div
+                key={i}
+                className="overflow-hidden rounded-2xl bg-maroon/60"
+              >
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  src={src}
+                  alt=""
+                  className="h-full w-full object-cover"
+                  loading="lazy"
+                />
+              </div>
+            ))}
+          </div>
         </div>
+        <div className="absolute inset-0 bg-maroon/80" />
+      </div>
+
+      <main className="relative z-10 flex flex-1 flex-col items-center justify-center px-6 py-20">
+        <Image
+          src="/logo.png"
+          alt="Still Caf&eacute;"
+          width={80}
+          height={80}
+          className="animate-float rounded-full"
+          priority
+        />
+        <h1 className="mt-6 text-center font-serif text-5xl font-semibold leading-[1.1] text-cream sm:text-6xl">
+          Still Caf&eacute;
+        </h1>
+        <p className="mt-3 text-center text-xs uppercase tracking-[0.3em] text-cream/50">
+          Be still. Drink coffee.
+        </p>
+        <p className="mx-auto mt-8 max-w-md text-center text-sm leading-relaxed text-cream/60">
+          We&apos;re a small neighborhood caf&eacute; that also brings a full
+          espresso bar to your event &mdash; weddings, birthdays, corporate
+          gatherings. Good coffee, good vibes, no hassle on your end.
+        </p>
         <Link
           href="/book"
-          className="rounded-lg bg-cream/10 px-4 py-2 text-sm font-medium text-cream/80 backdrop-blur-sm transition hover:bg-cream/20 hover:text-cream"
+          className="mt-10 inline-block rounded-full bg-cream px-8 py-3.5 text-sm font-semibold text-maroon shadow-glow transition hover:scale-[1.02] hover:bg-white hover:shadow-elevated active:scale-[0.98]"
         >
-          Book now
+          Book your event
         </Link>
-      </header>
-
-      <main className="relative z-10 flex flex-1 flex-col items-center justify-center px-6 pb-20">
-        <div className="animate-fade-in text-center">
-          <p className="text-[11px] font-medium uppercase tracking-[0.35em] text-cream/30">
-            Mobile espresso bar for events
-          </p>
-
-          <h1 className="mt-5 font-serif text-5xl leading-[1.1] text-cream sm:text-7xl">
-            Be still.
-            <br />
-            Drink coffee.
-          </h1>
-
-          <p className="mx-auto mt-6 max-w-sm text-[15px] leading-relaxed text-cream/45">
-            We bring a full espresso bar to your event — weddings,
-            birthdays, corporate gatherings. Good coffee, good vibes,
-            no hassle on your end.
-          </p>
-
-          <div className="mt-10 flex flex-col items-center gap-3 sm:flex-row sm:justify-center">
-            <Link
-              href="/book"
-              className="inline-flex items-center gap-2 rounded-lg bg-cream px-7 py-3 text-sm font-semibold text-espresso transition hover:bg-white active:scale-[0.98]"
-            >
-              Book your event
-              <svg width="14" height="14" viewBox="0 0 16 16" fill="none" className="opacity-40">
-                <path d="M6 3l5 5-5 5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-              </svg>
-            </Link>
-            <span className="text-[13px] text-cream/25">
-              Takes about 5 minutes
-            </span>
-          </div>
-        </div>
-
-        <div className="animate-slide-up-delay mt-20 flex items-center gap-8 text-center sm:gap-12">
-          <div>
-            <div className="text-2xl font-semibold text-cream/80">500+</div>
-            <div className="mt-1 text-[11px] text-cream/25">Events served</div>
-          </div>
-          <div className="h-8 w-px bg-cream/10" />
-          <div>
-            <div className="text-2xl font-semibold text-cream/80">4.9</div>
-            <div className="mt-1 text-[11px] text-cream/25">Client rating</div>
-          </div>
-          <div className="h-8 w-px bg-cream/10" />
-          <div>
-            <div className="text-2xl font-semibold text-cream/80">Metro Manila</div>
-            <div className="mt-1 text-[11px] text-cream/25">Service area</div>
-          </div>
-        </div>
+        <p className="mt-16 text-xs text-cream/25">
+          Serving Metro Manila &middot; Available for private events
+        </p>
       </main>
 
-      <footer className="relative z-10 px-6 py-5 text-center text-[11px] text-cream/15">
-        &copy; {new Date().getFullYear()} Still Café. All rights reserved.
+      <footer className="relative z-10 py-4 text-center text-[11px] text-cream/15">
+        &copy; {new Date().getFullYear()} Still Caf&eacute;
       </footer>
     </div>
   );
