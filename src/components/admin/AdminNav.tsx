@@ -13,7 +13,7 @@ const LINKS = [
 export function AdminNav() {
   const pathname = usePathname();
   return (
-    <nav className="flex gap-1">
+    <nav className="flex gap-0.5">
       {LINKS.map((l) => {
         const active =
           l.href === "/admin"
@@ -23,10 +23,10 @@ export function AdminNav() {
           <Link
             key={l.href}
             href={l.href}
-            className={`rounded-full px-4 py-2 text-sm font-medium transition ${
+            className={`rounded-lg px-3 py-1.5 text-[13px] font-medium transition ${
               active
-                ? "bg-mocha text-cream"
-                : "text-espresso/70 hover:bg-latte/60"
+                ? "bg-espresso text-cream"
+                : "text-espresso/40 hover:bg-sand hover:text-espresso/70"
             }`}
           >
             {l.label}

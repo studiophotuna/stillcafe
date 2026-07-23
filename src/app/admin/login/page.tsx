@@ -1,3 +1,4 @@
+import Image from "next/image";
 import { Suspense } from "react";
 import { LoginForm } from "@/components/admin/LoginForm";
 
@@ -8,11 +9,17 @@ export default function AdminLoginPage() {
     <div className="flex min-h-screen items-center justify-center bg-cream px-5">
       <div className="w-full max-w-sm">
         <div className="mb-6 text-center">
-          <div className="text-3xl">☕</div>
-          <h1 className="mt-2 font-serif text-2xl font-semibold text-espresso">
-            Still Café Admin
+          <Image
+            src="/logo.png"
+            alt="Still Café"
+            width={48}
+            height={48}
+            className="mx-auto rounded-full"
+          />
+          <h1 className="mt-4 font-serif text-2xl text-espresso">
+            Admin
           </h1>
-          <p className="mt-1 text-sm text-espresso/60">
+          <p className="mt-1 text-[13px] text-espresso/35">
             Sign in to manage packages and bookings.
           </p>
         </div>

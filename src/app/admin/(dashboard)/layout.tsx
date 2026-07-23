@@ -1,4 +1,5 @@
 import Link from "next/link";
+import Image from "next/image";
 import { AdminNav } from "@/components/admin/AdminNav";
 import { AdminAutoRefresh } from "@/components/admin/AdminAutoRefresh";
 import { SignOutButton } from "@/components/admin/SignOutButton";
@@ -12,21 +13,26 @@ export default function AdminLayout({
 }) {
   return (
     <div className="min-h-screen bg-cream">
-      <header className="border-b border-latte/40 bg-white shadow-soft">
-        <div className="mx-auto flex max-w-6xl flex-col gap-4 px-5 py-3.5 sm:flex-row sm:items-center sm:justify-between">
+      <header className="border-b border-latte bg-white">
+        <div className="mx-auto flex max-w-6xl flex-col gap-3 px-5 py-3 sm:flex-row sm:items-center sm:justify-between">
           <Link href="/admin" className="flex items-center gap-2.5">
-            <div className="flex h-7 w-7 items-center justify-center rounded-full bg-espresso text-[10px] font-bold text-cream">
-              SC
-            </div>
-            <span className="font-serif text-base font-semibold text-espresso">
-              Still Caf&eacute;
+            <Image
+              src="/logo.png"
+              alt="Still Café"
+              width={28}
+              height={28}
+              className="rounded-full"
+            />
+            <span className="text-sm font-semibold text-espresso">
+              Still Café
             </span>
-            <span className="rounded-md bg-sand px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-espresso/40">
+            <span className="rounded bg-espresso/[0.06] px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-espresso/35">
               Admin
             </span>
           </Link>
-          <div className="flex items-center gap-4">
+          <div className="flex items-center gap-3">
             <AdminNav />
+            <div className="hidden h-5 w-px bg-latte sm:block" />
             <SignOutButton />
           </div>
         </div>

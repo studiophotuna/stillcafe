@@ -10,34 +10,34 @@ export default function CancelledPage({
 }) {
   return (
     <div className="flex min-h-screen flex-col bg-cream">
-      <header className="border-b border-latte/30 bg-white/70 backdrop-blur-sm">
-        <div className="mx-auto flex max-w-7xl items-center px-5 py-3">
-          <Link href="/" className="flex items-center gap-2">
+      <header className="border-b border-latte bg-white">
+        <div className="mx-auto flex max-w-6xl items-center px-5 py-3">
+          <Link href="/" className="flex items-center gap-2.5">
             <Image
               src="/logo.png"
-              alt="Still Caf&eacute;"
-              width={32}
-              height={32}
+              alt="Still Café"
+              width={28}
+              height={28}
               className="rounded-full"
             />
-            <span className="font-serif text-base font-semibold text-espresso">
-              Still Caf&eacute;
+            <span className="text-sm font-semibold text-espresso">
+              Still Café
             </span>
           </Link>
         </div>
       </header>
 
-      <main className="mx-auto flex w-full max-w-xl flex-1 items-start px-5 py-12">
+      <main className="mx-auto flex w-full max-w-md flex-1 items-start px-5 py-12">
         <div className="card w-full p-8 text-center">
-          <h1 className="font-serif text-xl font-semibold text-espresso">
+          <h1 className="font-serif text-xl text-espresso">
             Payment cancelled
           </h1>
-          <p className="mt-2 text-sm text-espresso/50">
-            No worries &mdash; you weren&apos;t charged. You can start a new
+          <p className="mt-2 text-[14px] text-espresso/40">
+            No worries — you weren&apos;t charged. You can start a new
             booking whenever you&apos;re ready.
           </p>
           {searchParams.ref && (
-            <p className="mt-3 text-xs text-espresso/30">
+            <p className="mt-3 text-[12px] text-espresso/25">
               Ref: <span className="font-mono">{searchParams.ref}</span>
             </p>
           )}
@@ -52,8 +52,8 @@ export default function CancelledPage({
         </div>
       </main>
 
-      <footer className="border-t border-latte/20 px-5 py-5 text-center text-xs text-espresso/25">
-        &copy; {new Date().getFullYear()} Still Caf&eacute;
+      <footer className="border-t border-latte px-5 py-5 text-center text-[11px] text-espresso/20">
+        &copy; {new Date().getFullYear()} Still Café
       </footer>
     </div>
   );

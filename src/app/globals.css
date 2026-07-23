@@ -8,35 +8,33 @@
 
 body {
   @apply bg-cream text-espresso antialiased;
+  font-feature-settings: "ss01", "ss02";
 }
 
 @layer components {
   .btn {
-    @apply inline-flex items-center justify-center rounded-full px-6 py-3 text-sm font-semibold tracking-wide transition-all duration-200 disabled:cursor-not-allowed disabled:opacity-50;
+    @apply inline-flex items-center justify-center px-5 py-2.5 text-sm font-medium tracking-wide transition-all duration-150 disabled:cursor-not-allowed disabled:opacity-40;
   }
   .btn-primary {
-    @apply btn bg-maroon text-cream shadow-soft hover:bg-mocha hover:shadow-glow active:scale-[0.98];
+    @apply btn rounded-lg bg-maroon text-cream shadow-soft hover:bg-mocha active:scale-[0.98];
   }
   .btn-secondary {
-    @apply btn border border-espresso/15 bg-white text-espresso hover:border-espresso/30 hover:bg-sand active:scale-[0.98];
+    @apply btn rounded-lg border border-latte bg-white text-espresso hover:border-espresso/20 hover:bg-sand active:scale-[0.98];
   }
   .btn-ghost {
-    @apply btn text-espresso/70 hover:bg-espresso/5 hover:text-espresso;
+    @apply btn rounded-lg text-espresso/60 hover:bg-espresso/5 hover:text-espresso;
   }
   .field-label {
-    @apply mb-1.5 block text-xs font-medium text-espresso/60;
+    @apply mb-1.5 block text-[13px] font-medium text-espresso/50;
   }
   .field-input {
-    @apply w-full rounded-xl border border-latte bg-white px-4 py-3 text-sm text-espresso shadow-sm outline-none transition-all duration-200 placeholder:text-espresso/30 focus:border-mocha focus:ring-2 focus:ring-mocha/15;
+    @apply w-full rounded-lg border border-latte bg-white px-3.5 py-2.5 text-sm text-espresso outline-none transition placeholder:text-espresso/25 focus:border-mocha focus:ring-2 focus:ring-mocha/10;
   }
   .card {
-    @apply rounded-2xl border border-latte/60 bg-white shadow-card;
-  }
-  .glass {
-    @apply border border-white/30 bg-white/60 shadow-card backdrop-blur-xl;
+    @apply rounded-2xl border border-latte bg-white shadow-soft;
   }
 }
 
 ::selection {
-  @apply bg-caramel/20 text-espresso;
+  @apply bg-maroon/10 text-espresso;
 }
