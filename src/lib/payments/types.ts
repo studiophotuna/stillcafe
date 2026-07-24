@@ -1,5 +1,11 @@
 import type { PaymentMethod } from "@/lib/types";
 
+export type ProviderKeys = {
+  secretKey: string;
+  publicKey?: string;
+  webhookSecret?: string;
+};
+
 export type CreateCheckoutInput = {
   bookingId: string;
   reference: string;

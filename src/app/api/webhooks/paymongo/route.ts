@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { revalidatePath } from "next/cache";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { getPaymentProvider } from "@/lib/payments";
+import { getWebhookProvider } from "@/lib/payments";
 
 export const runtime = "nodejs";
 
@@ -15,7 +15,7 @@ export async function POST(req: Request) {
   const headers: Record<string, string> = {};
   req.headers.forEach((v, k) => (headers[k.toLowerCase()] = v));
 
-  const provider = getPaymentProvider("paymongo");
+  const provider = await getWebhookProvider("paymongo");
 
   let result;
   try {

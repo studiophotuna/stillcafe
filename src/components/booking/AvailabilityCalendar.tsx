@@ -64,9 +64,9 @@ export function AvailabilityCalendar({
   }
 
   return (
-    <div className="rounded-2xl border border-latte/30 bg-white/80 p-5 backdrop-blur-sm">
+    <div role="group" aria-label="Date picker" className="rounded-xl border border-latte/30 bg-card p-5">
       <div className="flex items-center justify-between">
-        <strong className="text-sm font-semibold text-espresso">
+        <strong className="text-sm font-medium text-espresso">
           {MONTHS[view.getMonth()]} {view.getFullYear()}
         </strong>
         <div className="flex gap-1">
@@ -74,14 +74,16 @@ export function AvailabilityCalendar({
             type="button"
             onClick={() => shift(-1)}
             disabled={!canGoPrev}
-            className="flex h-8 w-8 items-center justify-center rounded-lg border border-latte/60 bg-white text-xs font-bold text-espresso hover:bg-sand disabled:opacity-30"
+            aria-label="Previous month"
+            className="flex h-8 w-8 items-center justify-center rounded-lg border border-latte/50 bg-card text-xs text-espresso/60 transition-colors hover:bg-sand/50 disabled:opacity-30"
           >
             &lt;
           </button>
           <button
             type="button"
             onClick={() => shift(1)}
-            className="flex h-8 w-8 items-center justify-center rounded-lg border border-latte/60 bg-white text-xs font-bold text-espresso hover:bg-sand"
+            aria-label="Next month"
+            className="flex h-8 w-8 items-center justify-center rounded-lg border border-latte/50 bg-card text-xs text-espresso/60 transition-colors hover:bg-sand/50"
           >
             &gt;
           </button>
@@ -112,11 +114,12 @@ export function AvailabilityCalendar({
               onClick={() => onSelect(key)}
               className={`flex aspect-square items-center justify-center rounded-lg text-xs font-medium transition-colors ${
                 isSel
-                  ? "bg-maroon text-cream shadow-sm"
+                  ? "bg-maroon text-cream"
                   : disabled
                     ? "cursor-not-allowed text-espresso/20 line-through"
-                    : "text-espresso hover:bg-sand"
+                    : "text-espresso hover:bg-sand/50"
               }`}
+              aria-label={`${MONTHS[view.getMonth()]} ${date.getDate()}, ${isBooked ? "booked" : isPast ? "past" : isSel ? "selected" : "available"}`}
               title={isBooked ? "Booked" : isPast ? "Past date" : "Available"}
             >
               {date.getDate()}

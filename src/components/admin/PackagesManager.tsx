@@ -30,7 +30,7 @@ export function PackagesManager({ packages }: { packages: Package[] }) {
     <div>
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="font-serif text-2xl font-semibold text-espresso">
+          <h1 className="font-serif text-2xl text-espresso">
             Packages
           </h1>
           <p className="mt-1 text-sm text-espresso/60">
@@ -52,7 +52,7 @@ export function PackagesManager({ packages }: { packages: Package[] }) {
 
       {(creating || editing) && (
         <div className="mt-6 card p-6">
-          <h2 className="mb-4 font-serif text-lg font-semibold text-espresso">
+          <h2 className="mb-4 font-serif text-base text-espresso">
             {editing ? `Edit — ${editing.name}` : "New package"}
           </h2>
           <PackageForm pkg={editing ?? undefined} onDone={done} />
@@ -66,7 +66,7 @@ export function PackagesManager({ packages }: { packages: Package[] }) {
             className="card flex flex-wrap items-center justify-between gap-4 p-4"
           >
             <div className="flex items-center gap-4">
-              <div className="flex h-14 w-14 items-center justify-center overflow-hidden rounded-xl bg-latte/60 text-2xl">
+              <div className="flex h-12 w-12 items-center justify-center overflow-hidden rounded-lg bg-latte/40 text-xl">
                 {p.image_url ? (
                   // eslint-disable-next-line @next/next/no-img-element
                   <img
@@ -82,7 +82,7 @@ export function PackagesManager({ packages }: { packages: Package[] }) {
                 <div className="flex items-center gap-2">
                   <h3 className="font-medium text-espresso">{p.name}</h3>
                   {!p.is_active && (
-                    <span className="rounded-full bg-latte px-2 py-0.5 text-xs text-espresso/60">
+                    <span className="rounded bg-latte/50 px-1.5 py-0.5 text-[11px] text-espresso/50">
                       Hidden
                     </span>
                   )}

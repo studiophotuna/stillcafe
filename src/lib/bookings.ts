@@ -1,6 +1,6 @@
 import { revalidatePath } from "next/cache";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { getPaymentProvider } from "@/lib/payments";
+import { getWebhookProvider } from "@/lib/payments";
 import type { Booking } from "@/lib/types";
 
 /**
@@ -36,7 +36,7 @@ export async function syncBookingPayment(
   if (!payment?.provider_ref) return booking;
 
   try {
-    const provider = getPaymentProvider(payment.provider);
+    const provider = await getWebhookProvider(payment.provider);
     const result = await provider.retrieveCheckoutStatus(payment.provider_ref);
 
     if (result.status === "paid") {

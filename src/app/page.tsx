@@ -1,6 +1,16 @@
-import Link from "next/link";
 import Image from "next/image";
-import { getSiteContent } from "@/lib/data";
+import {
+  getActivePackages,
+  getBookedDates,
+  getSettings,
+  getSiteContent,
+} from "@/lib/data";
+import {
+  BookingDrawer,
+  BookNowTrigger,
+} from "@/components/booking/BookingDrawer";
+import { NavPagesMenu } from "@/components/landing/NavPagesMenu";
+import { BackgroundCarousel } from "@/components/landing/BackgroundCarousel";
 
 export const dynamic = "force-dynamic";
 
@@ -33,6 +43,22 @@ function TikTokIcon() {
 export default async function HomePage() {
   const content = await getSiteContent();
 
+  // Booking data for the slide-over panel; the page still renders if it fails.
+  let packages: Awaited<ReturnType<typeof getActivePackages>> = [];
+  let settings: Awaited<ReturnType<typeof getSettings>> | null = null;
+  let bookedDates: string[] = [];
+  try {
+    [packages, settings, bookedDates] = await Promise.all([
+      getActivePackages(),
+      getSettings(),
+      getBookedDates(),
+    ]);
+  } catch {}
+
+  const carouselImages =
+    content.bg_mode === "carousel" && content.bg_images.length > 0
+      ? content.bg_images
+      : [];
   const bgImage =
     content.bg_mode === "static" && content.bg_static_image
       ? content.bg_static_image
@@ -48,45 +74,59 @@ export default async function HomePage() {
   const hasSocials =
     content.social_instagram || content.social_facebook || content.social_tiktok;
 
+  const bookNowCls =
+    "rounded-full border border-cream/40 px-5 py-2 text-[11px] uppercase tracking-[0.2em] text-cream/90 backdrop-blur-sm transition-all hover:border-cream hover:bg-cream hover:text-espresso";
+
   return (
-    <div className="relative flex min-h-screen flex-col">
-      {/* Background image */}
+    <div className="relative flex min-h-screen flex-col overflow-hidden">
+      {/* Background image / carousel */}
       <div className="pointer-events-none absolute inset-0" aria-hidden="true">
-        {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img
-          src={bgImage}
-          alt=""
-          className="h-full w-full object-cover"
-        />
+        {carouselImages.length > 1 ? (
+          <BackgroundCarousel images={carouselImages} />
+        ) : (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img
+            src={bgImage}
+            alt=""
+            className="h-full w-full scale-105 object-cover"
+          />
+        )}
         <div className="absolute inset-0" style={overlayStyle} />
+        {/* Scrims keep nav and footer readable over any photo */}
+        <div className="absolute inset-x-0 top-0 h-48 bg-gradient-to-b from-black/40 to-transparent" />
+        <div className="absolute inset-x-0 bottom-0 h-32 bg-gradient-to-t from-black/35 to-transparent" />
       </div>
 
-      {/* Top navigation bar */}
-      <nav className="relative z-10 flex items-center justify-between px-6 py-5 sm:px-10 sm:py-7">
-        {/* Left: nav links */}
-        <div className="flex items-center gap-6 sm:gap-8">
-          <Link
-            href="#about"
-            className="text-[11px] uppercase tracking-[0.2em] text-cream/70 transition-colors hover:text-cream"
-          >
-            About
-          </Link>
-          <Link
-            href="#faq"
-            className="text-[11px] uppercase tracking-[0.2em] text-cream/70 transition-colors hover:text-cream"
-          >
-            FAQ
-          </Link>
+      {/* Top bar: links · logo · socials + book now */}
+      <nav className="relative z-10 grid grid-cols-[1fr_auto_1fr] items-start gap-4 px-6 pt-4 sm:px-10 sm:pt-5">
+        {/* Left: admin-managed nav pages */}
+        <div className="pt-2">
+          <NavPagesMenu pages={content.nav_pages} />
+        </div>
+
+        {/* Center: logo at the very top, tagline right under it */}
+        <div className="animate-fade-in flex flex-col items-center">
+          <Image
+            src={content.logo_url || "/logo.png"}
+            alt={content.brand_name}
+            width={120}
+            height={120}
+            className="h-20 w-20 object-contain sm:h-28 sm:w-28"
+            priority
+          />
+          <p className="mt-3 max-w-xs text-center text-[10px] uppercase tracking-[0.3em] text-cream/60 sm:text-[11px]">
+            {content.tagline}
+          </p>
         </div>
 
         {/* Right: social icons + book now */}
-        <div className="flex items-center gap-4 sm:gap-5">
+        <div className="flex items-center justify-end gap-4 pt-1 sm:gap-5">
           {content.social_instagram && (
             <a
               href={content.social_instagram}
               target="_blank"
               rel="noopener noreferrer"
-              className="text-cream/60 transition-colors hover:text-cream"
+              className="text-cream/60 transition-all hover:scale-110 hover:text-cream"
               aria-label="Instagram"
             >
               <InstagramIcon />
@@ -97,7 +137,7 @@ export default async function HomePage() {
               href={content.social_facebook}
               target="_blank"
               rel="noopener noreferrer"
-              className="text-cream/60 transition-colors hover:text-cream"
+              className="text-cream/60 transition-all hover:scale-110 hover:text-cream"
               aria-label="Facebook"
             >
               <FacebookIcon />
@@ -108,45 +148,33 @@ export default async function HomePage() {
               href={content.social_tiktok}
               target="_blank"
               rel="noopener noreferrer"
-              className="text-cream/60 transition-colors hover:text-cream"
+              className="text-cream/60 transition-all hover:scale-110 hover:text-cream"
               aria-label="TikTok"
             >
               <TikTokIcon />
             </a>
           )}
-          {hasSocials && (
-            <div className="h-4 w-px bg-cream/20" />
-          )}
-          <Link
-            href="/book"
-            className="text-[11px] uppercase tracking-[0.2em] text-cream/70 transition-colors hover:text-cream"
-          >
-            Book Now
-          </Link>
+          {hasSocials && <div className="hidden h-4 w-px bg-cream/20 sm:block" />}
+          <BookNowTrigger className={bookNowCls}>Book Now</BookNowTrigger>
         </div>
       </nav>
 
-      {/* Center: logo + tagline */}
-      <main className="relative z-10 flex flex-1 flex-col items-center justify-center px-6">
-        <div className="flex flex-col items-center">
-          <Image
-            src={content.logo_url || "/logo.png"}
-            alt={content.brand_name}
-            width={180}
-            height={180}
-            className="rounded-full"
-            priority
-          />
-          <p className="mt-6 text-center text-[11px] uppercase tracking-[0.3em] text-cream/50">
-            {content.tagline}
-          </p>
-        </div>
-      </main>
+      {/* Open space: let the background photo breathe */}
+      <main className="relative z-10 flex-1" />
 
       {/* Bottom: copyright */}
-      <footer className="relative z-10 py-5 text-center text-[10px] uppercase tracking-[0.15em] text-cream/25">
+      <footer className="relative z-10 py-5 text-center text-[10px] uppercase tracking-[0.15em] text-cream/30">
         {content.copyright_text}
       </footer>
+
+      {/* Right slide-over booking panel */}
+      <BookingDrawer
+        packages={packages}
+        settings={settings}
+        bookedDates={bookedDates}
+        policies={content.policies}
+        wizardFaqs={content.wizard_faqs}
+      />
     </div>
   );
 }

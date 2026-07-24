@@ -51,6 +51,7 @@ export type Booking = {
   venue_address: string | null;
   maps_link: string | null;
   event_type: string | null;
+  timezone: string | null;
   guest_count: number | null;
   notes: string;
   amount_due_cents: number;
@@ -81,33 +82,37 @@ export type Payment = {
   updated_at: string;
 };
 
-export type PaymentMethod = "gcash" | "card" | "grab_pay" | "paymaya";
+export type PaymentMethod = "gcash" | "card" | "grab_pay" | "paymaya" | "link";
 
-export type Settings = {
-  id: number;
-  payment_provider: string;
-  payment_methods: PaymentMethod[];
-  business_name: string;
-  business_email: string | null;
-  currency: string;
-  deposit_percent: number;
-  combo_discount_cents: number;
-  combo_min_packages: number;
-  extra_hour_cents: number;
-  standard_hours: number;
-  service_area: string;
-  service_cities: string[];
-  reference_prefix: string;
-  min_guests: number;
-  max_guests: number;
-  event_types: string[];
-  locale: string;
+export type PaymentConfig = {
+  id: string;
+  provider: string;
+  display_name: string;
+  public_key: string | null;
+  secret_key: string | null;
+  webhook_secret: string | null;
+  is_active: boolean;
+  supported_methods: string[];
+  config: Record<string, unknown>;
+  created_at: string;
   updated_at: string;
 };
 
 export type FaqItem = {
   question: string;
   answer: string;
+};
+
+export type NavPageSection = {
+  heading: string;
+  body: string;
+};
+
+export type NavPage = {
+  label: string;
+  title: string;
+  content: string;
+  sections?: NavPageSection[];
 };
 
 export type SiteContent = {
@@ -143,20 +148,33 @@ export type SiteContent = {
   social_instagram: string;
   social_facebook: string;
   social_tiktok: string;
+  font_display: string;
+  font_body: string;
+  font_size_base: number;
+  font_weight_body: number;
+  nav_pages: NavPage[];
   created_at: string;
   updated_at: string;
 };
 
-export type PaymentConfig = {
-  id: string;
-  provider: string;
-  display_name: string;
-  public_key: string | null;
-  secret_key: string | null;
-  webhook_secret: string | null;
-  is_active: boolean;
-  supported_methods: string[];
-  config: Record<string, unknown>;
-  created_at: string;
+export type Settings = {
+  id: number;
+  payment_provider: string;
+  payment_methods: PaymentMethod[];
+  business_name: string;
+  business_email: string | null;
+  currency: string;
+  deposit_percent: number;
+  combo_discount_cents: number;
+  combo_min_packages: number;
+  extra_hour_cents: number;
+  standard_hours: number;
+  service_area: string;
+  service_cities: string[];
+  reference_prefix: string;
+  min_guests: number;
+  max_guests: number;
+  event_types: string[];
+  locale: string;
   updated_at: string;
 };

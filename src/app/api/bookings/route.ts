@@ -2,10 +2,13 @@ import { NextResponse } from "next/server";
 import { revalidatePath } from "next/cache";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getSettings } from "@/lib/data";
-import { getPaymentProvider } from "@/lib/payments";
+import { getPaymentProviderFromConfig } from "@/lib/payments";
 import { generateReference } from "@/lib/reference";
 import { computeQuote } from "@/lib/pricing";
-import type { PaymentMethod } from "@/lib/types";
+import { rateLimit } from "@/lib/rate-limit";
+import { sendEmail } from "@/lib/email";
+import { bookingConfirmationEmail, adminNewBookingEmail } from "@/lib/email-templates";
+import type { Booking, PaymentMethod, Settings } from "@/lib/types";
 
 export const runtime = "nodejs";
 
@@ -16,7 +19,22 @@ function siteUrl(): string {
   );
 }
 
+function clientIp(req: Request): string {
+  const forwarded = req.headers.get("x-forwarded-for");
+  if (forwarded) return forwarded.split(",")[0].trim();
+  return "unknown";
+}
+
 export async function POST(req: Request) {
+  const ip = clientIp(req);
+  const { ok } = rateLimit(`booking:${ip}`, 5);
+  if (!ok) {
+    return NextResponse.json(
+      { error: "Too many booking attempts. Please wait a minute and try again." },
+      { status: 429 }
+    );
+  }
+
   let payload: any;
   try {
     payload = await req.json();
@@ -40,6 +58,7 @@ export async function POST(req: Request) {
     customer_phone,
     customer_email,
     notes,
+    timezone,
   } = payload ?? {};
 
   // ---- validate ----
@@ -54,9 +73,10 @@ export async function POST(req: Request) {
     return bad("Invalid contact number.");
   if (customer_email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(customer_email))
     return bad("Invalid email.");
+  const settings = await getSettings();
   const guestCount = Number(guests);
-  if (!guestCount || guestCount < 20 || guestCount > 500)
-    return bad("Estimated guests must be between 20 and 500.");
+  if (!guestCount || guestCount < settings.min_guests || guestCount > settings.max_guests)
+    return bad(`Estimated guests must be between ${settings.min_guests} and ${settings.max_guests}.`);
   if (!event_type) return bad("Missing event type.");
 
   const supabase = createAdminClient();
@@ -82,14 +102,13 @@ export async function POST(req: Request) {
   if (!pkgs || pkgs.length === 0)
     return bad("Selected packages are unavailable.");
 
-  const settings = await getSettings();
   const quote = computeQuote(pkgs, Number(extra_hours) || 0, settings);
 
   const chosenMethod: PaymentMethod = settings.payment_methods.includes(method)
     ? method
     : (settings.payment_methods[0] ?? "gcash");
 
-  const reference = generateReference();
+  const reference = generateReference(settings.reference_prefix || "BK");
   const combinedName = pkgs.map((p) => p.name).join(" + ");
   const snapshot = pkgs.map((p) => ({
     id: p.id,
@@ -125,6 +144,7 @@ export async function POST(req: Request) {
       venue_address: venue_address.trim(),
       maps_link: maps_link || null,
       event_type,
+      timezone: timezone || null,
       guest_count: guestCount,
       notes: (notes ?? "").trim(),
       amount_due_cents: quote.depositCents,
@@ -134,18 +154,21 @@ export async function POST(req: Request) {
     .single();
 
   if (bookErr || !booking) {
+    if (bookErr?.code === "23505") {
+      return bad("Sorry, that date was just booked by someone else. Please choose another.");
+    }
     return bad("Could not create booking. Please try again.", 500);
   }
 
   // ---- create payment + provider checkout for the deposit ----
   try {
-    const provider = getPaymentProvider(settings.payment_provider);
+    const provider = await getPaymentProviderFromConfig();
     const checkout = await provider.createCheckout({
       bookingId: booking.id,
       reference: booking.reference,
       amountCents: quote.depositCents,
       currency: settings.currency,
-      description: `Still Café deposit — ${combinedName} (${booking.reference})`,
+      description: `${settings.business_name} deposit — ${combinedName} (${booking.reference})`,
       customerName: booking.customer_name,
       customerEmail: booking.customer_email || "noreply@example.com",
       customerPhone: booking.customer_phone,
@@ -167,6 +190,8 @@ export async function POST(req: Request) {
     revalidatePath("/admin", "layout");
     revalidatePath("/book");
 
+    sendEmails(booking, settings).catch(() => {});
+
     return NextResponse.json({
       reference: booking.reference,
       checkoutUrl: checkout.checkoutUrl,
@@ -183,4 +208,21 @@ export async function POST(req: Request) {
 
 function bad(error: string, status = 400) {
   return NextResponse.json({ error }, { status });
+}
+
+async function sendEmails(booking: Booking, settings: Settings) {
+  if (booking.customer_email) {
+    const { subject, html } = bookingConfirmationEmail(booking, settings);
+    await sendEmail({
+      to: booking.customer_email,
+      subject,
+      html,
+      replyTo: settings.business_email ?? undefined,
+    });
+  }
+
+  if (settings.business_email) {
+    const { subject, html } = adminNewBookingEmail(booking, settings);
+    await sendEmail({ to: settings.business_email, subject, html });
+  }
 }

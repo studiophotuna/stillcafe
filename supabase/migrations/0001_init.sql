@@ -1,5 +1,5 @@
--- Still Café — coffee cart booking system
--- Initial schema: packages, bookings, payments, settings
+-- Event booking CMS — initial schema
+-- Schema: packages, bookings, payments, settings
 
 -- ---------------------------------------------------------------------------
 -- Extensions
@@ -99,7 +99,7 @@ create table if not exists public.settings (
   payment_provider   text not null default 'paymongo',
   -- which methods the customer can choose at checkout
   payment_methods    text[] not null default array['gcash','card'],
-  business_name      text not null default 'Still Café',
+  business_name      text not null default 'My Business',
   business_email     text,
   currency           text not null default 'PHP',
   updated_at         timestamptz not null default now()

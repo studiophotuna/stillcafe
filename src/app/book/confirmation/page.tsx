@@ -1,10 +1,16 @@
+import type { Metadata } from "next";
 import Link from "next/link";
 import Image from "next/image";
 import { syncBookingPayment } from "@/lib/bookings";
-import { formatDate, formatMoney } from "@/lib/format";
 import { getSiteContent } from "@/lib/data";
+import { formatDate, formatMoney } from "@/lib/format";
 
 export const dynamic = "force-dynamic";
+
+export const metadata: Metadata = {
+  title: "Booking Confirmation",
+  robots: { index: false },
+};
 
 export default async function ConfirmationPage({
   searchParams,
@@ -12,12 +18,10 @@ export default async function ConfirmationPage({
   searchParams: { ref?: string };
 }) {
   const ref = searchParams.ref;
-  const booking = ref ? await syncBookingPayment(ref).catch(() => null) : null;
-
-  let content: Awaited<ReturnType<typeof getSiteContent>> | null = null;
-  try {
-    content = await getSiteContent();
-  } catch {}
+  const [booking, content] = await Promise.all([
+    ref ? syncBookingPayment(ref).catch(() => null) : Promise.resolve(null),
+    getSiteContent().catch(() => null),
+  ]);
 
   const brandName = content?.brand_name ?? "My Business";
   const logoUrl = content?.logo_url || "/logo.png";
@@ -39,10 +43,10 @@ export default async function ConfirmationPage({
       </header>
 
       <main className="mx-auto flex w-full max-w-lg flex-1 flex-col items-start px-5 py-8">
-        <div className="w-full overflow-hidden rounded-2xl border border-espresso/8 bg-white shadow-card">
+        <div className="w-full animate-rise overflow-hidden rounded-2xl border border-espresso/8 bg-card shadow-card">
           <div className="border-b border-espresso/8 px-6 py-6 text-center">
             <h1 className="font-serif text-xl text-espresso">
-              {paid ? "You're all set!" : "Thanks for booking!"}
+              {paid ? "You’re all set!" : "Thanks for booking!"}
             </h1>
             <p className="mt-2 text-sm text-espresso/45">
               {paid
@@ -112,12 +116,18 @@ export default async function ConfirmationPage({
             </div>
           )}
 
-          <div className="border-t border-espresso/8 px-6 py-4 text-center">
+          <div className="border-t border-espresso/8 px-6 py-4 text-center space-x-4">
             <Link
               href="/"
               className="text-[11px] uppercase tracking-[0.2em] text-espresso/40 transition-colors hover:text-espresso/70"
             >
               Back to home
+            </Link>
+            <Link
+              href={`/book/status${booking ? `?ref=${booking.reference}` : ""}`}
+              className="text-[11px] uppercase tracking-[0.2em] text-espresso/40 transition-colors hover:text-espresso/70"
+            >
+              Check status
             </Link>
           </div>
         </div>
@@ -132,7 +142,7 @@ export default async function ConfirmationPage({
 
 function Item({ label, value }: { label: string; value: string }) {
   return (
-    <div className="flex items-center justify-between gap-6 bg-white px-4 py-3 text-sm">
+    <div className="flex items-center justify-between gap-6 bg-card px-4 py-3 text-sm">
       <dt className="text-espresso/35">{label}</dt>
       <dd className="text-right font-medium text-espresso">{value}</dd>
     </div>

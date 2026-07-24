@@ -11,7 +11,7 @@ const STYLES: Record<BookingStatus, string> = {
 export function StatusBadge({ status }: { status: BookingStatus }) {
   return (
     <span
-      className={`inline-flex rounded-full px-2.5 py-0.5 text-xs font-medium capitalize ${STYLES[status]}`}
+      className={`inline-flex rounded px-2 py-0.5 text-[11px] font-medium capitalize ${STYLES[status]}`}
     >
       {status}
     </span>

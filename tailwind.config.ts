@@ -9,39 +9,45 @@ const config: Config = {
   theme: {
     extend: {
       colors: {
-        cream: "#faf6f0",
-        latte: "#e8ddd0",
-        mocha: "#6f4e37",
-        espresso: "#2c1e14",
-        maroon: "#5c1f1a",
-        caramel: "#c08457",
+        cream: "rgb(var(--color-page-bg, 250 246 240) / <alpha-value>)",
+        latte: "rgb(var(--color-border, 232 221 208) / <alpha-value>)",
+        mocha: "rgb(var(--color-accent, 111 78 55) / <alpha-value>)",
+        espresso: "rgb(var(--color-text, 44 30 20) / <alpha-value>)",
+        maroon: "rgb(var(--color-primary, 92 31 26) / <alpha-value>)",
+        caramel: "rgb(var(--color-highlight, 192 132 87) / <alpha-value>)",
+        sand: "rgb(var(--color-surface, 240 230 216) / <alpha-value>)",
+        card: "rgb(var(--color-card, 255 255 255) / <alpha-value>)",
         sage: "#7d9171",
         amber: "#d4a853",
         clay: "#a07358",
-        sand: "#f0e6d8",
-        card: "rgb(var(--color-card, 255 255 255) / <alpha-value>)",
       },
       fontFamily: {
-        serif: ["var(--font-serif)", "Georgia", "Cambria", "serif"],
-        sans: ["var(--font-sans)", "ui-sans-serif", "system-ui", "sans-serif"],
+        serif: ["var(--font-display)", "Georgia", "Cambria", "serif"],
+        sans: [
+          "var(--font-body)",
+          "ui-sans-serif",
+          "system-ui",
+          "-apple-system",
+          "Segoe UI",
+          "Roboto",
+          "sans-serif",
+        ],
       },
       boxShadow: {
-        soft: "0 2px 20px -4px rgba(44, 30, 20, 0.08)",
-        glow: "0 4px 30px -6px rgba(44, 30, 20, 0.12)",
-        card: "0 1px 3px rgba(44, 30, 20, 0.06), 0 8px 24px -8px rgba(44, 30, 20, 0.08)",
+        soft: "0 1px 3px rgba(0,0,0,0.04), 0 4px 12px -2px rgba(0,0,0,0.06)",
+        glow: "0 2px 8px rgba(0,0,0,0.06), 0 8px 24px -4px rgba(0,0,0,0.1)",
+        card: "0 1px 2px rgba(0,0,0,0.04), 0 2px 8px -2px rgba(0,0,0,0.06)",
         elevated:
-          "0 2px 8px rgba(44, 30, 20, 0.06), 0 16px 40px -12px rgba(44, 30, 20, 0.14)",
+          "0 2px 4px rgba(0,0,0,0.04), 0 12px 32px -8px rgba(0,0,0,0.12)",
       },
       borderRadius: {
         "2xl": "1rem",
-        "3xl": "1.5rem",
-        "4xl": "2rem",
+        "3xl": "1.25rem",
       },
       animation: {
-        "fade-in": "fadeIn 0.5s ease-out",
-        "slide-up": "slideUp 0.5s ease-out",
+        "fade-in": "fadeIn 0.4s ease-out",
+        "slide-up": "slideUp 0.4s ease-out",
         collage: "collageScroll 50s ease-in-out infinite alternate",
-        float: "float 6s ease-in-out infinite",
       },
       keyframes: {
         fadeIn: {
@@ -49,16 +55,12 @@ const config: Config = {
           "100%": { opacity: "1" },
         },
         slideUp: {
-          "0%": { opacity: "0", transform: "translateY(12px)" },
+          "0%": { opacity: "0", transform: "translateY(8px)" },
           "100%": { opacity: "1", transform: "translateY(0)" },
         },
         collageScroll: {
           "0%": { transform: "translate(0, 0)" },
           "100%": { transform: "translate(-6%, -4%)" },
-        },
-        float: {
-          "0%, 100%": { transform: "translateY(0px)" },
-          "50%": { transform: "translateY(-6px)" },
         },
       },
     },

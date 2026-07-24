@@ -33,7 +33,7 @@ export default async function CancelledPage({
       </header>
 
       <main className="mx-auto flex w-full max-w-lg flex-1 items-start px-5 py-8">
-        <div className="w-full overflow-hidden rounded-2xl border border-espresso/8 bg-white p-8 text-center shadow-card">
+        <div className="w-full animate-rise overflow-hidden rounded-2xl border border-espresso/8 bg-card p-8 text-center shadow-card">
           <h1 className="font-serif text-xl text-espresso">
             Payment cancelled
           </h1>

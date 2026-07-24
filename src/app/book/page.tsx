@@ -18,7 +18,7 @@ export async function generateMetadata(): Promise<Metadata> {
     brandName = content.brand_name;
   } catch {}
   return {
-    title: `Book - ${brandName}`,
+    title: `Book — ${brandName}`,
     description: `Reserve your date with ${brandName}.`,
   };
 }
@@ -51,7 +51,7 @@ export default async function BookPage({
   return (
     <div className="flex min-h-screen flex-col bg-cream">
       {/* Minimal header */}
-      <header className="relative z-10 flex items-center justify-between px-6 py-5 sm:px-10">
+      <header className="sticky top-0 z-20 flex items-center justify-between border-b border-latte/20 bg-cream/90 px-6 py-4 backdrop-blur-sm sm:px-10">
         <Link
           href="/"
           className="text-[11px] uppercase tracking-[0.2em] text-espresso/40 transition-colors hover:text-espresso/70"
@@ -102,14 +102,16 @@ export default async function BookPage({
             </Link>
           </div>
         ) : (
-          <BookingWizard
-            packages={packages}
-            settings={settings}
-            bookedDates={bookedDates}
-            initialPackageSlug={searchParams.package}
-            policies={content?.policies}
-            wizardFaqs={content?.wizard_faqs}
-          />
+          <div className="animate-rise">
+            <BookingWizard
+              packages={packages}
+              settings={settings}
+              bookedDates={bookedDates}
+              initialPackageSlug={searchParams.package}
+              policies={content?.policies}
+              wizardFaqs={content?.wizard_faqs}
+            />
+          </div>
         )}
       </main>
 

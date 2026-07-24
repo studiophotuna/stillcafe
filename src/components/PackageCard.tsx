@@ -12,7 +12,7 @@ export function PackageCard({
   cta?: string;
 }) {
   return (
-    <div className="card flex flex-col overflow-hidden transition-shadow hover:shadow-glow">
+    <div className="card flex flex-col overflow-hidden transition-shadow hover:shadow-soft">
       <div className="aspect-[4/3] w-full bg-sand">
         {pkg.image_url ? (
           // eslint-disable-next-line @next/next/no-img-element
@@ -28,7 +28,7 @@ export function PackageCard({
         )}
       </div>
       <div className="flex flex-1 flex-col p-5">
-        <h3 className="font-serif text-lg font-semibold text-espresso">
+        <h3 className="font-serif text-base text-espresso">
           {pkg.name}
         </h3>
         <p className="mt-2 flex-1 text-xs leading-relaxed text-espresso/50">

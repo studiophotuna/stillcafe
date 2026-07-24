@@ -6,37 +6,98 @@
   color-scheme: light;
 }
 
+html {
+  scroll-behavior: smooth;
+}
+
 body {
   @apply bg-cream text-espresso antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+/* Accessible, on-brand focus rings */
+:focus-visible {
+  @apply outline-none ring-2 ring-mocha/40 ring-offset-2 ring-offset-cream;
 }
 
 @layer components {
   .btn {
-    @apply inline-flex items-center justify-center rounded-full px-6 py-3 text-sm font-semibold tracking-wide transition-all duration-200 disabled:cursor-not-allowed disabled:opacity-50;
+    @apply inline-flex items-center justify-center rounded-lg px-5 py-2.5 text-sm font-medium tracking-wide transition-all duration-150 disabled:cursor-not-allowed disabled:opacity-50 active:scale-[0.98];
   }
   .btn-primary {
-    @apply btn bg-maroon text-cream shadow-soft hover:bg-mocha hover:shadow-glow active:scale-[0.98];
+    @apply btn bg-maroon text-cream shadow-card hover:bg-mocha hover:shadow-glow active:bg-mocha;
   }
   .btn-secondary {
-    @apply btn border border-espresso/15 bg-white text-espresso hover:border-espresso/30 hover:bg-sand active:scale-[0.98];
+    @apply btn border border-latte bg-card text-espresso hover:border-mocha/30 hover:bg-sand/50 active:bg-sand;
   }
   .btn-ghost {
-    @apply btn text-espresso/70 hover:bg-espresso/5 hover:text-espresso;
+    @apply btn text-espresso/60 hover:bg-espresso/5 hover:text-espresso;
   }
   .field-label {
-    @apply mb-1.5 block text-xs font-medium text-espresso/60;
+    @apply mb-1.5 block text-xs font-medium text-espresso/50;
   }
   .field-input {
-    @apply w-full rounded-xl border border-latte bg-white px-4 py-3 text-sm text-espresso shadow-sm outline-none transition-all duration-200 placeholder:text-espresso/30 focus:border-mocha focus:ring-2 focus:ring-mocha/15;
+    @apply w-full rounded-lg border border-latte bg-card px-3.5 py-2.5 text-sm text-espresso outline-none transition-colors duration-150 placeholder:text-espresso/30 focus:border-mocha focus:ring-2 focus:ring-mocha/10;
   }
   .card {
-    @apply rounded-2xl border border-latte/60 bg-white shadow-card;
+    @apply rounded-2xl border border-latte/50 bg-card shadow-card;
   }
-  .glass {
-    @apply border border-white/30 bg-white/60 shadow-card backdrop-blur-xl;
+  /* Selectable chip used across the booking wizard */
+  .chip {
+    @apply rounded-full border-2 px-4 py-2 text-xs font-medium transition-all duration-150 active:scale-[0.97];
+  }
+  .chip-on {
+    @apply chip border-mocha bg-mocha/5 text-mocha;
+  }
+  .chip-off {
+    @apply chip border-latte/40 text-espresso/50 hover:border-mocha/30 hover:text-espresso/70;
+  }
+}
+
+@layer utilities {
+  /* Staggered entrance animation */
+  .animate-rise {
+    animation: rise 0.7s cubic-bezier(0.22, 1, 0.36, 1) both;
+  }
+  .delay-100 { animation-delay: 100ms; }
+  .delay-200 { animation-delay: 200ms; }
+  .delay-300 { animation-delay: 300ms; }
+  .delay-500 { animation-delay: 500ms; }
+}
+
+@keyframes rise {
+  0% {
+    opacity: 0;
+    transform: translateY(14px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .animate-rise,
+  .animate-fade-in,
+  .animate-slide-up {
+    animation: none;
   }
 }
 
 ::selection {
   @apply bg-caramel/20 text-espresso;
+}
+
+/* Subtle themed scrollbar (WebKit) */
+::-webkit-scrollbar {
+  width: 10px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  @apply rounded-full bg-latte;
+}
+::-webkit-scrollbar-thumb:hover {
+  @apply bg-mocha/40;
 }
