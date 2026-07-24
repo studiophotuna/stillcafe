@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { revalidatePath } from "next/cache";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getSettings } from "@/lib/data";
-import { getPaymentProviderFromConfig } from "@/lib/payments";
+import { getProviderForMethod } from "@/lib/payments";
 import { generateReference } from "@/lib/reference";
 import { computeQuote } from "@/lib/pricing";
 import { rateLimit } from "@/lib/rate-limit";
@@ -162,7 +162,7 @@ export async function POST(req: Request) {
 
   // ---- create payment + provider checkout for the deposit ----
   try {
-    const provider = await getPaymentProviderFromConfig();
+    const provider = await getProviderForMethod(chosenMethod);
     const checkout = await provider.createCheckout({
       bookingId: booking.id,
       reference: booking.reference,

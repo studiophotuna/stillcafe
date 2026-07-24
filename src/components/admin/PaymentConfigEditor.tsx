@@ -94,10 +94,14 @@ function ProviderCard({ config }: { config: SafePaymentConfig }) {
     try {
       const fd = new FormData(e.currentTarget);
       fd.set("id", config.id);
-      await savePaymentConfig(fd);
-      setMessage("Saved!");
-      // Pull fresh server props so status badges reflect what was stored.
-      router.refresh();
+      const res = await savePaymentConfig(fd);
+      if (res?.ok) {
+        setMessage("Saved!");
+        // Pull fresh server props so status badges reflect what was stored.
+        router.refresh();
+      } else {
+        setMessage(res?.error ?? "Save failed");
+      }
     } catch (err) {
       setMessage(err instanceof Error ? err.message : "Save failed");
     } finally {
@@ -243,12 +247,12 @@ function ProviderCard({ config }: { config: SafePaymentConfig }) {
                 className="h-4 w-4 rounded border-latte"
               />
               <span className="text-sm font-medium text-espresso">
-                Set as active provider
+                Active
               </span>
             </label>
             <p className="text-[11px] text-espresso/40">
-              Only one provider can be active at a time. Activating this will
-              deactivate any other provider.
+              Multiple providers can be active at once — each checkout method
+              is routed to the first active provider that supports it.
             </p>
           </div>
           <div className="mt-5 flex items-center gap-4">

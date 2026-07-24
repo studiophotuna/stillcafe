@@ -1,4 +1,5 @@
 import { getSettings, getPaymentConfigs } from "@/lib/data";
+import { getMethodRouting } from "@/lib/payments";
 import { saveSettings } from "@/app/admin/actions";
 import { PaymentConfigEditor } from "@/components/admin/PaymentConfigEditor";
 import type { PaymentMethod } from "@/lib/types";
@@ -13,10 +14,21 @@ const ALL_METHODS: { id: PaymentMethod; label: string }[] = [
   { id: "paypal", label: "PayPal" },
 ];
 
-export default async function SettingsPage() {
-  const [settings, rawConfigs] = await Promise.all([
+const PROVIDER_NAMES: Record<string, string> = {
+  paymongo: "PayMongo",
+  stripe: "Stripe",
+  paypal: "PayPal",
+};
+
+export default async function SettingsPage({
+  searchParams,
+}: {
+  searchParams: { saved?: string; error?: string };
+}) {
+  const [settings, rawConfigs, routing] = await Promise.all([
     getSettings(),
     getPaymentConfigs(),
+    getMethodRouting(ALL_METHODS.map((m) => m.id)),
   ]);
 
   const paymentConfigs = rawConfigs.map((c) => ({
@@ -40,6 +52,23 @@ export default async function SettingsPage() {
       <p className="mt-1 text-sm text-espresso/45">
         Configure your business, pricing, and payment options.
       </p>
+
+      {searchParams.saved && (
+        <div className="mt-4 flex items-center gap-2 rounded-lg border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-700">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-4 w-4 shrink-0">
+            <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" /><polyline points="22 4 12 14.01 9 11.01" />
+          </svg>
+          Settings saved.
+        </div>
+      )}
+      {searchParams.error && (
+        <div className="mt-4 flex items-center gap-2 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-4 w-4 shrink-0">
+            <circle cx="12" cy="12" r="10" /><line x1="12" y1="8" x2="12" y2="12" /><line x1="12" y1="16" x2="12.01" y2="16" />
+          </svg>
+          {searchParams.error}
+        </div>
+      )}
 
       <form action={saveSettings} className="mt-6 items-start gap-6 lg:flex">
         <div className="min-w-0 flex-1 space-y-5">
@@ -240,7 +269,8 @@ export default async function SettingsPage() {
           </div>
           <div className="p-6">
             <p className="mb-4 text-sm text-espresso/45">
-              Choose which payment methods customers can use at checkout.
+              Choose which payment methods customers can use at checkout. Each
+              method is routed to the first active provider that supports it.
             </p>
             <div className="grid grid-cols-2 gap-2">
               {ALL_METHODS.map((m) => (
@@ -255,7 +285,16 @@ export default async function SettingsPage() {
                     defaultChecked={settings.payment_methods.includes(m.id)}
                     className="h-4 w-4 rounded border-latte accent-mocha"
                   />
-                  {m.label}
+                  <span className="flex-1">{m.label}</span>
+                  {routing[m.id] ? (
+                    <span className="rounded bg-sand/60 px-1.5 py-0.5 text-[10px] text-espresso/45">
+                      via {PROVIDER_NAMES[routing[m.id]!] ?? routing[m.id]}
+                    </span>
+                  ) : (
+                    <span className="rounded bg-red-50 px-1.5 py-0.5 text-[10px] text-red-500">
+                      no provider
+                    </span>
+                  )}
                 </label>
               ))}
             </div>
@@ -288,7 +327,9 @@ export default async function SettingsPage() {
           Payment providers
         </h2>
         <p className="mt-1 text-sm text-espresso/45">
-          Configure your payment gateway keys. Only one provider can be active at a time.
+          Configure your payment gateway keys. You can activate several
+          providers — each checkout method goes to the first active provider
+          that supports it.
         </p>
         <div className="mt-4">
           <PaymentConfigEditor configs={paymentConfigs} />

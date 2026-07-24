@@ -321,6 +321,31 @@ export async function getActivePaymentConfig(): Promise<PaymentConfig | null> {
   return data;
 }
 
+export async function getActivePaymentConfigs(): Promise<PaymentConfig[]> {
+  const supabase = createAdminClient();
+  const { data, error } = await supabase
+    .from("payment_configs")
+    .select("*")
+    .eq("is_active", true)
+    .order("created_at", { ascending: true });
+  if (error) throw error;
+  return data ?? [];
+}
+
+export async function getPaymentConfigByProvider(
+  provider: string
+): Promise<PaymentConfig | null> {
+  const supabase = createAdminClient();
+  const { data, error } = await supabase
+    .from("payment_configs")
+    .select("*")
+    .eq("provider", provider)
+    .limit(1)
+    .maybeSingle();
+  if (error) throw error;
+  return data;
+}
+
 export async function getBookedDates(): Promise<string[]> {
   const supabase = createAdminClient();
   const today = new Date().toISOString().split("T")[0];

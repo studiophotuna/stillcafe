@@ -1,6 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { redirect } from "next/navigation";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { requireUser } from "@/lib/auth";
 import { toCents } from "@/lib/format";
@@ -193,51 +194,89 @@ export async function updateBooking(formData: FormData) {
     if (row[k] === undefined) delete row[k];
   });
 
-  const { error } = await supabase.from("bookings").update(row).eq("id", id);
-  if (error) throw new Error(error.message);
+  const { data, error } = await supabase
+    .from("bookings")
+    .update(row)
+    .eq("id", id)
+    .select("id");
+  if (error || !data?.length) {
+    const msg = error?.message ?? "Booking not found.";
+    redirect(`/admin/bookings/${id}?error=${encodeURIComponent(msg.slice(0, 200))}`);
+  }
   revalidatePath("/admin", "layout");
   revalidatePath("/book");
+  redirect(`/admin/bookings/${id}?saved=1`);
 }
 
 export async function saveSettings(formData: FormData) {
   await requireUser();
-  const supabase = createAdminClient();
 
-  const methods = formData.getAll("payment_methods") as PaymentMethod[];
+  let failure: string | null = null;
+  try {
+    const supabase = createAdminClient();
 
-  const eventTypesRaw = ((formData.get("event_types") as string) || "").trim();
-  const eventTypes = eventTypesRaw
-    .split("\n")
-    .map((s) => s.trim())
-    .filter(Boolean);
+    const methods = formData.getAll("payment_methods") as PaymentMethod[];
 
-  const { error } = await supabase
-    .from("settings")
-    .update({
-      payment_methods: methods.length ? methods : ["gcash"],
-      business_name: (formData.get("business_name") as string) || "My Business",
-      business_email: (formData.get("business_email") as string) || null,
-      deposit_percent: clampInt(formData.get("deposit_percent"), 50, 1, 100),
-      standard_hours: Number(formData.get("standard_hours")) || 3,
-      combo_discount_cents: toCents((formData.get("combo_discount") as string) || "0"),
-      combo_min_packages: clampInt(formData.get("combo_min_packages"), 2, 1, 10),
-      extra_hour_cents: toCents((formData.get("extra_hour_price") as string) || "0"),
-      service_area: (formData.get("service_area") as string) || "Metro Manila",
-      reference_prefix: ((formData.get("reference_prefix") as string) || "BK").toUpperCase().slice(0, 5),
-      min_guests: clampInt(formData.get("min_guests"), 1, 1, 10000),
-      max_guests: clampInt(formData.get("max_guests"), 500, 1, 10000),
-      event_types: eventTypes.length ? eventTypes : ["Wedding", "Birthday", "Corporate event", "Other"],
-      locale: (formData.get("locale") as string) || "en-US",
-    })
-    .eq("id", 1);
+    const eventTypesRaw = ((formData.get("event_types") as string) || "").trim();
+    const eventTypes = eventTypesRaw
+      .split("\n")
+      .map((s) => s.trim())
+      .filter(Boolean);
 
-  if (error) throw new Error(error.message);
+    const { data, error } = await supabase
+      .from("settings")
+      .update({
+        payment_methods: methods.length ? methods : ["gcash"],
+        business_name: (formData.get("business_name") as string) || "My Business",
+        business_email: (formData.get("business_email") as string) || null,
+        deposit_percent: clampInt(formData.get("deposit_percent"), 50, 1, 100),
+        standard_hours: Number(formData.get("standard_hours")) || 3,
+        combo_discount_cents: toCents((formData.get("combo_discount") as string) || "0"),
+        combo_min_packages: clampInt(formData.get("combo_min_packages"), 2, 1, 10),
+        extra_hour_cents: toCents((formData.get("extra_hour_price") as string) || "0"),
+        service_area: (formData.get("service_area") as string) || "Metro Manila",
+        reference_prefix: ((formData.get("reference_prefix") as string) || "BK").toUpperCase().slice(0, 5),
+        min_guests: clampInt(formData.get("min_guests"), 1, 1, 10000),
+        max_guests: clampInt(formData.get("max_guests"), 500, 1, 10000),
+        event_types: eventTypes.length ? eventTypes : ["Wedding", "Birthday", "Corporate event", "Other"],
+        locale: (formData.get("locale") as string) || "en-US",
+      })
+      .eq("id", 1)
+      .select("id");
+
+    if (error) failure = error.message;
+    else if (!data || data.length === 0)
+      failure = "No settings row was updated — the settings table has no row with id 1.";
+  } catch (e) {
+    failure = e instanceof Error ? e.message : "Unexpected error while saving.";
+  }
+
+  if (failure) {
+    redirect(`/admin/settings?error=${encodeURIComponent(failure.slice(0, 200))}`);
+  }
+
   revalidatePath("/admin", "layout");
   revalidatePath("/book");
+  redirect("/admin/settings?saved=1");
 }
 
-export async function saveSiteContent(formData: FormData) {
+export type SaveResult = { ok: boolean; error?: string };
+
+export async function saveSiteContent(formData: FormData): Promise<SaveResult> {
   await requireUser();
+  try {
+    return await saveSiteContentInner(formData);
+  } catch (e) {
+    // Return the real message: thrown server-action errors are masked in
+    // production builds, which made failures look like generic crashes.
+    return {
+      ok: false,
+      error: e instanceof Error ? e.message : "Unexpected error while saving.",
+    };
+  }
+}
+
+async function saveSiteContentInner(formData: FormData): Promise<SaveResult> {
   const supabase = createAdminClient();
 
   const logo = formData.get("logo") as File | null;
@@ -371,69 +410,90 @@ export async function saveSiteContent(formData: FormData) {
   if (logo_url) row.logo_url = logo_url;
   if (bg_static_image !== undefined) row.bg_static_image = bg_static_image;
 
-  const { error } = await supabase
+  const { data, error } = await supabase
     .from("site_content")
     .update(row)
-    .eq("id", 1);
+    .eq("id", 1)
+    .select("id");
 
-  if (error) throw new Error(error.message);
+  if (error) return { ok: false, error: error.message };
+  if (!data || data.length === 0)
+    return {
+      ok: false,
+      error:
+        "Nothing was saved — the site_content table has no row with id 1.",
+    };
+
   // Layout-scope revalidation: theme colors and fonts live in the root
   // layout, so bust everything rendered beneath it.
   revalidatePath("/", "layout");
+  return { ok: true };
 }
 
-export async function savePaymentConfig(formData: FormData) {
+export async function savePaymentConfig(
+  formData: FormData
+): Promise<SaveResult> {
   await requireUser();
-  const supabase = createAdminClient();
+  try {
+    const supabase = createAdminClient();
 
-  const id = formData.get("id") as string;
-  const publicKeyInput = ((formData.get("public_key") as string) || "").trim();
-  const secretKeyInput = ((formData.get("secret_key") as string) || "").trim();
-  const webhookSecretInput = ((formData.get("webhook_secret") as string) || "").trim();
-  const isActive = formData.get("is_active") === "on";
+    const id = formData.get("id") as string;
+    const publicKeyInput = ((formData.get("public_key") as string) || "").trim();
+    const secretKeyInput = ((formData.get("secret_key") as string) || "").trim();
+    const webhookSecretInput = ((formData.get("webhook_secret") as string) || "").trim();
+    const isActive = formData.get("is_active") === "on";
 
-  const { data: existing } = await supabase
-    .from("payment_configs")
-    .select("secret_key, public_key, webhook_secret, provider, config")
-    .eq("id", id)
-    .single();
-
-  const publicKey = publicKeyInput || existing?.public_key || null;
-  const secretKey = secretKeyInput || existing?.secret_key || null;
-  const webhookSecret = webhookSecretInput || existing?.webhook_secret || null;
-
-  if (isActive && !secretKey) {
-    throw new Error("A secret key is required to activate a payment provider.");
-  }
-
-  let config = (existing?.config as Record<string, unknown>) ?? {};
-  if (existing?.provider === "paypal") {
-    const mode = formData.get("paypal_mode") as string;
-    if (mode === "sandbox" || mode === "live") {
-      config = { ...config, mode };
-    }
-  }
-
-  if (isActive) {
-    await supabase
+    const { data: existing } = await supabase
       .from("payment_configs")
-      .update({ is_active: false })
-      .neq("id", id);
+      .select("secret_key, public_key, webhook_secret, provider, config")
+      .eq("id", id)
+      .single();
+
+    const publicKey = publicKeyInput || existing?.public_key || null;
+    const secretKey = secretKeyInput || existing?.secret_key || null;
+    const webhookSecret = webhookSecretInput || existing?.webhook_secret || null;
+
+    if (isActive && !secretKey) {
+      return {
+        ok: false,
+        error: "A secret key is required to activate a payment provider.",
+      };
+    }
+
+    let config = (existing?.config as Record<string, unknown>) ?? {};
+    if (existing?.provider === "paypal") {
+      const mode = formData.get("paypal_mode") as string;
+      if (mode === "sandbox" || mode === "live") {
+        config = { ...config, mode };
+      }
+    }
+
+    // Multiple providers may be active at once; each checkout method is
+    // routed to the first active provider that supports it.
+    const { data, error } = await supabase
+      .from("payment_configs")
+      .update({
+        public_key: publicKey,
+        secret_key: secretKey,
+        webhook_secret: webhookSecret,
+        is_active: isActive,
+        config,
+      })
+      .eq("id", id)
+      .select("id");
+
+    if (error) return { ok: false, error: error.message };
+    if (!data || data.length === 0)
+      return { ok: false, error: "Nothing was saved — provider row not found." };
+
+    revalidatePath("/admin", "layout");
+    revalidatePath("/admin/settings");
+    revalidatePath("/book");
+    return { ok: true };
+  } catch (e) {
+    return {
+      ok: false,
+      error: e instanceof Error ? e.message : "Unexpected error while saving.",
+    };
   }
-
-  const { error } = await supabase
-    .from("payment_configs")
-    .update({
-      public_key: publicKey,
-      secret_key: secretKey,
-      webhook_secret: webhookSecret,
-      is_active: isActive,
-      config,
-    })
-    .eq("id", id);
-
-  if (error) throw new Error(error.message);
-  revalidatePath("/admin", "layout");
-  revalidatePath("/admin/settings");
-  revalidatePath("/book");
 }

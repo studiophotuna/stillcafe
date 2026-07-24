@@ -136,10 +136,14 @@ export function SiteContentEditor({ content }: { content: SiteContent }) {
       }
       fd.set("wizard_faqs", JSON.stringify(wizardFaqs));
       fd.set("nav_pages", JSON.stringify(navPages));
-      await saveSiteContent(fd);
-      setMessage("Saved!");
-      // Pull fresh server props so the editor reflects what was stored.
-      router.refresh();
+      const res = await saveSiteContent(fd);
+      if (res?.ok) {
+        setMessage("Saved!");
+        // Pull fresh server props so the editor reflects what was stored.
+        router.refresh();
+      } else {
+        setMessage(res?.error ?? "Save failed");
+      }
     } catch (err) {
       setMessage(err instanceof Error ? err.message : "Save failed");
     } finally {
