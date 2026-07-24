@@ -1,59 +1,70 @@
 import Link from "next/link";
 import Image from "next/image";
+import { getSiteContent } from "@/lib/data";
 
 export const dynamic = "force-dynamic";
 
-export default function CancelledPage({
+export default async function CancelledPage({
   searchParams,
 }: {
   searchParams: { ref?: string };
 }) {
+  let content: Awaited<ReturnType<typeof getSiteContent>> | null = null;
+  try {
+    content = await getSiteContent();
+  } catch {}
+
+  const brandName = content?.brand_name ?? "My Business";
+  const logoUrl = content?.logo_url || "/logo.png";
+
   return (
     <div className="flex min-h-screen flex-col bg-cream">
-      <header className="border-b border-latte/30 bg-white/70 backdrop-blur-sm">
-        <div className="mx-auto flex max-w-7xl items-center px-5 py-3">
-          <Link href="/" className="flex items-center gap-2">
-            <Image
-              src="/logo.png"
-              alt="Still Caf&eacute;"
-              width={32}
-              height={32}
-              className="rounded-full"
-            />
-            <span className="font-serif text-base font-semibold text-espresso">
-              Still Caf&eacute;
-            </span>
-          </Link>
-        </div>
+      {/* Minimal header */}
+      <header className="relative z-10 flex items-center justify-center px-6 py-5 sm:px-10">
+        <Link href="/">
+          <Image
+            src={logoUrl}
+            alt={brandName}
+            width={40}
+            height={40}
+            className="rounded-full"
+          />
+        </Link>
       </header>
 
-      <main className="mx-auto flex w-full max-w-xl flex-1 items-start px-5 py-12">
-        <div className="card w-full p-8 text-center">
-          <h1 className="font-serif text-xl font-semibold text-espresso">
+      <main className="mx-auto flex w-full max-w-lg flex-1 items-start px-5 py-8">
+        <div className="w-full overflow-hidden rounded-2xl border border-espresso/8 bg-white p-8 text-center shadow-card">
+          <h1 className="font-serif text-xl text-espresso">
             Payment cancelled
           </h1>
-          <p className="mt-2 text-sm text-espresso/50">
-            No worries &mdash; you weren&apos;t charged. You can start a new
+          <p className="mt-2 text-sm text-espresso/45">
+            No worries — you weren&apos;t charged. You can start a new
             booking whenever you&apos;re ready.
           </p>
           {searchParams.ref && (
-            <p className="mt-3 text-xs text-espresso/30">
+            <p className="mt-3 text-xs text-espresso/25">
               Ref: <span className="font-mono">{searchParams.ref}</span>
             </p>
           )}
-          <div className="mt-8 flex justify-center gap-3">
-            <Link href="/book" className="btn-primary">
+          <div className="mt-8 flex justify-center gap-4">
+            <Link
+              href="/book"
+              className="rounded-full bg-espresso px-6 py-2.5 text-xs font-semibold text-cream transition hover:bg-mocha"
+            >
               Try again
             </Link>
-            <Link href="/" className="btn-secondary">
+            <Link
+              href="/"
+              className="rounded-full border border-espresso/15 px-6 py-2.5 text-xs font-medium text-espresso/50 transition hover:border-espresso/30 hover:text-espresso"
+            >
               Back home
             </Link>
           </div>
         </div>
       </main>
 
-      <footer className="border-t border-latte/20 px-5 py-5 text-center text-xs text-espresso/25">
-        &copy; {new Date().getFullYear()} Still Caf&eacute;
+      <footer className="py-5 text-center text-[10px] uppercase tracking-[0.15em] text-espresso/20">
+        {content?.copyright_text ?? `© ${new Date().getFullYear()} ${brandName}`}
       </footer>
     </div>
   );

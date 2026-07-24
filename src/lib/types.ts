@@ -97,5 +97,66 @@ export type Settings = {
   standard_hours: number;
   service_area: string;
   service_cities: string[];
+  reference_prefix: string;
+  min_guests: number;
+  max_guests: number;
+  event_types: string[];
+  locale: string;
+  updated_at: string;
+};
+
+export type FaqItem = {
+  question: string;
+  answer: string;
+};
+
+export type SiteContent = {
+  id: number;
+  logo_url: string | null;
+  brand_name: string;
+  tagline: string;
+  description: string;
+  cta_text: string;
+  footer_tagline: string;
+  copyright_text: string;
+  bg_mode: "carousel" | "static";
+  bg_images: string[];
+  bg_static_image: string | null;
+  bg_overlay_color: string;
+  bg_overlay_opacity: number;
+  booking_hero_label: string;
+  booking_hero_title: string;
+  booking_hero_subtitle: string;
+  sidebar_title: string;
+  sidebar_description: string;
+  sidebar_faqs: FaqItem[];
+  policies: string[];
+  wizard_faqs: FaqItem[];
+  color_primary: string;
+  color_accent: string;
+  color_page_bg: string;
+  color_text: string;
+  color_surface: string;
+  color_border: string;
+  color_highlight: string;
+  color_card: string;
+  social_instagram: string;
+  social_facebook: string;
+  social_tiktok: string;
+  created_at: string;
+  updated_at: string;
+};
+
+export type PaymentConfig = {
+  id: string;
+  provider: string;
+  display_name: string;
+  public_key: string | null;
+  secret_key: string | null;
+  webhook_secret: string | null;
+  is_active: boolean;
+  supported_methods: string[];
+  config: Record<string, unknown>;
+  created_at: string;
   updated_at: string;
 };

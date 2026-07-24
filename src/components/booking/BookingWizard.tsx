@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from "react";
 import Image from "next/image";
-import type { Package, PaymentMethod, Settings } from "@/lib/types";
+import type { FaqItem, Package, PaymentMethod, Settings } from "@/lib/types";
 import { formatMoney, methodLabel } from "@/lib/format";
 import { computeQuote } from "@/lib/pricing";
 import { AvailabilityCalendar } from "./AvailabilityCalendar";
@@ -12,6 +12,8 @@ type Props = {
   settings: Settings;
   bookedDates: string[];
   initialPackageSlug?: string;
+  policies?: string[];
+  wizardFaqs?: FaqItem[];
 };
 
 const STEP_TITLES = [
@@ -24,20 +26,13 @@ const STEP_TITLES = [
   "Review & pay",
 ];
 
-const EVENT_TYPES = [
-  "Wedding",
-  "Birthday",
-  "Corporate event",
-  "Baptism",
-  "Holiday party",
-  "Other",
-];
-
 export function BookingWizard({
   packages,
   settings,
   bookedDates,
   initialPackageSlug,
+  policies,
+  wizardFaqs,
 }: Props) {
   const initial = packages.find((p) => p.slug === initialPackageSlug);
 
@@ -76,6 +71,10 @@ export function BookingWizard({
     [selectedPackages, extraHours, settings]
   );
 
+  const eventTypes = settings.event_types?.length
+    ? settings.event_types
+    : ["Wedding", "Birthday", "Corporate event", "Other"];
+
   const lastStep = STEP_TITLES.length - 1;
 
   function togglePackage(id: string) {
@@ -110,8 +109,8 @@ export function BookingWizard({
       if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email))
         return fail("That email doesn't look right.");
       const g = Number(guests);
-      if (!g || g < 20 || g > 500)
-        return fail("Guest count should be between 20 and 500.");
+      if (!g || g < (settings.min_guests ?? 20) || g > (settings.max_guests ?? 500))
+        return fail(`Guest count should be between ${settings.min_guests ?? 20} and ${settings.max_guests ?? 500}.`);
       if (!eventType) return fail("What kind of event is this?");
     }
     if (current === 6 && !terms)
@@ -170,29 +169,35 @@ export function BookingWizard({
 
   const showQuote = selectedPackages.length > 0 && step >= 3;
 
+  function interpolate(text: string): string {
+    return text
+      .replace(/\{service_area\}/g, settings.service_area)
+      .replace(/\{deposit_percent\}/g, String(settings.deposit_percent));
+  }
+
   return (
-    <div className="overflow-hidden rounded-3xl border border-latte/30 bg-white/80 shadow-elevated backdrop-blur-sm">
+    <div className="overflow-hidden rounded-2xl border border-espresso/8 bg-white shadow-card">
       {/* Header */}
-      <div className="bg-maroon px-6 py-6 sm:px-8">
-        <h2 className="font-serif text-lg font-semibold text-cream sm:text-xl">
-          {STEP_TITLES[step]}
-        </h2>
-        <p className="mt-1 text-[11px] text-cream/35">
+      <div className="border-b border-espresso/8 px-6 py-5 sm:px-8">
+        <p className="text-[10px] uppercase tracking-[0.2em] text-espresso/30">
           Step {step + 1} of {STEP_TITLES.length}
         </p>
+        <h2 className="mt-1 font-serif text-xl text-espresso">
+          {STEP_TITLES[step]}
+        </h2>
       </div>
 
       {/* Progress */}
-      <div className="flex gap-1.5 px-6 py-3 sm:px-8">
+      <div className="flex gap-0 bg-sand/30">
         {STEP_TITLES.map((t, i) => (
           <div key={t} className="flex-1">
             <div
-              className={`h-1.5 rounded-full transition-all duration-500 ${
+              className={`h-0.5 transition-all duration-500 ${
                 i < step
                   ? "bg-mocha"
                   : i === step
-                    ? "bg-maroon"
-                    : "bg-latte/30"
+                    ? "bg-espresso"
+                    : "bg-transparent"
               }`}
             />
           </div>
@@ -202,11 +207,23 @@ export function BookingWizard({
       {/* Body */}
       <div className="p-6 sm:p-8">
         <div className="min-h-[300px]">
-          {step === 0 && <PoliciesStep settings={settings} />}
-          {step === 1 && <FaqStep settings={settings} />}
+          {step === 0 && (
+            <PoliciesStep
+              settings={settings}
+              policies={policies}
+              interpolate={interpolate}
+            />
+          )}
+          {step === 1 && (
+            <FaqStep
+              settings={settings}
+              wizardFaqs={wizardFaqs}
+              interpolate={interpolate}
+            />
+          )}
           {step === 2 && (
             <div>
-              <p className="mb-4 text-sm text-espresso/50">
+              <p className="mb-4 text-sm text-espresso/45">
                 Dates that are crossed out are already taken.
               </p>
               <AvailabilityCalendar
@@ -255,8 +272,10 @@ export function BookingWizard({
               onGuests={setGuests}
               eventType={eventType}
               onEventType={setEventType}
+              eventTypes={eventTypes}
               notes={notes}
               onNotes={setNotes}
+              settings={settings}
             />
           )}
           {step === 6 && (
@@ -272,9 +291,9 @@ export function BookingWizard({
         </div>
 
         {showQuote && (
-          <div className="mt-6 overflow-hidden rounded-2xl border border-white/10 bg-maroon shadow-elevated">
+          <div className="mt-6 overflow-hidden rounded-xl border border-espresso/8 bg-espresso text-cream">
             <div className="p-5">
-              <h4 className="text-xs font-medium text-cream/40">
+              <h4 className="text-[10px] uppercase tracking-[0.15em] text-cream/40">
                 Your estimate
               </h4>
               <ul className="mt-3 space-y-1.5">
@@ -298,7 +317,7 @@ export function BookingWizard({
             </div>
             <div className="flex items-center justify-between border-t border-cream/10 bg-cream/5 px-5 py-4">
               <div>
-                <span className="text-xs text-cream/40">
+                <span className="text-[10px] uppercase tracking-[0.1em] text-cream/40">
                   {settings.deposit_percent}% deposit
                 </span>
                 <strong className="ml-3 text-lg font-bold text-caramel">
@@ -313,7 +332,7 @@ export function BookingWizard({
         )}
 
         {error && (
-          <div className="mt-4 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-center text-xs text-red-600">
+          <div className="mt-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-center text-xs text-red-600">
             {error}
           </div>
         )}
@@ -323,7 +342,7 @@ export function BookingWizard({
             type="button"
             onClick={back}
             disabled={step === 0 || submitting}
-            className="btn w-1/3 rounded-full border-2 border-latte/40 bg-white/80 py-3 text-espresso/60 backdrop-blur-sm transition hover:border-latte hover:bg-white hover:text-espresso disabled:opacity-30"
+            className="w-1/3 rounded-full border border-espresso/15 bg-white px-4 py-3 text-xs font-medium text-espresso/50 transition hover:border-espresso/30 hover:text-espresso disabled:opacity-30"
           >
             Back
           </button>
@@ -331,7 +350,7 @@ export function BookingWizard({
             <button
               type="button"
               onClick={next}
-              className="btn w-2/3 rounded-full bg-maroon py-3 font-bold text-cream shadow-soft transition hover:scale-[1.01] hover:bg-mocha hover:shadow-glow active:scale-[0.98]"
+              className="w-2/3 rounded-full bg-espresso px-4 py-3 text-xs font-semibold text-cream transition hover:bg-mocha active:scale-[0.98]"
             >
               Continue
             </button>
@@ -340,7 +359,7 @@ export function BookingWizard({
               type="button"
               onClick={submit}
               disabled={submitting}
-              className="btn w-2/3 rounded-full bg-sage py-3 font-bold text-white shadow-soft transition hover:scale-[1.01] hover:opacity-90 hover:shadow-glow active:scale-[0.98] disabled:opacity-50"
+              className="w-2/3 rounded-full bg-sage px-4 py-3 text-xs font-semibold text-white transition hover:opacity-90 active:scale-[0.98] disabled:opacity-50"
             >
               {submitting
                 ? "Redirecting to payment..."
@@ -355,7 +374,7 @@ export function BookingWizard({
 
 function Tip({ children }: { children: React.ReactNode }) {
   return (
-    <div className="rounded-2xl border border-latte/30 bg-white/60 p-5 backdrop-blur-sm">
+    <div className="rounded-lg border border-espresso/8 bg-sand/30 p-4">
       <span className="text-sm leading-relaxed text-espresso/60">
         {children}
       </span>
@@ -363,65 +382,71 @@ function Tip({ children }: { children: React.ReactNode }) {
   );
 }
 
-function PoliciesStep({ settings }: { settings: Settings }) {
+function PoliciesStep({
+  settings,
+  policies,
+  interpolate,
+}: {
+  settings: Settings;
+  policies?: string[];
+  interpolate: (s: string) => string;
+}) {
+  const items = policies?.length
+    ? policies
+    : [
+        `We currently serve ${settings.service_area} only.`,
+        `A ${settings.deposit_percent}% deposit is needed to lock in your date.`,
+        "We show up early to set up and test everything.",
+        "You get a full professional setup. Setup and teardown are included.",
+      ];
+
   return (
     <div>
-      <p className="mb-4 text-sm text-espresso/50">
+      <p className="mb-4 text-sm text-espresso/45">
         A few things worth knowing before you fill this out.
       </p>
       <div className="space-y-3">
-        <Tip>
-          We currently serve <strong className="text-espresso">{settings.service_area}</strong> only.
-        </Tip>
-        <Tip>
-          A <strong className="text-espresso">{settings.deposit_percent}% deposit</strong> is
-          needed to lock in your date. Without it, the date stays open for
-          others.
-        </Tip>
-        <Tip>
-          We show up <strong className="text-espresso">1&ndash;2 hours early</strong> to
-          set up and test everything, so you don&apos;t have to worry about a
-          thing.
-        </Tip>
-        <Tip>
-          You get a full mobile espresso bar, premium beans, a barista, and all
-          the equipment. Setup and teardown are included.
-        </Tip>
+        {items.map((item, i) => (
+          <Tip key={i}>
+            <span dangerouslySetInnerHTML={{ __html: interpolate(item) }} />
+          </Tip>
+        ))}
       </div>
     </div>
   );
 }
 
-function FaqStep({ settings }: { settings: Settings }) {
+function FaqStep({
+  settings,
+  wizardFaqs,
+  interpolate,
+}: {
+  settings: Settings;
+  wizardFaqs?: FaqItem[];
+  interpolate: (s: string) => string;
+}) {
+  const items = wizardFaqs?.length
+    ? wizardFaqs
+    : [
+        { question: "Does this form confirm my date?", answer: `Not yet. Your date is only locked once the ${settings.deposit_percent}% deposit is paid.` },
+        { question: "How many guests can I have?", answer: "We can handle anywhere from 20 to 500. Just give us your best estimate." },
+        { question: "Can I cancel after paying?", answer: "The deposit is non-refundable, but you can move to another available date." },
+        { question: "What if we go overtime?", answer: "You can add extra hours during booking, or we can arrange it before your event." },
+      ];
+
   return (
     <div>
-      <p className="mb-4 text-sm text-espresso/50">
+      <p className="mb-4 text-sm text-espresso/45">
         Answers to things people usually ask.
       </p>
       <div className="space-y-3">
-        <Tip>
-          <strong className="text-espresso">Does this form confirm my date?</strong>
-          <br />
-          Not yet. Your date is only locked once the {settings.deposit_percent}%
-          deposit is paid.
-        </Tip>
-        <Tip>
-          <strong className="text-espresso">How many guests can I have?</strong>
-          <br />
-          We can handle anywhere from 20 to 500. Just give us your best estimate.
-        </Tip>
-        <Tip>
-          <strong className="text-espresso">Can I cancel after paying?</strong>
-          <br />
-          The deposit is non-refundable, but you can move to another available
-          date.
-        </Tip>
-        <Tip>
-          <strong className="text-espresso">What if we go overtime?</strong>
-          <br />
-          You can add extra hours during booking, or we can arrange it before your
-          event.
-        </Tip>
+        {items.map((faq, i) => (
+          <Tip key={i}>
+            <strong className="text-espresso">{interpolate(faq.question)}</strong>
+            <br />
+            {interpolate(faq.answer)}
+          </Tip>
+        ))}
       </div>
     </div>
   );
@@ -446,7 +471,7 @@ function PackagesStep({
 }) {
   return (
     <div>
-      <p className="mb-1 text-sm text-espresso/50">
+      <p className="mb-1 text-sm text-espresso/45">
         Pick one or combine a few.
       </p>
       {settings.combo_discount_cents > 0 && (
@@ -464,10 +489,10 @@ function PackagesStep({
               key={p.id}
               type="button"
               onClick={() => onToggle(p.id)}
-              className={`group overflow-hidden rounded-2xl border-2 text-left transition-all duration-200 hover:scale-[1.01] hover:shadow-soft ${
+              className={`group overflow-hidden rounded-xl border text-left transition-all duration-200 ${
                 active
-                  ? "border-mocha bg-mocha/5 shadow-soft"
-                  : "border-latte/40 bg-white/80 hover:border-mocha/30"
+                  ? "border-espresso/30 bg-sand/40 shadow-sm"
+                  : "border-espresso/8 bg-white hover:border-espresso/20"
               }`}
             >
               {p.image_url && (
@@ -487,22 +512,22 @@ function PackagesStep({
                     <span className="block text-sm font-semibold text-espresso">
                       {p.name}
                     </span>
-                    <span className="mt-1 block text-xs text-espresso/50">
+                    <span className="mt-1 block text-xs text-espresso/40">
                       {formatMoney(p.price_cents)} &middot; {p.duration_hours}h
                     </span>
                   </div>
                   <div
-                    className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-full border-2 text-[10px] transition-all duration-200 ${
+                    className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-full border transition-all duration-200 text-[10px] ${
                       active
-                        ? "border-mocha bg-mocha text-cream"
-                        : "border-latte/60 text-transparent group-hover:border-mocha/40"
+                        ? "border-espresso bg-espresso text-cream"
+                        : "border-espresso/20 text-transparent group-hover:border-espresso/40"
                     }`}
                   >
                     ✓
                   </div>
                 </div>
                 {p.description && (
-                  <p className="mt-2 text-[11px] leading-relaxed text-espresso/40">
+                  <p className="mt-2 text-[11px] leading-relaxed text-espresso/35">
                     {p.description}
                   </p>
                 )}
@@ -530,17 +555,17 @@ function PackagesStep({
       </div>
 
       {selectedIds.length > 0 && (
-        <div className="mt-5 space-y-2 rounded-2xl border border-latte/30 bg-white/60 p-5 backdrop-blur-sm">
-          <h4 className="text-xs font-medium text-espresso/40">
+        <div className="mt-5 space-y-2 rounded-lg border border-espresso/8 bg-sand/30 p-4">
+          <h4 className="text-[10px] uppercase tracking-[0.1em] text-espresso/35">
             What&apos;s included
           </h4>
           {packages
             .filter((p) => selectedIds.includes(p.id))
             .map((p) => (
-              <div key={p.id} className="text-xs text-espresso/60">
+              <div key={p.id} className="text-xs text-espresso/55">
                 <span className="font-semibold text-espresso">{p.name}</span>
                 {p.inclusions.length > 0 && (
-                  <span> &mdash; {p.inclusions.join(", ")}</span>
+                  <span> — {p.inclusions.join(", ")}</span>
                 )}
               </div>
             ))}
@@ -596,7 +621,7 @@ function ScheduleStep({
 }) {
   return (
     <div className="space-y-4">
-      <p className="text-sm text-espresso/50">
+      <p className="text-sm text-espresso/45">
         Where and when is the event?
       </p>
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
@@ -670,8 +695,10 @@ function ContactStep({
   onGuests,
   eventType,
   onEventType,
+  eventTypes,
   notes,
   onNotes,
+  settings,
 }: {
   name: string;
   onName: (v: string) => void;
@@ -683,12 +710,14 @@ function ContactStep({
   onGuests: (v: string) => void;
   eventType: string;
   onEventType: (v: string) => void;
+  eventTypes: string[];
   notes: string;
   onNotes: (v: string) => void;
+  settings: Settings;
 }) {
   return (
     <div className="space-y-4">
-      <p className="text-sm text-espresso/50">
+      <p className="text-sm text-espresso/45">
         So we know who to coordinate with.
       </p>
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
@@ -722,8 +751,8 @@ function ContactStep({
         <Field label="Estimated guests">
           <input
             type="number"
-            min={20}
-            max={500}
+            min={settings.min_guests ?? 20}
+            max={settings.max_guests ?? 500}
             value={guests}
             onChange={(e) => onGuests(e.target.value)}
             placeholder="120"
@@ -738,7 +767,7 @@ function ContactStep({
           className={inputCls}
         >
           <option value="">Select one</option>
-          {EVENT_TYPES.map((t) => (
+          {eventTypes.map((t) => (
             <option key={t}>{t}</option>
           ))}
         </select>
@@ -772,7 +801,7 @@ function ConfirmStep({
 }) {
   return (
     <div>
-      <p className="mb-5 text-sm text-espresso/50">
+      <p className="mb-5 text-sm text-espresso/45">
         Almost there. Pick how you&apos;d like to pay the deposit.
       </p>
 
@@ -784,10 +813,10 @@ function ConfirmStep({
               key={m}
               type="button"
               onClick={() => onMethod(m)}
-              className={`rounded-2xl border-2 px-3 py-3.5 text-xs font-medium transition-all duration-200 ${
+              className={`rounded-lg border px-3 py-3 text-xs font-medium transition-all duration-200 ${
                 method === m
-                  ? "border-mocha bg-mocha/5 text-mocha shadow-sm"
-                  : "border-latte/40 bg-white/80 text-espresso/50 hover:border-mocha/30 hover:bg-white"
+                  ? "border-espresso/30 bg-sand/40 text-espresso shadow-sm"
+                  : "border-espresso/8 bg-white text-espresso/50 hover:border-espresso/20"
               }`}
             >
               {methodLabel(m)}
@@ -796,20 +825,20 @@ function ConfirmStep({
         </div>
       </div>
 
-      <div className="mb-5 rounded-2xl border border-latte/30 bg-white/60 p-5 text-xs leading-relaxed text-espresso/50 backdrop-blur-sm">
+      <div className="mb-5 rounded-lg border border-espresso/8 bg-sand/30 p-4 text-xs leading-relaxed text-espresso/50">
         You&apos;re paying {settings.deposit_percent}% now to lock your date. The
         rest is due on or before the event day. We&apos;ll send a confirmation
         to your email.
       </div>
 
-      <label className="flex items-start gap-3 rounded-2xl border-2 border-latte/30 bg-white/80 p-5 text-xs text-espresso transition hover:border-latte/50 hover:bg-white">
+      <label className="flex items-start gap-3 rounded-lg border border-espresso/10 bg-white p-4 text-xs text-espresso transition hover:border-espresso/20">
         <input
           type="checkbox"
           checked={terms}
           onChange={(e) => onTerms(e.target.checked)}
-          className="mt-0.5 accent-mocha"
+          className="mt-0.5 accent-espresso"
         />
-        <span className="leading-relaxed text-espresso/60">
+        <span className="leading-relaxed text-espresso/55">
           I&apos;ve read the service area, cancellation, and setup info above and
           I&apos;m good to go.
         </span>

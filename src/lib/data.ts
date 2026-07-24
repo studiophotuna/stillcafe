@@ -1,10 +1,12 @@
 import { createAdminClient } from "@/lib/supabase/admin";
-import type { Booking, Package, Payment, Settings } from "@/lib/types";
-
-/**
- * Server-side data access using the service-role client. Import only from
- * server components, server actions, and route handlers.
- */
+import type {
+  Booking,
+  Package,
+  Payment,
+  PaymentConfig,
+  Settings,
+  SiteContent,
+} from "@/lib/types";
 
 export async function getActivePackages(): Promise<Package[]> {
   const supabase = createAdminClient();
@@ -93,13 +95,12 @@ export async function getSettings(): Promise<Settings> {
     .eq("id", 1)
     .maybeSingle();
   if (error) throw error;
-  // Fall back to sane defaults if the row is somehow missing.
   return (
     data ?? {
       id: 1,
       payment_provider: "paymongo",
       payment_methods: ["gcash", "card"],
-      business_name: "Still Café",
+      business_name: "My Business",
       business_email: null,
       currency: "PHP",
       deposit_percent: 50,
@@ -108,30 +109,100 @@ export async function getSettings(): Promise<Settings> {
       extra_hour_cents: 150000,
       standard_hours: 3,
       service_area: "Metro Manila",
-      service_cities: [
-        "Manila",
-        "Makati",
-        "Taguig",
-        "Pasig",
-        "Quezon City",
-        "Mandaluyong",
-        "San Juan",
-        "Pasay",
-        "Paranaque",
-        "Muntinlupa",
-        "Las Pinas",
-        "Marikina",
-        "Caloocan",
-      ],
+      service_cities: [],
+      reference_prefix: "BK",
+      min_guests: 1,
+      max_guests: 500,
+      event_types: ["Wedding", "Birthday", "Corporate event", "Other"],
+      locale: "en-US",
       updated_at: new Date().toISOString(),
     }
   );
 }
 
-/**
- * Dates that already have a reserved booking (confirmed/paid/completed), so the
- * availability calendar can mark them as unavailable. Only future dates.
- */
+export async function getSiteContent(): Promise<SiteContent> {
+  const supabase = createAdminClient();
+  const { data, error } = await supabase
+    .from("site_content")
+    .select("*")
+    .eq("id", 1)
+    .maybeSingle();
+  if (error) throw error;
+  const fallback: SiteContent = {
+    id: 1,
+    logo_url: null,
+    brand_name: "My Business",
+    tagline: "Your tagline here",
+    description: "Welcome to our business.",
+    cta_text: "Book Now",
+    footer_tagline: "Available for bookings",
+    copyright_text: "© My Business",
+    bg_mode: "carousel",
+    bg_images: [],
+    bg_static_image: null,
+    bg_overlay_color: "#5c1f1a",
+    bg_overlay_opacity: 80,
+    booking_hero_label: "Event Booking",
+    booking_hero_title: "Let’s get your event booked",
+    booking_hero_subtitle:
+      "Pick a date, choose your setup, and we’ll handle the rest.",
+    sidebar_title: "What you get",
+    sidebar_description: "A complete professional setup for your event.",
+    sidebar_faqs: [
+      { question: "Does this form lock in my date?", answer: "Not yet. Your date is reserved once the deposit goes through." },
+      { question: "When do you show up?", answer: "We arrive early to set everything up and test the equipment." },
+      { question: "How do I pay?", answer: "The deposit is paid online. The remaining balance is due on or before the event day." },
+    ],
+    policies: [
+      "We currently serve {service_area} only.",
+      "A {deposit_percent}% deposit is needed to lock in your date.",
+    ],
+    wizard_faqs: [
+      { question: "Does this form confirm my date?", answer: "Not yet. Your date is only locked once the {deposit_percent}% deposit is paid." },
+      { question: "How many guests can I have?", answer: "We can handle anywhere from 20 to 500." },
+      { question: "Can I cancel after paying?", answer: "The deposit is non-refundable, but you can move to another available date." },
+      { question: "What if we go overtime?", answer: "You can add extra hours during booking, or we can arrange it before your event." },
+    ],
+    color_primary: "#5c1f1a",
+    color_accent: "#6f4e37",
+    color_page_bg: "#faf6f0",
+    color_text: "#2c1e14",
+    color_surface: "#f0e6d8",
+    color_border: "#e8ddd0",
+    color_highlight: "#c08457",
+    color_card: "#ffffff",
+    social_instagram: "",
+    social_facebook: "",
+    social_tiktok: "",
+    created_at: new Date().toISOString(),
+    updated_at: new Date().toISOString(),
+  };
+  if (!data) return fallback;
+  return { ...fallback, ...data };
+}
+
+export async function getPaymentConfigs(): Promise<PaymentConfig[]> {
+  const supabase = createAdminClient();
+  const { data, error } = await supabase
+    .from("payment_configs")
+    .select("*")
+    .order("provider", { ascending: true });
+  if (error) throw error;
+  return data ?? [];
+}
+
+export async function getActivePaymentConfig(): Promise<PaymentConfig | null> {
+  const supabase = createAdminClient();
+  const { data, error } = await supabase
+    .from("payment_configs")
+    .select("*")
+    .eq("is_active", true)
+    .limit(1)
+    .maybeSingle();
+  if (error) throw error;
+  return data;
+}
+
 export async function getBookedDates(): Promise<string[]> {
   const supabase = createAdminClient();
   const today = new Date().toISOString().split("T")[0];

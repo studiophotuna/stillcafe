@@ -19,22 +19,11 @@ const config: Config = {
         amber: "#d4a853",
         clay: "#a07358",
         sand: "#f0e6d8",
+        card: "rgb(var(--color-card, 255 255 255) / <alpha-value>)",
       },
       fontFamily: {
-        serif: [
-          "Georgia",
-          "Cambria",
-          "Times New Roman",
-          "serif",
-        ],
-        sans: [
-          "ui-sans-serif",
-          "system-ui",
-          "-apple-system",
-          "Segoe UI",
-          "Roboto",
-          "sans-serif",
-        ],
+        serif: ["var(--font-serif)", "Georgia", "Cambria", "serif"],
+        sans: ["var(--font-sans)", "ui-sans-serif", "system-ui", "sans-serif"],
       },
       boxShadow: {
         soft: "0 2px 20px -4px rgba(44, 30, 20, 0.08)",
