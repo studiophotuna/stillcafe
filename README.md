@@ -44,13 +44,13 @@ npm install
 
 ### 2. Set up Supabase
 
-Create a project at [supabase.com](https://supabase.com), then run the SQL in
-order (SQL Editor, or the Supabase CLI):
+Create a project at [supabase.com](https://supabase.com), then run the SQL
+(SQL Editor, or the Supabase CLI):
 
-1. `supabase/migrations/0001_init.sql` — tables, RLS, triggers
-2. `supabase/migrations/0002_storage.sql` — package-images storage bucket
-3. `supabase/migrations/0003_wizard.sql` — multi-package / wizard fields
-4. `supabase/seed.sql` — *(optional)* sample packages
+1. `supabase/schema.sql` — the complete schema in one idempotent file
+   (tables, columns, RLS, triggers, storage buckets, seed rows). Safe to
+   re-run; all future schema changes are merged into this same file.
+2. `supabase/seed.sql` — *(optional)* sample packages
 
 Create your admin user under **Authentication → Users → Add user** (email +
 password). Anyone with a Supabase auth account can access `/admin`.
@@ -127,7 +127,7 @@ src/
     data.ts                      server data access
     format.ts, types.ts, auth.ts
 supabase/
-  migrations/                    schema + storage
+  schema.sql                     complete schema in one idempotent file
   seed.sql                       sample packages
 ```
 

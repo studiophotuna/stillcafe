@@ -16,21 +16,19 @@ A white-label event booking system built with Next.js, Supabase, and Tailwind CS
 2. Note your **Project URL** and **Service Role Key** (Settings > API)
 3. Note your **Anon Key** (Settings > API)
 
-## 2. Run Database Migrations
+## 2. Run the Database Schema
 
-In the Supabase SQL Editor (or via CLI), run these migration files **in order**:
+The entire database lives in **one file**. In the Supabase SQL Editor (or via
+CLI), run:
 
 ```
-supabase/migrations/0001_init.sql
-supabase/migrations/0002_wizard_fields.sql
-supabase/migrations/0003_site_content.sql
-supabase/migrations/0004_booking_hero.sql
-supabase/migrations/0005_sidebar_and_wizard_faqs.sql
-supabase/migrations/0006_theme_and_payments.sql
-supabase/migrations/0007_configurable_settings.sql
+supabase/schema.sql
 ```
 
-Each file is safe to run multiple times (`IF NOT EXISTS` / `ON CONFLICT` guards).
+The file is fully idempotent (`IF NOT EXISTS` / `ON CONFLICT` guards), so it
+works on a fresh project and can be re-run any time to bring an existing
+database up to date. All future schema changes are merged into this same
+file — there are no separate migration files.
 
 ## 3. Create Storage Buckets
 
