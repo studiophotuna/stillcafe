@@ -244,9 +244,9 @@ export async function saveSettings(formData: FormData) {
       .eq("id", 1)
       .select("id");
 
-    if (error) failure = error.message;
+    if (error) failure = friendlyDbError(error.message);
     else if (!data || data.length === 0)
-      failure = "No settings row was updated — the settings table has no row with id 1.";
+      failure = `No settings row was updated — the settings table in ${dbHost()} has no row with id 1. Run supabase/schema.sql in that project.`;
   } catch (e) {
     failure = e instanceof Error ? e.message : "Unexpected error while saving.";
   }
@@ -261,6 +261,26 @@ export async function saveSettings(formData: FormData) {
 }
 
 export type SaveResult = { ok: boolean; error?: string };
+
+function dbHost(): string {
+  try {
+    return new URL(process.env.NEXT_PUBLIC_SUPABASE_URL ?? "").host;
+  } catch {
+    return "unknown";
+  }
+}
+
+/**
+ * Missing-column errors mean the connected database hasn't had
+ * supabase/schema.sql run against it. Say so, and name the database, so
+ * it's obvious which Supabase project needs the update.
+ */
+function friendlyDbError(message: string): string {
+  if (/schema cache|could not find/i.test(message)) {
+    return `${message}. The connected database (${dbHost()}) is missing newer columns — run supabase/schema.sql in that Supabase project's SQL Editor, then try again.`;
+  }
+  return message;
+}
 
 export async function saveSiteContent(formData: FormData): Promise<SaveResult> {
   await requireUser();
@@ -416,12 +436,11 @@ async function saveSiteContentInner(formData: FormData): Promise<SaveResult> {
     .eq("id", 1)
     .select("id");
 
-  if (error) return { ok: false, error: error.message };
+  if (error) return { ok: false, error: friendlyDbError(error.message) };
   if (!data || data.length === 0)
     return {
       ok: false,
-      error:
-        "Nothing was saved — the site_content table has no row with id 1.",
+      error: `Nothing was saved — the site_content table in ${dbHost()} has no row with id 1. Run supabase/schema.sql in that project.`,
     };
 
   // Layout-scope revalidation: theme colors and fonts live in the root
@@ -482,9 +501,12 @@ export async function savePaymentConfig(
       .eq("id", id)
       .select("id");
 
-    if (error) return { ok: false, error: error.message };
+    if (error) return { ok: false, error: friendlyDbError(error.message) };
     if (!data || data.length === 0)
-      return { ok: false, error: "Nothing was saved — provider row not found." };
+      return {
+        ok: false,
+        error: `Nothing was saved — provider row not found in ${dbHost()}. Run supabase/schema.sql in that project.`,
+      };
 
     revalidatePath("/admin", "layout");
     revalidatePath("/admin/settings");

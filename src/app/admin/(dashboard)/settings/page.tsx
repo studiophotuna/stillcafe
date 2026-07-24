@@ -52,6 +52,18 @@ export default async function SettingsPage({
       <p className="mt-1 text-sm text-espresso/45">
         Configure your business, pricing, and payment options.
       </p>
+      <p className="mt-1 text-xs text-espresso/30">
+        Connected database:{" "}
+        <code className="rounded bg-sand/50 px-1 py-0.5 font-mono">
+          {(() => {
+            try {
+              return new URL(process.env.NEXT_PUBLIC_SUPABASE_URL ?? "").host;
+            } catch {
+              return "not configured";
+            }
+          })()}
+        </code>
+      </p>
 
       {searchParams.saved && (
         <div className="mt-4 flex items-center gap-2 rounded-lg border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-700">
