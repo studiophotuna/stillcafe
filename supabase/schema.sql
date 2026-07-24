@@ -384,3 +384,10 @@ create policy "site_content public read" on public.site_content
 
 -- bookings, payments, payment_configs: RLS enabled with no policies =
 -- all anon/authenticated access denied; service-role only.
+
+-- ----------------------------------------------------------------------------
+-- Refresh PostgREST's schema cache so the API sees new columns immediately.
+-- Without this, requests can fail with "Could not find the '<col>' column
+-- of '<table>' in the schema cache" until the cache expires on its own.
+-- ----------------------------------------------------------------------------
+notify pgrst, 'reload schema';
