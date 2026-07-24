@@ -377,9 +377,9 @@ export async function saveSiteContent(formData: FormData) {
     .eq("id", 1);
 
   if (error) throw new Error(error.message);
-  revalidatePath("/admin", "layout");
-  revalidatePath("/");
-  revalidatePath("/book");
+  // Layout-scope revalidation: theme colors and fonts live in the root
+  // layout, so bust everything rendered beneath it.
+  revalidatePath("/", "layout");
 }
 
 export async function savePaymentConfig(formData: FormData) {
@@ -394,7 +394,7 @@ export async function savePaymentConfig(formData: FormData) {
 
   const { data: existing } = await supabase
     .from("payment_configs")
-    .select("secret_key, public_key, webhook_secret")
+    .select("secret_key, public_key, webhook_secret, provider, config")
     .eq("id", id)
     .single();
 
@@ -404,6 +404,14 @@ export async function savePaymentConfig(formData: FormData) {
 
   if (isActive && !secretKey) {
     throw new Error("A secret key is required to activate a payment provider.");
+  }
+
+  let config = (existing?.config as Record<string, unknown>) ?? {};
+  if (existing?.provider === "paypal") {
+    const mode = formData.get("paypal_mode") as string;
+    if (mode === "sandbox" || mode === "live") {
+      config = { ...config, mode };
+    }
   }
 
   if (isActive) {
@@ -420,10 +428,12 @@ export async function savePaymentConfig(formData: FormData) {
       secret_key: secretKey,
       webhook_secret: webhookSecret,
       is_active: isActive,
+      config,
     })
     .eq("id", id);
 
   if (error) throw new Error(error.message);
   revalidatePath("/admin", "layout");
+  revalidatePath("/admin/settings");
   revalidatePath("/book");
 }

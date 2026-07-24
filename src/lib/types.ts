@@ -82,7 +82,13 @@ export type Payment = {
   updated_at: string;
 };
 
-export type PaymentMethod = "gcash" | "card" | "grab_pay" | "paymaya" | "link";
+export type PaymentMethod =
+  | "gcash"
+  | "card"
+  | "grab_pay"
+  | "paymaya"
+  | "paypal"
+  | "link";
 
 export type PaymentConfig = {
   id: string;

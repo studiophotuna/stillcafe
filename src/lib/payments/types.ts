@@ -4,6 +4,8 @@ export type ProviderKeys = {
   secretKey: string;
   publicKey?: string;
   webhookSecret?: string;
+  /** Provider-specific options from the payment_configs.config column. */
+  options?: Record<string, unknown>;
 };
 
 export type CreateCheckoutInput = {

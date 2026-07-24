@@ -30,6 +30,7 @@ const METHOD_LABELS: Record<string, string> = {
   card: "Credit / Debit Card",
   grab_pay: "GrabPay",
   paymaya: "Maya",
+  paypal: "PayPal",
   link: "Payment Link",
 };
 

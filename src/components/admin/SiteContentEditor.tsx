@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useRouter } from "next/navigation";
 import Image from "next/image";
 import { saveSiteContent } from "@/app/admin/actions";
 import { BODY_FONTS, DISPLAY_FONTS } from "@/lib/fonts";
@@ -40,6 +41,7 @@ function SectionHeader({
 }
 
 export function SiteContentEditor({ content }: { content: SiteContent }) {
+  const router = useRouter();
   const [tab, setTab] = useState<Tab>("landing");
   const [bgMode, setBgMode] = useState(content.bg_mode);
   const [bgImages, setBgImages] = useState<string[]>(content.bg_images);
@@ -136,6 +138,8 @@ export function SiteContentEditor({ content }: { content: SiteContent }) {
       fd.set("nav_pages", JSON.stringify(navPages));
       await saveSiteContent(fd);
       setMessage("Saved!");
+      // Pull fresh server props so the editor reflects what was stored.
+      router.refresh();
     } catch (err) {
       setMessage(err instanceof Error ? err.message : "Save failed");
     } finally {

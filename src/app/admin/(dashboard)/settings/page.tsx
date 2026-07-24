@@ -10,6 +10,7 @@ const ALL_METHODS: { id: PaymentMethod; label: string }[] = [
   { id: "card", label: "Credit / Debit Card" },
   { id: "grab_pay", label: "GrabPay" },
   { id: "paymaya", label: "Maya" },
+  { id: "paypal", label: "PayPal" },
 ];
 
 export default async function SettingsPage() {
@@ -27,6 +28,10 @@ export default async function SettingsPage() {
     has_public_key: !!c.public_key,
     has_secret_key: !!c.secret_key,
     has_webhook_secret: !!c.webhook_secret,
+    mode:
+      typeof (c.config as Record<string, unknown> | null)?.mode === "string"
+        ? String((c.config as Record<string, unknown>).mode)
+        : undefined,
   }));
 
   return (
