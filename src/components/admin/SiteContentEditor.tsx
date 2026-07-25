@@ -6,6 +6,7 @@ import Image from "next/image";
 import { saveSiteContent } from "@/app/admin/actions";
 import { BODY_FONTS, DISPLAY_FONTS } from "@/lib/fonts";
 import { resolveCopy, type SiteCopy } from "@/lib/copy";
+import { resolveTextSizes, type TextSizes } from "@/lib/text-sizes";
 import type { FaqItem, NavPage, SiteContent } from "@/lib/types";
 
 const DEFAULT_THEME: Record<string, string> = {
@@ -49,7 +50,14 @@ export function SiteContentEditor({ content }: { content: SiteContent }) {
   const [wizardFaqs, setWizardFaqs] = useState<FaqItem[]>(content.wizard_faqs);
   const [navPages, setNavPages] = useState<NavPage[]>(content.nav_pages ?? []);
   const [copy, setCopy] = useState<SiteCopy>(resolveCopy(content.copy));
+  const [textSizes, setTextSizes] = useState<TextSizes>(
+    resolveTextSizes(content.text_sizes)
+  );
   const [saving, setSaving] = useState(false);
+
+  function setSize(key: keyof TextSizes, value: number) {
+    setTextSizes((s) => ({ ...s, [key]: value }));
+  }
 
   function setCopyField<K extends keyof SiteCopy>(key: K, value: SiteCopy[K]) {
     setCopy((c) => ({ ...c, [key]: value }));
@@ -154,6 +162,7 @@ export function SiteContentEditor({ content }: { content: SiteContent }) {
       fd.set("wizard_faqs", JSON.stringify(wizardFaqs));
       fd.set("nav_pages", JSON.stringify(navPages));
       fd.set("copy", JSON.stringify(copy));
+      fd.set("text_sizes", JSON.stringify(textSizes));
       const res = await saveSiteContent(fd);
       if (res?.ok) {
         setMessage("Saved!");
@@ -619,6 +628,25 @@ export function SiteContentEditor({ content }: { content: SiteContent }) {
               </div>
             </div>
 
+            {/* Landing element sizes */}
+            <div className="card overflow-hidden">
+              <SectionHeader
+                title="Landing element sizes"
+                hint="Fine-tune each landing element relative to the landing text size above. Values are multipliers, so the master size still scales them all together."
+                icon={
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-4 w-4">
+                    <polyline points="4 7 4 4 20 4 20 7" /><line x1="9" y1="20" x2="15" y2="20" /><line x1="12" y1="4" x2="12" y2="20" />
+                  </svg>
+                }
+              />
+              <div className="grid gap-4 p-6 sm:grid-cols-2">
+                <SizeField label="Logo" value={textSizes.logo} min={2.5} max={9} onChange={(v) => setSize("logo", v)} />
+                <SizeField label="Tagline" value={textSizes.tagline} min={0.4} max={1.4} onChange={(v) => setSize("tagline", v)} />
+                <SizeField label="Nav links & buttons" value={textSizes.links} min={0.4} max={1.1} onChange={(v) => setSize("links", v)} />
+                <SizeField label="Copyright" value={textSizes.copyright} min={0.4} max={1} onChange={(v) => setSize("copyright", v)} />
+              </div>
+            </div>
+
             {/* Theme colors */}
             <div className="card overflow-hidden">
               <div className="flex items-center justify-between border-b border-latte/30 px-6 py-4">
@@ -909,6 +937,40 @@ export function SiteContentEditor({ content }: { content: SiteContent }) {
         </div>
       </div>
     </form>
+  );
+}
+
+function SizeField({
+  label,
+  value,
+  min,
+  max,
+  onChange,
+}: {
+  label: string;
+  value: number;
+  min: number;
+  max: number;
+  onChange: (v: number) => void;
+}) {
+  return (
+    <div>
+      <div className="mb-1.5 flex items-center justify-between">
+        <label className="text-xs font-medium text-espresso/50">{label}</label>
+        <span className="font-mono text-xs text-espresso/40">
+          {value.toFixed(2)}×
+        </span>
+      </div>
+      <input
+        type="range"
+        min={min}
+        max={max}
+        step={0.05}
+        value={value}
+        onChange={(e) => onChange(Number(e.target.value))}
+        className="w-full accent-mocha"
+      />
+    </div>
   );
 }
 

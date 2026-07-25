@@ -343,6 +343,15 @@ async function saveSiteContentInner(formData: FormData): Promise<SaveResult> {
     copy = {};
   }
 
+  const textSizesRaw = (formData.get("text_sizes") as string) || "{}";
+  let text_sizes: Record<string, unknown> = {};
+  try {
+    const parsed = JSON.parse(textSizesRaw);
+    if (parsed && typeof parsed === "object") text_sizes = parsed;
+  } catch {
+    text_sizes = {};
+  }
+
   const sidebarFaqsRaw = (formData.get("sidebar_faqs") as string) || "[]";
   let sidebar_faqs: FaqItem[] = [];
   try {
@@ -436,6 +445,7 @@ async function saveSiteContentInner(formData: FormData): Promise<SaveResult> {
     font_weight_body: clampInt(formData.get("font_weight_body"), 400, 300, 500),
     nav_pages,
     copy,
+    text_sizes,
   };
 
   if (logo_url) row.logo_url = logo_url;

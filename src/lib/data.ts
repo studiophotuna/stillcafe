@@ -294,6 +294,7 @@ export async function getSiteContent(): Promise<SiteContent> {
     social_facebook: "",
     social_tiktok: "",
     copy: {},
+    text_sizes: {},
     created_at: new Date().toISOString(),
     updated_at: new Date().toISOString(),
   };

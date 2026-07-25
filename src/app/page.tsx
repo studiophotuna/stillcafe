@@ -12,6 +12,7 @@ import {
 import { NavPagesMenu } from "@/components/landing/NavPagesMenu";
 import { BackgroundCarousel } from "@/components/landing/BackgroundCarousel";
 import { resolveCopy } from "@/lib/copy";
+import { resolveTextSizes, textSizeVars } from "@/lib/text-sizes";
 
 export const dynamic = "force-dynamic";
 
@@ -80,12 +81,14 @@ export default async function HomePage() {
   // Landing base font size drives all landing text via em units. clamp keeps
   // it readable on phones (scales with viewport) and capped on desktop.
   const landingSize = Math.min(48, Math.max(12, content.font_size_landing || 22));
+  const sizes = resolveTextSizes(content.text_sizes);
   const landingFontStyle = {
     fontSize: `clamp(15px, 4.2vw, ${landingSize}px)`,
+    ...textSizeVars(sizes),
   } as React.CSSProperties;
 
   const bookNowCls =
-    "rounded-full border border-espresso px-[1.4em] py-[0.6em] text-[0.62em] uppercase tracking-[0.2em] text-espresso backdrop-blur-sm transition-all hover:bg-espresso hover:text-cream";
+    "rounded-full border border-espresso px-[1.4em] py-[0.6em] text-[length:var(--size-links)] uppercase tracking-[0.2em] text-espresso backdrop-blur-sm transition-all hover:bg-espresso hover:text-cream";
 
   return (
     <div
@@ -121,10 +124,10 @@ export default async function HomePage() {
             alt={content.brand_name}
             width={240}
             height={240}
-            className="h-[5em] w-[5em] object-contain"
+            className="h-[var(--size-logo)] w-[var(--size-logo)] object-contain"
             priority
           />
-          <p className="mt-3 max-w-[16em] text-center text-[0.68em] uppercase leading-relaxed tracking-[0.3em] text-espresso">
+          <p className="mt-3 max-w-[16em] text-center text-[length:var(--size-tagline)] uppercase leading-relaxed tracking-[0.3em] text-espresso">
             {content.tagline}
           </p>
         </div>
@@ -173,7 +176,7 @@ export default async function HomePage() {
       <main className="relative z-10 flex-1" />
 
       {/* Bottom: copyright */}
-      <footer className="relative z-10 py-5 text-center text-[0.55em] uppercase tracking-[0.15em] text-espresso">
+      <footer className="relative z-10 py-5 text-center text-[length:var(--size-copyright)] uppercase tracking-[0.15em] text-espresso">
         {content.copyright_text}
       </footer>
 
