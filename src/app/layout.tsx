@@ -43,7 +43,7 @@ export default async function RootLayout({
     const content = await getSiteContent();
     displayFont = sanitizeDisplayFont(content.font_display);
     bodyFont = sanitizeBodyFont(content.font_body);
-    fontSize = Math.min(18, Math.max(14, content.font_size_base || 16));
+    fontSize = Math.min(20, Math.max(14, content.font_size_base || 16));
     fontWeight = Math.min(500, Math.max(300, content.font_weight_body || 400));
     vars = {
       "--color-primary": hexToChannels(content.color_primary),

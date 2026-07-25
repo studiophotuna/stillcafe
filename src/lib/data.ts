@@ -274,6 +274,7 @@ export async function getSiteContent(): Promise<SiteContent> {
     font_display: "DM Serif Display",
     font_body: "DM Sans",
     font_size_base: 16,
+    font_size_landing: 22,
     font_weight_body: 400,
     nav_pages: [
       {

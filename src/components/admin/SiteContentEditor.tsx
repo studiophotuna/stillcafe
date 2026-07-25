@@ -558,20 +558,6 @@ export function SiteContentEditor({ content }: { content: SiteContent }) {
                   </select>
                 </div>
                 <div>
-                  <label className="field-label">Base font size (px)</label>
-                  <input
-                    type="number"
-                    name="font_size_base"
-                    min="14"
-                    max="18"
-                    defaultValue={content.font_size_base || 16}
-                    className="field-input"
-                  />
-                  <p className="mt-1 text-xs text-espresso/35">
-                    14–18. Scales all text proportionally.
-                  </p>
-                </div>
-                <div>
                   <label className="field-label">Body font weight</label>
                   <select
                     name="font_weight_body"
@@ -582,6 +568,35 @@ export function SiteContentEditor({ content }: { content: SiteContent }) {
                     <option value="400">Regular (400)</option>
                     <option value="500">Medium (500)</option>
                   </select>
+                </div>
+                <div>
+                  <label className="field-label">Landing page text size (px)</label>
+                  <input
+                    type="number"
+                    name="font_size_landing"
+                    min="12"
+                    max="48"
+                    defaultValue={content.font_size_landing || 22}
+                    className="field-input"
+                  />
+                  <p className="mt-1 text-xs text-espresso/35">
+                    12–48. Sizes the landing page (logo, tagline, nav). Scales
+                    down automatically on small screens.
+                  </p>
+                </div>
+                <div>
+                  <label className="field-label">Booking &amp; app text size (px)</label>
+                  <input
+                    type="number"
+                    name="font_size_base"
+                    min="14"
+                    max="20"
+                    defaultValue={content.font_size_base || 16}
+                    className="field-input"
+                  />
+                  <p className="mt-1 text-xs text-espresso/35">
+                    14–20. Sizes the booking flow and other pages.
+                  </p>
                 </div>
               </div>
             </div>

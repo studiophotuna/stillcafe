@@ -16,7 +16,7 @@ export const dynamic = "force-dynamic";
 
 function InstagramIcon() {
   return (
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className="h-5 w-5">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className="h-[1.35em] w-[1.35em]">
       <rect x="2" y="2" width="20" height="20" rx="5" />
       <circle cx="12" cy="12" r="5" />
       <circle cx="17.5" cy="6.5" r="1" fill="currentColor" stroke="none" />
@@ -74,11 +74,21 @@ export default async function HomePage() {
   const hasSocials =
     content.social_instagram || content.social_facebook || content.social_tiktok;
 
+  // Landing base font size drives all landing text via em units. clamp keeps
+  // it readable on phones (scales with viewport) and capped on desktop.
+  const landingSize = Math.min(48, Math.max(12, content.font_size_landing || 22));
+  const landingFontStyle = {
+    fontSize: `clamp(15px, 4.2vw, ${landingSize}px)`,
+  } as React.CSSProperties;
+
   const bookNowCls =
-    "rounded-full border border-espresso px-5 py-2 text-[11px] uppercase tracking-[0.2em] text-espresso backdrop-blur-sm transition-all hover:bg-espresso hover:text-cream";
+    "rounded-full border border-espresso px-[1.4em] py-[0.6em] text-[0.62em] uppercase tracking-[0.2em] text-espresso backdrop-blur-sm transition-all hover:bg-espresso hover:text-cream";
 
   return (
-    <div className="relative flex min-h-screen flex-col overflow-hidden">
+    <div
+      className="relative flex min-h-screen flex-col overflow-hidden"
+      style={landingFontStyle}
+    >
       {/* Background image / carousel */}
       <div className="pointer-events-none absolute inset-0" aria-hidden="true">
         {carouselImages.length > 1 ? (
@@ -95,7 +105,7 @@ export default async function HomePage() {
       </div>
 
       {/* Top bar: links · logo · socials + book now */}
-      <nav className="relative z-10 grid grid-cols-[1fr_auto_1fr] items-start gap-4 px-6 pt-4 sm:px-10 sm:pt-5">
+      <nav className="relative z-10 grid grid-cols-[1fr_auto_1fr] items-start gap-2 px-4 pt-4 sm:gap-4 sm:px-10 sm:pt-5">
         {/* Left: admin-managed nav pages */}
         <div className="pt-2">
           <NavPagesMenu pages={content.nav_pages} />
@@ -106,18 +116,18 @@ export default async function HomePage() {
           <Image
             src={content.logo_url || "/logo.png"}
             alt={content.brand_name}
-            width={120}
-            height={120}
-            className="h-20 w-20 object-contain sm:h-28 sm:w-28"
+            width={240}
+            height={240}
+            className="h-[5em] w-[5em] object-contain"
             priority
           />
-          <p className="mt-3 max-w-xs text-center text-[10px] uppercase tracking-[0.3em] text-espresso sm:text-[11px]">
+          <p className="mt-3 max-w-[16em] text-center text-[0.68em] uppercase leading-relaxed tracking-[0.3em] text-espresso">
             {content.tagline}
           </p>
         </div>
 
         {/* Right: social icons + book now */}
-        <div className="flex items-center justify-end gap-4 pt-1 sm:gap-5">
+        <div className="flex items-center justify-end gap-3 pt-1 sm:gap-5">
           {content.social_instagram && (
             <a
               href={content.social_instagram}
@@ -151,7 +161,7 @@ export default async function HomePage() {
               <TikTokIcon />
             </a>
           )}
-          {hasSocials && <div className="hidden h-4 w-px bg-espresso/25 sm:block" />}
+          {hasSocials && <div className="hidden h-[1.2em] w-px bg-espresso/25 sm:block" />}
           <BookNowTrigger className={bookNowCls}>Book Now</BookNowTrigger>
         </div>
       </nav>
@@ -160,7 +170,7 @@ export default async function HomePage() {
       <main className="relative z-10 flex-1" />
 
       {/* Bottom: copyright */}
-      <footer className="relative z-10 py-5 text-center text-[10px] uppercase tracking-[0.15em] text-espresso">
+      <footer className="relative z-10 py-5 text-center text-[0.55em] uppercase tracking-[0.15em] text-espresso">
         {content.copyright_text}
       </footer>
 

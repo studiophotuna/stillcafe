@@ -260,6 +260,7 @@ create table if not exists public.site_content (
   font_display     text not null default 'DM Serif Display',
   font_body        text not null default 'DM Sans',
   font_size_base   integer not null default 16,
+  font_size_landing integer not null default 22,
   font_weight_body integer not null default 400,
 
   -- landing page navigation pages (label + slide-over panel content)
@@ -291,6 +292,7 @@ alter table public.site_content
   add column if not exists font_display      text not null default 'DM Serif Display',
   add column if not exists font_body         text not null default 'DM Sans',
   add column if not exists font_size_base    integer not null default 16,
+  add column if not exists font_size_landing integer not null default 22,
   add column if not exists font_weight_body  integer not null default 400,
   add column if not exists nav_pages         jsonb not null default '[
     {"label": "About", "title": "About us", "content": "We bring a full mobile espresso bar to your event. Premium beans, a friendly barista, and a setup that looks as good as the coffee tastes.", "sections": []},

@@ -157,6 +157,7 @@ export type SiteContent = {
   font_display: string;
   font_body: string;
   font_size_base: number;
+  font_size_landing: number;
   font_weight_body: number;
   nav_pages: NavPage[];
   created_at: string;

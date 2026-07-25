@@ -422,7 +422,8 @@ async function saveSiteContentInner(formData: FormData): Promise<SaveResult> {
     social_tiktok: ((formData.get("social_tiktok") as string) || "").trim(),
     font_display: sanitizeDisplayFont(formData.get("font_display") as string),
     font_body: sanitizeBodyFont(formData.get("font_body") as string),
-    font_size_base: clampInt(formData.get("font_size_base"), 16, 14, 18),
+    font_size_base: clampInt(formData.get("font_size_base"), 16, 14, 20),
+    font_size_landing: clampInt(formData.get("font_size_landing"), 22, 12, 48),
     font_weight_body: clampInt(formData.get("font_weight_body"), 400, 300, 500),
     nav_pages,
   };
