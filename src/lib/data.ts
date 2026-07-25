@@ -293,6 +293,7 @@ export async function getSiteContent(): Promise<SiteContent> {
     social_instagram: "",
     social_facebook: "",
     social_tiktok: "",
+    copy: {},
     created_at: new Date().toISOString(),
     updated_at: new Date().toISOString(),
   };

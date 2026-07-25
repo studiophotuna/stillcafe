@@ -5,6 +5,7 @@ import Image from "next/image";
 import type { FaqItem, Package, PaymentMethod, Settings } from "@/lib/types";
 import { formatMoney, methodLabel } from "@/lib/format";
 import { computeQuote } from "@/lib/pricing";
+import { DEFAULT_COPY, interpolate, type SiteCopy } from "@/lib/copy";
 import { AvailabilityCalendar } from "./AvailabilityCalendar";
 
 type Props = {
@@ -14,17 +15,8 @@ type Props = {
   initialPackageSlug?: string;
   policies?: string[];
   wizardFaqs?: FaqItem[];
+  copy?: SiteCopy;
 };
-
-const STEP_TITLES = [
-  "Good to know",
-  "Quick FAQ",
-  "Pick a date",
-  "Choose your setup",
-  "Event details",
-  "Your info",
-  "Review & pay",
-];
 
 const DEFAULT_EVENT_TYPES = [
   "Wedding",
@@ -41,7 +33,10 @@ export function BookingWizard({
   initialPackageSlug,
   policies: cmsPolicies,
   wizardFaqs: cmsWizardFaqs,
+  copy = DEFAULT_COPY,
 }: Props) {
+  const STEP_TITLES = copy.step_titles;
+  const STEP_INTROS = copy.step_intros;
   const initial = packages.find((p) => p.slug === initialPackageSlug);
 
   const [step, setStep] = useState(0);
@@ -204,12 +199,12 @@ export function BookingWizard({
 
       <div className="p-6 sm:p-8">
         <div key={step} className="min-h-[300px] animate-fade-in">
-          {step === 0 && <PoliciesStep settings={settings} policies={cmsPolicies} />}
-          {step === 1 && <FaqStep settings={settings} wizardFaqs={cmsWizardFaqs} />}
+          {step === 0 && <PoliciesStep settings={settings} policies={cmsPolicies} intro={STEP_INTROS[0]} />}
+          {step === 1 && <FaqStep settings={settings} wizardFaqs={cmsWizardFaqs} intro={STEP_INTROS[1]} />}
           {step === 2 && (
             <div>
               <p className="mb-4 text-sm text-espresso/45">
-                Dates that are crossed out are already taken.
+                {STEP_INTROS[2]}
               </p>
               <AvailabilityCalendar
                 bookedDates={bookedDates}
@@ -227,6 +222,7 @@ export function BookingWizard({
               onExtraHours={setExtraHours}
               settings={settings}
               quote={quote}
+              intro={STEP_INTROS[3]}
             />
           )}
           {step === 4 && (
@@ -243,6 +239,7 @@ export function BookingWizard({
               onVenueAddress={setVenueAddress}
               mapsLink={mapsLink}
               onMapsLink={setMapsLink}
+              intro={STEP_INTROS[4]}
             />
           )}
           {step === 5 && (
@@ -260,6 +257,7 @@ export function BookingWizard({
               onEventType={setEventType}
               notes={notes}
               onNotes={setNotes}
+              intro={STEP_INTROS[5]}
             />
           )}
           {step === 6 && (
@@ -270,6 +268,9 @@ export function BookingWizard({
               method={method}
               methods={settings.payment_methods}
               onMethod={setMethod}
+              intro={STEP_INTROS[6]}
+              depositNote={copy.deposit_note}
+              termsText={copy.terms_text}
             />
           )}
         </div>
@@ -386,9 +387,11 @@ function Tip({ children }: { children: React.ReactNode }) {
 function PoliciesStep({
   settings,
   policies,
+  intro,
 }: {
   settings: Settings;
   policies?: string[];
+  intro: string;
 }) {
   const items = policies && policies.length > 0
     ? policies
@@ -407,9 +410,7 @@ function PoliciesStep({
 
   return (
     <div>
-      <p className="mb-4 text-sm text-espresso/45">
-        A few things worth knowing before you fill this out.
-      </p>
+      <p className="mb-4 text-sm text-espresso/45">{intro}</p>
       <div className="space-y-2.5">
         {items.map((text, i) => (
           <Tip key={i}>{interpolate(text)}</Tip>
@@ -422,9 +423,11 @@ function PoliciesStep({
 function FaqStep({
   settings,
   wizardFaqs,
+  intro,
 }: {
   settings: Settings;
   wizardFaqs?: FaqItem[];
+  intro: string;
 }) {
   const items: FaqItem[] = wizardFaqs && wizardFaqs.length > 0
     ? wizardFaqs
@@ -443,9 +446,7 @@ function FaqStep({
 
   return (
     <div>
-      <p className="mb-4 text-sm text-espresso/45">
-        Answers to things people usually ask.
-      </p>
+      <p className="mb-4 text-sm text-espresso/45">{intro}</p>
       <div className="space-y-2.5">
         {items.map((faq, i) => (
           <Tip key={i}>
@@ -467,6 +468,7 @@ function PackagesStep({
   onExtraHours,
   settings,
   quote,
+  intro,
 }: {
   packages: Package[];
   selectedIds: string[];
@@ -475,12 +477,11 @@ function PackagesStep({
   onExtraHours: (n: number) => void;
   settings: Settings;
   quote: ReturnType<typeof computeQuote>;
+  intro: string;
 }) {
   return (
     <div>
-      <p className="mb-1 text-sm text-espresso/45">
-        Pick one or combine a few.
-      </p>
+      <p className="mb-1 text-sm text-espresso/45">{intro}</p>
       {settings.combo_discount_cents > 0 && (
         <p className="mb-4 text-xs text-mocha">
           {formatMoney(settings.combo_discount_cents)} off when you pick{" "}
@@ -619,6 +620,7 @@ function ScheduleStep({
   onVenueAddress,
   mapsLink,
   onMapsLink,
+  intro,
 }: {
   settings: Settings;
   date: string | null;
@@ -632,15 +634,14 @@ function ScheduleStep({
   onVenueAddress: (v: string) => void;
   mapsLink: string;
   onMapsLink: (v: string) => void;
+  intro: string;
 }) {
   const isCustom = !TIME_PRESETS.includes(time);
   const [showCustom, setShowCustom] = useState(isCustom && time !== "08:00");
 
   return (
     <div className="space-y-4">
-      <p className="text-sm text-espresso/45">
-        Where and when is the event?
-      </p>
+      <p className="text-sm text-espresso/45">{intro}</p>
       <Field label="Date">
         <input
           type="text"
@@ -736,6 +737,7 @@ function ContactStep({
   onEventType,
   notes,
   onNotes,
+  intro,
 }: {
   settings: Settings;
   name: string;
@@ -750,12 +752,11 @@ function ContactStep({
   onEventType: (v: string) => void;
   notes: string;
   onNotes: (v: string) => void;
+  intro: string;
 }) {
   return (
     <div className="space-y-4">
-      <p className="text-sm text-espresso/45">
-        So we know who to coordinate with.
-      </p>
+      <p className="text-sm text-espresso/45">{intro}</p>
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
         <Field label="Your name">
           <input
@@ -829,6 +830,9 @@ function ConfirmStep({
   method,
   methods,
   onMethod,
+  intro,
+  depositNote,
+  termsText,
 }: {
   settings: Settings;
   terms: boolean;
@@ -836,12 +840,13 @@ function ConfirmStep({
   method: PaymentMethod;
   methods: PaymentMethod[];
   onMethod: (m: PaymentMethod) => void;
+  intro: string;
+  depositNote: string;
+  termsText: string;
 }) {
   return (
     <div>
-      <p className="mb-5 text-sm text-espresso/45">
-        Almost there. Pick how you&apos;d like to pay the deposit.
-      </p>
+      <p className="mb-5 text-sm text-espresso/45">{intro}</p>
 
       <div className="mb-5">
         <label className="field-label">Payment method</label>
@@ -864,9 +869,10 @@ function ConfirmStep({
       </div>
 
       <div className="mb-5 rounded-lg border border-latte/30 bg-sand/20 p-4 text-xs leading-relaxed text-espresso/50">
-        You&apos;re paying {settings.deposit_percent}% now to lock your date. The
-        rest is due on or before the event day. Save your booking reference
-        after payment.
+        {interpolate(depositNote, {
+          deposit_percent: settings.deposit_percent,
+          service_area: settings.service_area,
+        })}
       </div>
 
       <label className="flex items-start gap-3 rounded-lg border-2 border-latte/30 bg-card p-4 text-xs text-espresso transition-colors hover:border-latte/50">
@@ -876,10 +882,7 @@ function ConfirmStep({
           onChange={(e) => onTerms(e.target.checked)}
           className="mt-0.5 accent-mocha"
         />
-        <span className="leading-relaxed text-espresso/55">
-          I&apos;ve read the service area, cancellation, and setup info above and
-          I&apos;m good to go.
-        </span>
+        <span className="leading-relaxed text-espresso/55">{termsText}</span>
       </label>
     </div>
   );

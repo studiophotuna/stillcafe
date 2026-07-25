@@ -263,6 +263,9 @@ create table if not exists public.site_content (
   font_size_landing integer not null default 22,
   font_weight_body integer not null default 400,
 
+  -- editable UI copy (labels, headings, wizard step titles/intros)
+  copy jsonb not null default '{}'::jsonb,
+
   -- landing page navigation pages (label + slide-over panel content)
   nav_pages jsonb not null default '[
     {"label": "About", "title": "About us", "content": "We bring a full mobile espresso bar to your event. Premium beans, a friendly barista, and a setup that looks as good as the coffee tastes.", "sections": []},
@@ -294,6 +297,7 @@ alter table public.site_content
   add column if not exists font_size_base    integer not null default 16,
   add column if not exists font_size_landing integer not null default 22,
   add column if not exists font_weight_body  integer not null default 400,
+  add column if not exists copy              jsonb not null default '{}'::jsonb,
   add column if not exists nav_pages         jsonb not null default '[
     {"label": "About", "title": "About us", "content": "We bring a full mobile espresso bar to your event. Premium beans, a friendly barista, and a setup that looks as good as the coffee tastes.", "sections": []},
     {"label": "FAQ", "title": "Frequently asked questions", "content": "", "sections": [

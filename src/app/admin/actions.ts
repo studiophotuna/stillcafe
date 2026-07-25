@@ -334,6 +334,15 @@ async function saveSiteContentInner(formData: FormData): Promise<SaveResult> {
     .map((s) => s.trim())
     .filter(Boolean);
 
+  const copyRaw = (formData.get("copy") as string) || "{}";
+  let copy: Record<string, unknown> = {};
+  try {
+    const parsed = JSON.parse(copyRaw);
+    if (parsed && typeof parsed === "object") copy = parsed;
+  } catch {
+    copy = {};
+  }
+
   const sidebarFaqsRaw = (formData.get("sidebar_faqs") as string) || "[]";
   let sidebar_faqs: FaqItem[] = [];
   try {
@@ -426,6 +435,7 @@ async function saveSiteContentInner(formData: FormData): Promise<SaveResult> {
     font_size_landing: clampInt(formData.get("font_size_landing"), 22, 12, 48),
     font_weight_body: clampInt(formData.get("font_weight_body"), 400, 300, 500),
     nav_pages,
+    copy,
   };
 
   if (logo_url) row.logo_url = logo_url;

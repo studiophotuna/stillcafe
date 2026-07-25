@@ -3,6 +3,7 @@ import Link from "next/link";
 import Image from "next/image";
 import { getBookingByReference, getSiteContent } from "@/lib/data";
 import { formatDate, formatMoney } from "@/lib/format";
+import { resolveCopy } from "@/lib/copy";
 
 export const dynamic = "force-dynamic";
 
@@ -73,16 +74,17 @@ export default async function StatusPage({
   const logoUrl = content.logo_url || "/logo.png";
   const copyright =
     content.copyright_text ?? `© ${new Date().getFullYear()} ${brandName}`;
+  const copy = resolveCopy(content.copy);
 
   if (!ref) {
     return (
       <Shell logoUrl={logoUrl} brandName={brandName} copyright={copyright}>
         <div className="card w-full max-w-md animate-rise p-8">
           <h1 className="font-serif text-xl text-espresso">
-            Check your booking
+            {copy.status_title}
           </h1>
           <p className="mt-2 text-sm text-espresso/45">
-            Enter the reference number from your booking confirmation.
+            {copy.status_intro}
           </p>
           <form className="mt-6">
             <input

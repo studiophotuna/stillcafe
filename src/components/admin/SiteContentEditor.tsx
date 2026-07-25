@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import Image from "next/image";
 import { saveSiteContent } from "@/app/admin/actions";
 import { BODY_FONTS, DISPLAY_FONTS } from "@/lib/fonts";
+import { resolveCopy, type SiteCopy } from "@/lib/copy";
 import type { FaqItem, NavPage, SiteContent } from "@/lib/types";
 
 const DEFAULT_THEME: Record<string, string> = {
@@ -47,7 +48,23 @@ export function SiteContentEditor({ content }: { content: SiteContent }) {
   const [bgImages, setBgImages] = useState<string[]>(content.bg_images);
   const [wizardFaqs, setWizardFaqs] = useState<FaqItem[]>(content.wizard_faqs);
   const [navPages, setNavPages] = useState<NavPage[]>(content.nav_pages ?? []);
+  const [copy, setCopy] = useState<SiteCopy>(resolveCopy(content.copy));
   const [saving, setSaving] = useState(false);
+
+  function setCopyField<K extends keyof SiteCopy>(key: K, value: SiteCopy[K]) {
+    setCopy((c) => ({ ...c, [key]: value }));
+  }
+  function setStepText(
+    field: "step_titles" | "step_intros",
+    i: number,
+    value: string
+  ) {
+    setCopy((c) => {
+      const arr = [...c[field]];
+      arr[i] = value;
+      return { ...c, [field]: arr };
+    });
+  }
   const [message, setMessage] = useState("");
   // Bumping the key remounts the color fields with default values.
   const [themeKey, setThemeKey] = useState(0);
@@ -136,6 +153,7 @@ export function SiteContentEditor({ content }: { content: SiteContent }) {
       }
       fd.set("wizard_faqs", JSON.stringify(wizardFaqs));
       fd.set("nav_pages", JSON.stringify(navPages));
+      fd.set("copy", JSON.stringify(copy));
       const res = await saveSiteContent(fd);
       if (res?.ok) {
         setMessage("Saved!");
@@ -678,10 +696,108 @@ export function SiteContentEditor({ content }: { content: SiteContent }) {
                 </div>
               </div>
             </div>
+
+            {/* Buttons & labels */}
+            <div className="card overflow-hidden">
+              <SectionHeader
+                title="Buttons & labels"
+                hint="Short labels used on the landing page and booking panel."
+                icon={
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-4 w-4">
+                    <path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z" /><line x1="7" y1="7" x2="7.01" y2="7" />
+                  </svg>
+                }
+              />
+              <div className="grid gap-4 p-6 sm:grid-cols-2">
+                <CopyField label="“Book Now” button" value={copy.nav_book_now} onChange={(v) => setCopyField("nav_book_now", v)} />
+                <CopyField label="Booking panel title" value={copy.drawer_title} onChange={(v) => setCopyField("drawer_title", v)} />
+                <CopyField label="Back link" value={copy.label_back} onChange={(v) => setCopyField("label_back", v)} />
+                <CopyField label="Check status link" value={copy.label_check_status} onChange={(v) => setCopyField("label_check_status", v)} />
+              </div>
+            </div>
           </div>
 
           {/* ------------------------- BOOKING TAB ------------------------- */}
           <div className={tab === "booking" ? "space-y-5" : "hidden"}>
+            {/* Step titles & intros */}
+            <div className="card overflow-hidden">
+              <SectionHeader
+                title="Wizard steps"
+                hint="The title and one-line intro shown at each of the 7 booking steps."
+                icon={
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-4 w-4">
+                    <line x1="8" y1="6" x2="21" y2="6" /><line x1="8" y1="12" x2="21" y2="12" /><line x1="8" y1="18" x2="21" y2="18" /><line x1="3" y1="6" x2="3.01" y2="6" /><line x1="3" y1="12" x2="3.01" y2="12" /><line x1="3" y1="18" x2="3.01" y2="18" />
+                  </svg>
+                }
+              />
+              <div className="space-y-3 p-6">
+                {copy.step_titles.map((title, i) => (
+                  <div
+                    key={i}
+                    className="rounded-xl border border-latte/40 bg-sand/20 p-3"
+                  >
+                    <div className="mb-2 text-[11px] font-medium uppercase tracking-wider text-espresso/35">
+                      Step {i + 1}
+                    </div>
+                    <div className="grid gap-2 sm:grid-cols-2">
+                      <input
+                        value={title}
+                        onChange={(e) => setStepText("step_titles", i, e.target.value)}
+                        placeholder="Step title"
+                        className="field-input text-sm"
+                      />
+                      <input
+                        value={copy.step_intros[i]}
+                        onChange={(e) => setStepText("step_intros", i, e.target.value)}
+                        placeholder="Step intro line"
+                        className="field-input text-sm"
+                      />
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* Deposit & terms copy */}
+            <div className="card overflow-hidden">
+              <SectionHeader
+                title="Deposit & terms"
+                hint="Shown on the review step. Use {deposit_percent} for the deposit percentage."
+                icon={
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-4 w-4">
+                    <path d="M9 12l2 2 4-4" /><path d="M21 12c-1 0-3-1-3-3s2-3 3-3-2-3-3-3-3 2-3 3-2 3-3 3 3 1 3 3-2 3-3 3 3-1 3-3z" />
+                  </svg>
+                }
+              />
+              <div className="space-y-4 p-6">
+                <CopyField label="Deposit note" value={copy.deposit_note} onChange={(v) => setCopyField("deposit_note", v)} multiline />
+                <CopyField label="Terms checkbox text" value={copy.terms_text} onChange={(v) => setCopyField("terms_text", v)} multiline />
+              </div>
+            </div>
+
+            {/* Result pages copy */}
+            <div className="card overflow-hidden">
+              <SectionHeader
+                title="Confirmation & status pages"
+                hint="Headings shown after checkout and on the status lookup."
+                icon={
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-4 w-4">
+                    <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" /><polyline points="22 4 12 14.01 9 11.01" />
+                  </svg>
+                }
+              />
+              <div className="grid gap-4 p-6 sm:grid-cols-2">
+                <CopyField label="Paid — title" value={copy.confirmation_paid_title} onChange={(v) => setCopyField("confirmation_paid_title", v)} />
+                <CopyField label="Paid — subtitle" value={copy.confirmation_paid_subtitle} onChange={(v) => setCopyField("confirmation_paid_subtitle", v)} multiline />
+                <CopyField label="Pending — title" value={copy.confirmation_pending_title} onChange={(v) => setCopyField("confirmation_pending_title", v)} />
+                <CopyField label="Pending — subtitle" value={copy.confirmation_pending_subtitle} onChange={(v) => setCopyField("confirmation_pending_subtitle", v)} multiline />
+                <CopyField label="Cancelled — title" value={copy.cancelled_title} onChange={(v) => setCopyField("cancelled_title", v)} />
+                <CopyField label="Cancelled — subtitle" value={copy.cancelled_subtitle} onChange={(v) => setCopyField("cancelled_subtitle", v)} multiline />
+                <CopyField label="Status lookup — title" value={copy.status_title} onChange={(v) => setCopyField("status_title", v)} />
+                <CopyField label="Status lookup — intro" value={copy.status_intro} onChange={(v) => setCopyField("status_intro", v)} multiline />
+              </div>
+            </div>
+
             {/* Wizard policies */}
             <div className="card overflow-hidden">
               <SectionHeader
@@ -793,6 +909,41 @@ export function SiteContentEditor({ content }: { content: SiteContent }) {
         </div>
       </div>
     </form>
+  );
+}
+
+function CopyField({
+  label,
+  value,
+  onChange,
+  hint,
+  multiline,
+}: {
+  label: string;
+  value: string;
+  onChange: (v: string) => void;
+  hint?: string;
+  multiline?: boolean;
+}) {
+  return (
+    <div>
+      <label className="field-label">{label}</label>
+      {multiline ? (
+        <textarea
+          rows={2}
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          className="field-input resize-none text-sm"
+        />
+      ) : (
+        <input
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          className="field-input text-sm"
+        />
+      )}
+      {hint && <p className="mt-1 text-xs text-espresso/35">{hint}</p>}
+    </div>
   );
 }
 

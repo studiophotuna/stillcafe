@@ -160,6 +160,7 @@ export type SiteContent = {
   font_size_landing: number;
   font_weight_body: number;
   nav_pages: NavPage[];
+  copy: Record<string, unknown>;
   created_at: string;
   updated_at: string;
 };

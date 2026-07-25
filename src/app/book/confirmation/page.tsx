@@ -4,6 +4,7 @@ import Image from "next/image";
 import { syncBookingPayment } from "@/lib/bookings";
 import { getSiteContent } from "@/lib/data";
 import { formatDate, formatMoney } from "@/lib/format";
+import { resolveCopy } from "@/lib/copy";
 
 export const dynamic = "force-dynamic";
 
@@ -26,6 +27,7 @@ export default async function ConfirmationPage({
   const brandName = content?.brand_name ?? "My Business";
   const logoUrl = content?.logo_url || "/logo.png";
   const paid = booking?.status === "paid";
+  const copy = resolveCopy(content?.copy);
 
   return (
     <div className="flex min-h-screen flex-col bg-cream">
@@ -46,12 +48,12 @@ export default async function ConfirmationPage({
         <div className="w-full animate-rise overflow-hidden rounded-2xl border border-espresso/8 bg-card shadow-card">
           <div className="border-b border-espresso/8 px-6 py-6 text-center">
             <h1 className="font-serif text-xl text-espresso">
-              {paid ? "You’re all set!" : "Thanks for booking!"}
+              {paid ? copy.confirmation_paid_title : copy.confirmation_pending_title}
             </h1>
             <p className="mt-2 text-sm text-espresso/45">
               {paid
-                ? "Payment received — your date is locked in."
-                : "We got your booking. If you just paid, give it a moment to update."}
+                ? copy.confirmation_paid_subtitle
+                : copy.confirmation_pending_subtitle}
             </p>
           </div>
 

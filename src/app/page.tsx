@@ -11,6 +11,7 @@ import {
 } from "@/components/booking/BookingDrawer";
 import { NavPagesMenu } from "@/components/landing/NavPagesMenu";
 import { BackgroundCarousel } from "@/components/landing/BackgroundCarousel";
+import { resolveCopy } from "@/lib/copy";
 
 export const dynamic = "force-dynamic";
 
@@ -73,6 +74,8 @@ export default async function HomePage() {
 
   const hasSocials =
     content.social_instagram || content.social_facebook || content.social_tiktok;
+
+  const copy = resolveCopy(content.copy);
 
   // Landing base font size drives all landing text via em units. clamp keeps
   // it readable on phones (scales with viewport) and capped on desktop.
@@ -162,7 +165,7 @@ export default async function HomePage() {
             </a>
           )}
           {hasSocials && <div className="hidden h-[1.2em] w-px bg-espresso/25 sm:block" />}
-          <BookNowTrigger className={bookNowCls}>Book Now</BookNowTrigger>
+          <BookNowTrigger className={bookNowCls}>{copy.nav_book_now}</BookNowTrigger>
         </div>
       </nav>
 
@@ -181,6 +184,7 @@ export default async function HomePage() {
         bookedDates={bookedDates}
         policies={content.policies}
         wizardFaqs={content.wizard_faqs}
+        copy={copy}
       />
     </div>
   );

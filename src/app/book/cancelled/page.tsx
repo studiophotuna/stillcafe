@@ -1,6 +1,7 @@
 import Link from "next/link";
 import Image from "next/image";
 import { getSiteContent } from "@/lib/data";
+import { resolveCopy } from "@/lib/copy";
 
 export const dynamic = "force-dynamic";
 
@@ -16,6 +17,7 @@ export default async function CancelledPage({
 
   const brandName = content?.brand_name ?? "My Business";
   const logoUrl = content?.logo_url || "/logo.png";
+  const copy = resolveCopy(content?.copy);
 
   return (
     <div className="flex min-h-screen flex-col bg-cream">
@@ -35,11 +37,10 @@ export default async function CancelledPage({
       <main className="mx-auto flex w-full max-w-lg flex-1 items-start px-5 py-8">
         <div className="w-full animate-rise overflow-hidden rounded-2xl border border-espresso/8 bg-card p-8 text-center shadow-card">
           <h1 className="font-serif text-xl text-espresso">
-            Payment cancelled
+            {copy.cancelled_title}
           </h1>
           <p className="mt-2 text-sm text-espresso/45">
-            No worries — you weren&apos;t charged. You can start a new
-            booking whenever you&apos;re ready.
+            {copy.cancelled_subtitle}
           </p>
           {searchParams.ref && (
             <p className="mt-3 text-xs text-espresso/25">

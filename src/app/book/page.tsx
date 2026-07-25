@@ -8,6 +8,7 @@ import {
   getBookedDates,
   getSiteContent,
 } from "@/lib/data";
+import { resolveCopy } from "@/lib/copy";
 
 export const dynamic = "force-dynamic";
 
@@ -47,6 +48,7 @@ export default async function BookPage({
 
   const brandName = content?.brand_name ?? "My Business";
   const logoUrl = content?.logo_url || "/logo.png";
+  const copy = resolveCopy(content?.copy);
 
   return (
     <div className="flex min-h-screen flex-col bg-cream">
@@ -56,7 +58,7 @@ export default async function BookPage({
           href="/"
           className="text-[11px] uppercase tracking-[0.2em] text-espresso/40 transition-colors hover:text-espresso/70"
         >
-          &larr; Back
+          &larr; {copy.label_back}
         </Link>
         <Link href="/" className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2">
           <Image
@@ -71,7 +73,7 @@ export default async function BookPage({
           href="/book/status"
           className="text-[11px] uppercase tracking-[0.2em] text-espresso/40 transition-colors hover:text-espresso/70"
         >
-          Check Status
+          {copy.label_check_status}
         </Link>
       </header>
 
@@ -110,6 +112,7 @@ export default async function BookPage({
               initialPackageSlug={searchParams.package}
               policies={content?.policies}
               wizardFaqs={content?.wizard_faqs}
+              copy={copy}
             />
           </div>
         )}

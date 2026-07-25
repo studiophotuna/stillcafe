@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import type { FaqItem, Package, Settings } from "@/lib/types";
+import { DEFAULT_COPY, type SiteCopy } from "@/lib/copy";
 import { BookingWizard } from "./BookingWizard";
 
 const OPEN_EVENT = "open-booking-drawer";
@@ -32,12 +33,14 @@ export function BookingDrawer({
   bookedDates,
   policies,
   wizardFaqs,
+  copy = DEFAULT_COPY,
 }: {
   packages: Package[];
   settings: Settings | null;
   bookedDates: string[];
   policies?: string[];
   wizardFaqs?: FaqItem[];
+  copy?: SiteCopy;
 }) {
   const [open, setOpen] = useState(false);
   // Wizard mounts on first open so the landing page stays light.
@@ -80,19 +83,19 @@ export function BookingDrawer({
       <aside
         role="dialog"
         aria-modal="true"
-        aria-label="Book your date"
+        aria-label={copy.drawer_title}
         className={`fixed inset-y-0 right-0 z-50 flex w-full flex-col bg-cream shadow-elevated transition-transform duration-300 ease-out sm:max-w-xl ${
           open ? "translate-x-0" : "translate-x-full"
         }`}
       >
         <div className="flex items-center justify-between border-b border-latte/30 bg-cream/95 px-5 py-4 sm:px-6">
-          <h2 className="font-serif text-lg text-espresso">Book your date</h2>
+          <h2 className="font-serif text-lg text-espresso">{copy.drawer_title}</h2>
           <div className="flex items-center gap-4">
             <a
               href="/book/status"
               className="text-[11px] uppercase tracking-[0.2em] text-espresso/40 transition-colors hover:text-espresso/70"
             >
-              Check status
+              {copy.label_check_status}
             </a>
             <button
               type="button"
