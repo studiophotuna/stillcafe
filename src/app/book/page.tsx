@@ -78,7 +78,7 @@ export default async function BookPage({
       </header>
 
       {/* Main content */}
-      <main className="mx-auto flex w-full max-w-2xl flex-1 flex-col px-5 py-6 sm:py-10">
+      <main className="mx-auto flex w-full max-w-4xl flex-1 flex-col px-5 py-6 sm:py-10">
         {loadError || !settings ? (
           <div className="flex flex-1 flex-col items-center justify-center text-center">
             <p className="font-serif text-lg text-espresso">
@@ -113,6 +113,7 @@ export default async function BookPage({
               policies={content?.policies}
               wizardFaqs={content?.wizard_faqs}
               copy={copy}
+              withSummary
             />
           </div>
         )}

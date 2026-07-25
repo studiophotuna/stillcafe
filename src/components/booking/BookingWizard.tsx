@@ -1,9 +1,9 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { Fragment, useMemo, useState } from "react";
 import Image from "next/image";
 import type { FaqItem, Package, PaymentMethod, Settings } from "@/lib/types";
-import { formatMoney, methodLabel } from "@/lib/format";
+import { formatDate, formatMoney, methodLabel } from "@/lib/format";
 import { computeQuote } from "@/lib/pricing";
 import { DEFAULT_COPY, interpolate, type SiteCopy } from "@/lib/copy";
 import { AvailabilityCalendar } from "./AvailabilityCalendar";
@@ -16,6 +16,8 @@ type Props = {
   policies?: string[];
   wizardFaqs?: FaqItem[];
   copy?: SiteCopy;
+  /** Show the live booking summary sidebar (full booking page only). */
+  withSummary?: boolean;
 };
 
 const DEFAULT_EVENT_TYPES = [
@@ -34,6 +36,7 @@ export function BookingWizard({
   policies: cmsPolicies,
   wizardFaqs: cmsWizardFaqs,
   copy = DEFAULT_COPY,
+  withSummary = false,
 }: Props) {
   const STEP_TITLES = copy.step_titles;
   const STEP_INTROS = copy.step_intros;
@@ -171,7 +174,9 @@ export function BookingWizard({
   const showInclusions = selectedPackages.length > 0 && step === 3;
 
   return (
-    <><div className="card overflow-hidden">
+    <div className={withSummary ? "grid items-start gap-5 lg:grid-cols-[1fr_300px]" : "contents"}>
+    <div className={withSummary ? "min-w-0" : "contents"}>
+    <div className="card overflow-hidden">
       <div className="border-b border-latte/30 px-6 py-5 sm:px-8">
         <p className="text-[10px] font-medium uppercase tracking-[0.15em] text-espresso/30">
           Step {step + 1} of {STEP_TITLES.length}
@@ -181,20 +186,65 @@ export function BookingWizard({
         </h2>
       </div>
 
-      <div className="flex gap-1 px-6 py-2.5 sm:px-8">
-        {STEP_TITLES.map((t, i) => (
-          <div key={t} className="flex-1">
-            <div
-              className={`h-1 rounded-full transition-all duration-500 ${
-                i < step
-                  ? "bg-mocha"
-                  : i === step
-                    ? "bg-maroon"
-                    : "bg-latte/30"
-              }`}
-            />
-          </div>
-        ))}
+      <div className="flex items-start px-4 py-3 sm:px-8">
+        {STEP_TITLES.map((t, i) => {
+          const done = i < step;
+          const current = i === step;
+          const clickable = i < step;
+          return (
+            <Fragment key={t}>
+              <button
+                type="button"
+                onClick={() => {
+                  if (clickable) {
+                    setError(null);
+                    setStep(i);
+                  }
+                }}
+                aria-current={current ? "step" : undefined}
+                className={`flex shrink-0 flex-col items-center ${
+                  clickable ? "cursor-pointer" : "cursor-default"
+                }`}
+              >
+                <span
+                  className={`flex h-7 w-7 items-center justify-center rounded-full text-[11px] font-semibold transition-colors ${
+                    done
+                      ? "bg-mocha text-cream"
+                      : current
+                        ? "border-2 border-maroon bg-card text-maroon"
+                        : "border-2 border-latte/50 bg-card text-espresso/30"
+                  }`}
+                >
+                  {done ? (
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" className="h-3.5 w-3.5">
+                      <polyline points="20 6 9 17 4 12" />
+                    </svg>
+                  ) : (
+                    i + 1
+                  )}
+                </span>
+                <span
+                  className={`mt-1.5 hidden w-16 text-center text-[10px] leading-tight sm:block ${
+                    current
+                      ? "font-medium text-espresso"
+                      : done
+                        ? "text-espresso/50"
+                        : "text-espresso/30"
+                  }`}
+                >
+                  {t}
+                </span>
+              </button>
+              {i < STEP_TITLES.length - 1 && (
+                <span
+                  className={`mt-3.5 h-0.5 flex-1 rounded-full transition-colors ${
+                    i < step ? "bg-mocha" : "bg-latte/40"
+                  }`}
+                />
+              )}
+            </Fragment>
+          );
+        })}
       </div>
 
       <div className="p-6 sm:p-8">
@@ -276,7 +326,7 @@ export function BookingWizard({
         </div>
 
         {showQuote && (
-          <div className="mt-6 overflow-hidden rounded-xl border border-latte/30 bg-espresso/[0.03]">
+          <div className={`mt-6 overflow-hidden rounded-xl border border-latte/30 bg-espresso/[0.03] ${withSummary ? "lg:hidden" : ""}`}>
             <div className="p-5">
               <h4 className="text-xs font-medium text-espresso/35">
                 Your estimate
@@ -370,7 +420,130 @@ export function BookingWizard({
         ))}
       </div>
     )}
-    </>
+    </div>
+
+    {withSummary && (
+      <aside className="hidden lg:sticky lg:top-24 lg:block">
+        <OrderSummary
+          selectedPackages={selectedPackages}
+          extraHours={extraHours}
+          settings={settings}
+          quote={quote}
+          date={date}
+          time={time}
+          guests={guests}
+          venueCity={venueCity}
+          eventType={eventType}
+        />
+      </aside>
+    )}
+    </div>
+  );
+}
+
+function OrderSummary({
+  selectedPackages,
+  extraHours,
+  settings,
+  quote,
+  date,
+  time,
+  guests,
+  venueCity,
+  eventType,
+}: {
+  selectedPackages: Package[];
+  extraHours: number;
+  settings: Settings;
+  quote: ReturnType<typeof computeQuote>;
+  date: string | null;
+  time: string;
+  guests: string;
+  venueCity: string;
+  eventType: string;
+}) {
+  const hasMeta = date || guests || venueCity || eventType;
+  return (
+    <div className="card overflow-hidden">
+      <div className="border-b border-latte/30 px-5 py-4">
+        <h3 className="font-serif text-base text-espresso">Your booking</h3>
+      </div>
+      <div className="p-5">
+        {selectedPackages.length === 0 ? (
+          <p className="text-xs leading-relaxed text-espresso/40">
+            Pick a package and your running estimate will appear here.
+          </p>
+        ) : (
+          <>
+            <ul className="space-y-2">
+              {selectedPackages.map((p) => (
+                <li key={p.id} className="flex justify-between gap-3 text-xs">
+                  <span className="text-espresso/70">{p.name}</span>
+                  <span className="shrink-0 text-espresso/50">
+                    {formatMoney(p.price_cents)}
+                  </span>
+                </li>
+              ))}
+              {extraHours > 0 && (
+                <li className="flex justify-between gap-3 text-xs">
+                  <span className="text-espresso/70">
+                    +{extraHours} extra hour{extraHours > 1 ? "s" : ""}
+                  </span>
+                  <span className="shrink-0 text-espresso/50">
+                    {formatMoney(extraHours * settings.extra_hour_cents)}
+                  </span>
+                </li>
+              )}
+              {quote.comboDiscountCents > 0 && (
+                <li className="flex justify-between gap-3 text-xs">
+                  <span className="text-sage">Combo discount</span>
+                  <span className="shrink-0 text-sage">
+                    -{formatMoney(quote.comboDiscountCents)}
+                  </span>
+                </li>
+              )}
+            </ul>
+            <div className="mt-3 space-y-1.5 border-t border-latte/30 pt-3">
+              <div className="flex justify-between text-xs">
+                <span className="text-espresso/50">Total</span>
+                <span className="font-medium text-espresso">
+                  {formatMoney(quote.totalCents)}
+                </span>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="text-xs text-espresso/40">
+                  {settings.deposit_percent}% deposit
+                </span>
+                <strong className="text-base font-semibold text-maroon">
+                  {formatMoney(quote.depositCents)}
+                </strong>
+              </div>
+            </div>
+          </>
+        )}
+
+        {hasMeta && (
+          <dl className="mt-4 space-y-1.5 border-t border-latte/30 pt-4 text-xs">
+            {date && <SummaryMeta label="Date" value={formatDate(date)} />}
+            {date && time && (
+              <SummaryMeta label="Time" value={formatTime12(time)} />
+            )}
+            {guests && <SummaryMeta label="Guests" value={guests} />}
+            {venueCity && <SummaryMeta label="City" value={venueCity} />}
+            {eventType && <SummaryMeta label="Event" value={eventType} />}
+          </dl>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function SummaryMeta({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="flex justify-between gap-3">
+      <dt className="text-espresso/40">{label}</dt>
+      <dd className="text-right font-medium text-espresso/70">{value}</dd>
+    </div>
   );
 }
 
