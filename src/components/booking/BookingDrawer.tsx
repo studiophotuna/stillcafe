@@ -10,15 +10,18 @@ const OPEN_EVENT = "open-booking-drawer";
 /** Button that opens the booking drawer from anywhere on the page. */
 export function BookNowTrigger({
   className,
+  style,
   children,
 }: {
   className?: string;
+  style?: React.CSSProperties;
   children: React.ReactNode;
 }) {
   return (
     <button
       type="button"
       className={className}
+      style={style}
       onClick={() => window.dispatchEvent(new Event(OPEN_EVENT))}
     >
       {children}
@@ -91,12 +94,16 @@ export function BookingDrawer({
         <div className="flex items-center justify-between border-b border-latte/30 bg-cream/95 px-5 py-4 sm:px-6">
           <h2 className="font-serif text-lg text-espresso">{copy.drawer_title}</h2>
           <div className="flex items-center gap-4">
-            <a
-              href="/book/status"
+            <button
+              type="button"
+              onClick={() => {
+                setOpen(false);
+                window.dispatchEvent(new Event("open-status-drawer"));
+              }}
               className="text-[11px] uppercase tracking-[0.2em] text-espresso/40 transition-colors hover:text-espresso/70"
             >
               {copy.label_check_status}
-            </a>
+            </button>
             <button
               type="button"
               onClick={() => setOpen(false)}

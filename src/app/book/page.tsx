@@ -9,6 +9,7 @@ import {
   getSiteContent,
 } from "@/lib/data";
 import { resolveCopy } from "@/lib/copy";
+import { StatusDrawer, StatusTrigger } from "@/components/booking/StatusDrawer";
 
 export const dynamic = "force-dynamic";
 
@@ -69,12 +70,9 @@ export default async function BookPage({
             className="rounded-full"
           />
         </Link>
-        <Link
-          href="/book/status"
-          className="text-[11px] uppercase tracking-[0.2em] text-espresso/40 transition-colors hover:text-espresso/70"
-        >
+        <StatusTrigger className="text-[11px] uppercase tracking-[0.2em] text-espresso/40 transition-colors hover:text-espresso/70">
           {copy.label_check_status}
-        </Link>
+        </StatusTrigger>
       </header>
 
       {/* Main content */}
@@ -123,6 +121,8 @@ export default async function BookPage({
       <footer className="py-5 text-center text-[10px] uppercase tracking-[0.15em] text-espresso/20">
         {content?.copyright_text ?? `© ${new Date().getFullYear()} ${brandName}`}
       </footer>
+
+      <StatusDrawer title={copy.status_title} intro={copy.status_intro} />
     </div>
   );
 }

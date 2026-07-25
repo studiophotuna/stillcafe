@@ -161,6 +161,7 @@ export type SiteContent = {
   font_weight_body: number;
   nav_pages: NavPage[];
   copy: Record<string, unknown>;
+  /** Landing per-element sizes and bold/italic styles (styles nested under `styles`). */
   text_sizes: Record<string, unknown>;
   created_at: string;
   updated_at: string;

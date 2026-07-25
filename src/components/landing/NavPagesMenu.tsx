@@ -34,6 +34,7 @@ export function NavPagesMenu({ pages }: { pages: NavPage[] }) {
             type="button"
             onClick={() => setOpenIdx(i)}
             className="text-[length:var(--size-links,0.62em)] uppercase tracking-[0.2em] text-espresso transition-opacity hover:opacity-70"
+            style={{ fontWeight: "var(--weight-links)", fontStyle: "var(--italic-links)" }}
           >
             {p.label}
           </button>

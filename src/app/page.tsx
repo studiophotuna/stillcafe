@@ -10,8 +10,10 @@ import {
 } from "@/components/booking/BookingDrawer";
 import { NavPagesMenu } from "@/components/landing/NavPagesMenu";
 import { BackgroundCarousel } from "@/components/landing/BackgroundCarousel";
+import { StatusDrawer } from "@/components/booking/StatusDrawer";
 import { resolveCopy } from "@/lib/copy";
 import { resolveTextSizes, textSizeVars } from "@/lib/text-sizes";
+import { resolveTextStyles, textStyleVars } from "@/lib/text-styles";
 
 export const dynamic = "force-dynamic";
 
@@ -81,9 +83,11 @@ export default async function HomePage() {
   // it readable on phones (scales with viewport) and capped on desktop.
   const landingSize = Math.min(48, Math.max(12, content.font_size_landing || 22));
   const sizes = resolveTextSizes(content.text_sizes);
+  const styles = resolveTextStyles(content.text_sizes);
   const landingFontStyle = {
     fontSize: `clamp(15px, 4.2vw, ${landingSize}px)`,
     ...textSizeVars(sizes),
+    ...textStyleVars(styles),
   } as React.CSSProperties;
 
   const bookNowCls =
@@ -127,7 +131,10 @@ export default async function HomePage() {
             className="w-auto object-contain"
             style={{ height: "var(--size-logo)" }}
           />
-          <p className="mt-3 max-w-[16em] text-center text-[length:var(--size-tagline)] uppercase leading-relaxed tracking-[0.3em] text-espresso">
+          <p
+            className="mt-3 max-w-[16em] text-center text-[length:var(--size-tagline)] uppercase leading-relaxed tracking-[0.3em] text-espresso"
+            style={{ fontWeight: "var(--weight-tagline)", fontStyle: "var(--italic-tagline)" }}
+          >
             {content.tagline}
           </p>
         </div>
@@ -168,7 +175,12 @@ export default async function HomePage() {
             </a>
           )}
           {hasSocials && <div className="hidden h-[1.2em] w-px bg-espresso/25 sm:block" />}
-          <BookNowTrigger className={bookNowCls}>{copy.nav_book_now}</BookNowTrigger>
+          <BookNowTrigger
+            className={bookNowCls}
+            style={{ fontWeight: "var(--weight-links)", fontStyle: "var(--italic-links)" }}
+          >
+            {copy.nav_book_now}
+          </BookNowTrigger>
         </div>
       </nav>
 
@@ -176,7 +188,10 @@ export default async function HomePage() {
       <main className="relative z-10 flex-1" />
 
       {/* Bottom: copyright */}
-      <footer className="relative z-10 py-5 text-center text-[length:var(--size-copyright)] uppercase tracking-[0.15em] text-espresso">
+      <footer
+        className="relative z-10 py-5 text-center text-[length:var(--size-copyright)] uppercase tracking-[0.15em] text-espresso"
+        style={{ fontWeight: "var(--weight-copyright)", fontStyle: "var(--italic-copyright)" }}
+      >
         {content.copyright_text}
       </footer>
 
@@ -189,6 +204,8 @@ export default async function HomePage() {
         wizardFaqs={content.wizard_faqs}
         copy={copy}
       />
+
+      <StatusDrawer title={copy.status_title} intro={copy.status_intro} />
     </div>
   );
 }
