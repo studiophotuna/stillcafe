@@ -75,7 +75,7 @@ export default async function HomePage() {
     content.social_instagram || content.social_facebook || content.social_tiktok;
 
   const bookNowCls =
-    "rounded-full border border-cream/40 px-5 py-2 text-[11px] uppercase tracking-[0.2em] text-cream/90 backdrop-blur-sm transition-all hover:border-cream hover:bg-cream hover:text-espresso";
+    "rounded-full border border-espresso px-5 py-2 text-[11px] uppercase tracking-[0.2em] text-espresso backdrop-blur-sm transition-all hover:bg-espresso hover:text-cream";
 
   return (
     <div className="relative flex min-h-screen flex-col overflow-hidden">
@@ -92,9 +92,6 @@ export default async function HomePage() {
           />
         )}
         <div className="absolute inset-0" style={overlayStyle} />
-        {/* Scrims keep nav and footer readable over any photo */}
-        <div className="absolute inset-x-0 top-0 h-48 bg-gradient-to-b from-black/40 to-transparent" />
-        <div className="absolute inset-x-0 bottom-0 h-32 bg-gradient-to-t from-black/35 to-transparent" />
       </div>
 
       {/* Top bar: links · logo · socials + book now */}
@@ -114,7 +111,7 @@ export default async function HomePage() {
             className="h-20 w-20 object-contain sm:h-28 sm:w-28"
             priority
           />
-          <p className="mt-3 max-w-xs text-center text-[10px] uppercase tracking-[0.3em] text-cream/60 sm:text-[11px]">
+          <p className="mt-3 max-w-xs text-center text-[10px] uppercase tracking-[0.3em] text-espresso sm:text-[11px]">
             {content.tagline}
           </p>
         </div>
@@ -126,7 +123,7 @@ export default async function HomePage() {
               href={content.social_instagram}
               target="_blank"
               rel="noopener noreferrer"
-              className="text-cream/60 transition-all hover:scale-110 hover:text-cream"
+              className="text-espresso transition-all hover:scale-110"
               aria-label="Instagram"
             >
               <InstagramIcon />
@@ -137,7 +134,7 @@ export default async function HomePage() {
               href={content.social_facebook}
               target="_blank"
               rel="noopener noreferrer"
-              className="text-cream/60 transition-all hover:scale-110 hover:text-cream"
+              className="text-espresso transition-all hover:scale-110"
               aria-label="Facebook"
             >
               <FacebookIcon />
@@ -148,13 +145,13 @@ export default async function HomePage() {
               href={content.social_tiktok}
               target="_blank"
               rel="noopener noreferrer"
-              className="text-cream/60 transition-all hover:scale-110 hover:text-cream"
+              className="text-espresso transition-all hover:scale-110"
               aria-label="TikTok"
             >
               <TikTokIcon />
             </a>
           )}
-          {hasSocials && <div className="hidden h-4 w-px bg-cream/20 sm:block" />}
+          {hasSocials && <div className="hidden h-4 w-px bg-espresso/25 sm:block" />}
           <BookNowTrigger className={bookNowCls}>Book Now</BookNowTrigger>
         </div>
       </nav>
@@ -163,7 +160,7 @@ export default async function HomePage() {
       <main className="relative z-10 flex-1" />
 
       {/* Bottom: copyright */}
-      <footer className="relative z-10 py-5 text-center text-[10px] uppercase tracking-[0.15em] text-cream/30">
+      <footer className="relative z-10 py-5 text-center text-[10px] uppercase tracking-[0.15em] text-espresso">
         {content.copyright_text}
       </footer>
 
