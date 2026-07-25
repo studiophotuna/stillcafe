@@ -7,7 +7,7 @@ A white-label event booking system built with Next.js, Supabase, and Tailwind CS
 - Node.js 18+
 - A [Supabase](https://supabase.com) account (free tier works)
 - A [Vercel](https://vercel.com) account (free tier works) or any Node.js host
-- A payment provider account: [PayMongo](https://paymongo.com) or [Stripe](https://stripe.com)
+- A payment provider account: [Stripe](https://stripe.com), [PayPal](https://paypal.com), or [PayMongo](https://paymongo.com)
 - (Optional) A [Resend](https://resend.com) account for email notifications (free tier: 100 emails/day)
 
 ## 1. Create a Supabase Project
@@ -74,7 +74,7 @@ CREATE POLICY "Auth upload" ON storage.objects FOR INSERT WITH CHECK (bucket_id 
 2. **Settings** — Set your business name, email, pricing rules, guest limits, event types
 3. **Site** — Customize branding: logo, colors, hero text, background images, FAQs, policies
 4. **Packages** — Add your service packages with pricing and images
-5. **Settings > Payment Providers** — Enter your PayMongo or Stripe API keys
+5. **Settings > Payment Providers** — Enter your Stripe, PayPal, or PayMongo keys
 
 ## 7. Set Up Payments
 
@@ -96,7 +96,17 @@ CREATE POLICY "Auth upload" ON storage.objects FOR INSERT WITH CHECK (bucket_id 
    - **Webhook Secret**: Create a webhook in Stripe pointing to `yourdomain.com/api/webhooks/stripe` (listen for `checkout.session.completed`)
 3. Toggle "Active"
 
-Only one provider can be active at a time.
+### PayPal
+
+1. Create a REST API app at [PayPal Developer](https://developer.paypal.com) > Apps & Credentials
+2. In admin Settings > Payment Providers, enter:
+   - **Client ID** and **Secret** from your app
+   - **Webhook ID**: Create a webhook pointing to `yourdomain.com/api/webhooks/paypal` (subscribe to payment capture events)
+   - Choose **Sandbox** or **Live**
+3. Toggle "Active"
+
+You can keep several providers active at once — each checkout method is routed
+to the first active provider that supports it.
 
 ## 8. Email Notifications (Optional)
 
@@ -146,7 +156,7 @@ Set in Settings. The locale affects how currency and dates are formatted through
 - **Auth**: Supabase Auth (email/password)
 - **Storage**: Supabase Storage (images)
 - **Styling**: Tailwind CSS with CSS custom properties for theming
-- **Payments**: PayMongo or Stripe (configurable, one active at a time)
+- **Payments**: Stripe, PayPal, or PayMongo (configurable; several can be active, with per-method routing)
 - **Emails**: Resend (optional)
 - **Hosting**: Vercel (recommended) or any Node.js host
 

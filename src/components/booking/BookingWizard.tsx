@@ -571,8 +571,8 @@ function PoliciesStep({
     : [
         `We currently serve {service_area} only.`,
         `A {deposit_percent}% deposit is needed to lock in your date. Without it, the date stays open for others.`,
-        `We show up 1–2 hours early to set up and test everything, so you don't have to worry about a thing.`,
-        `You get a full mobile espresso bar, premium beans, a barista, and all the equipment. Setup and teardown are included.`,
+        `We arrive early to set up and test everything, so you don't have to worry about a thing.`,
+        `Everything you need is included — our team handles setup and teardown so you can focus on your guests.`,
       ];
 
   function interpolate(text: string) {
@@ -854,24 +854,33 @@ function ScheduleStep({
         )}
       </Field>
       <Field label="City">
-        <div className="flex flex-wrap gap-2">
-          {settings.service_cities.map((c) => (
-            <button
-              key={c}
-              type="button"
-              onClick={() => onCity(c)}
-              className={venueCity === c ? "chip-on" : "chip-off"}
-            >
-              {c}
-            </button>
-          ))}
-        </div>
+        {settings.service_cities.length > 0 ? (
+          <div className="flex flex-wrap gap-2">
+            {settings.service_cities.map((c) => (
+              <button
+                key={c}
+                type="button"
+                onClick={() => onCity(c)}
+                className={venueCity === c ? "chip-on" : "chip-off"}
+              >
+                {c}
+              </button>
+            ))}
+          </div>
+        ) : (
+          <input
+            value={venueCity}
+            onChange={(e) => onCity(e.target.value)}
+            placeholder="City or town"
+            className={inputCls}
+          />
+        )}
       </Field>
       <Field label="Venue name">
         <input
           value={venueName}
           onChange={(e) => onVenueName(e.target.value)}
-          placeholder="e.g. The Blue Leaf Events Pavilion"
+          placeholder="e.g. The Grand Ballroom"
           className={inputCls}
         />
       </Field>
@@ -879,7 +888,7 @@ function ScheduleStep({
         <input
           value={venueAddress}
           onChange={(e) => onVenueAddress(e.target.value)}
-          placeholder="Street, barangay, or building"
+          placeholder="Street address or building"
           className={inputCls}
         />
       </Field>

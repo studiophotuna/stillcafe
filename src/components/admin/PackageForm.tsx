@@ -94,7 +94,7 @@ export function PackageForm({
             name="inclusions"
             rows={4}
             defaultValue={pkg?.inclusions.join("\n")}
-            placeholder={"1 professional barista\nUnlimited espresso drinks\nSetup & teardown"}
+            placeholder={"What's included, one item per line\ne.g. On-site staff\ne.g. Setup & teardown"}
             className="field-input"
           />
         </div>

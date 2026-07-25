@@ -150,20 +150,19 @@ create table if not exists public.settings (
   id                 integer primary key default 1 check (id = 1),
   payment_provider   text not null default 'paymongo',
   -- which methods the customer can choose at checkout
-  payment_methods    text[] not null default array['gcash','card'],
+  payment_methods    text[] not null default array['card'],
   business_name      text not null default 'My Business',
   business_email     text,
-  currency           text not null default 'PHP',
+  currency           text not null default 'USD',
   deposit_percent      integer not null default 50,
-  combo_discount_cents integer not null default 250000,
+  combo_discount_cents integer not null default 0,
   combo_min_packages   integer not null default 2,
-  extra_hour_cents     integer not null default 150000,
+  extra_hour_cents     integer not null default 5000,
   standard_hours       numeric(4,1) not null default 3,
-  service_area         text not null default 'Metro Manila',
-  service_cities       text[] not null default array[
-    'Manila','Makati','Taguig','Pasig','Quezon City','Mandaluyong','San Juan',
-    'Pasay','Paranaque','Muntinlupa','Las Pinas','Marikina','Caloocan'
-  ]::text[],
+  service_area         text not null default 'your area',
+  -- Empty by default: buyers add their own cities in Settings. When empty,
+  -- the booking form shows a free-text city field instead of chips.
+  service_cities       text[] not null default '{}',
   reference_prefix text not null default 'BK',
   min_guests       integer not null default 1,
   max_guests       integer not null default 500,
@@ -179,11 +178,8 @@ alter table public.settings
   add column if not exists combo_min_packages   integer not null default 2,
   add column if not exists extra_hour_cents     integer not null default 150000,
   add column if not exists standard_hours       numeric(4,1) not null default 3,
-  add column if not exists service_area         text not null default 'Metro Manila',
-  add column if not exists service_cities       text[] not null default array[
-    'Manila','Makati','Taguig','Pasig','Quezon City','Mandaluyong','San Juan',
-    'Pasay','Paranaque','Muntinlupa','Las Pinas','Marikina','Caloocan'
-  ]::text[],
+  add column if not exists service_area         text not null default 'your area',
+  add column if not exists service_cities       text[] not null default '{}',
   add column if not exists reference_prefix text not null default 'BK',
   add column if not exists min_guests       integer not null default 1,
   add column if not exists max_guests       integer not null default 500,
@@ -270,7 +266,7 @@ create table if not exists public.site_content (
 
   -- landing page navigation pages (label + slide-over panel content)
   nav_pages jsonb not null default '[
-    {"label": "About", "title": "About us", "content": "We bring a full mobile espresso bar to your event. Premium beans, a friendly barista, and a setup that looks as good as the coffee tastes.", "sections": []},
+    {"label": "About", "title": "About us", "content": "Share your story here. Tell customers who you are, what you offer, and why they will love working with you.", "sections": []},
     {"label": "FAQ", "title": "Frequently asked questions", "content": "", "sections": [
       {"heading": "How far in advance should I book?", "body": "As early as possible - popular dates fill up fast."},
       {"heading": "Do you need power at the venue?", "body": "One standard outlet is enough for our setup."}
@@ -302,7 +298,7 @@ alter table public.site_content
   add column if not exists copy              jsonb not null default '{}'::jsonb,
   add column if not exists text_sizes        jsonb not null default '{}'::jsonb,
   add column if not exists nav_pages         jsonb not null default '[
-    {"label": "About", "title": "About us", "content": "We bring a full mobile espresso bar to your event. Premium beans, a friendly barista, and a setup that looks as good as the coffee tastes.", "sections": []},
+    {"label": "About", "title": "About us", "content": "Share your story here. Tell customers who you are, what you offer, and why they will love working with you.", "sections": []},
     {"label": "FAQ", "title": "Frequently asked questions", "content": "", "sections": [
       {"heading": "How far in advance should I book?", "body": "As early as possible - popular dates fill up fast."},
       {"heading": "Do you need power at the venue?", "body": "One standard outlet is enough for our setup."}

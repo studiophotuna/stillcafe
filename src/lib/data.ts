@@ -281,13 +281,13 @@ export async function getSiteContent(): Promise<SiteContent> {
         label: "About",
         title: "About us",
         content:
-          "We bring a full mobile espresso bar to your event. Premium beans, a friendly barista, and a setup that looks as good as the coffee tastes.",
+          "Share your story here. Tell customers who you are, what you offer, and why they'll love working with you.",
       },
       {
         label: "FAQ",
         title: "Frequently asked questions",
         content:
-          "How far in advance should I book?\nAs early as possible - popular dates fill up fast.\n\nDo you need power at the venue?\nOne standard outlet is enough for our setup.",
+          "How far in advance should I book?\nAs early as possible — popular dates fill up fast.\n\nWhat do you need from us on the day?\nAdd your own answer here in the admin.",
       },
     ],
     social_instagram: "",
