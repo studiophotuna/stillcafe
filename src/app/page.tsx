@@ -1,4 +1,3 @@
-import Image from "next/image";
 import {
   getActivePackages,
   getBookedDates,
@@ -119,13 +118,14 @@ export default async function HomePage() {
 
         {/* Center: logo at the very top, tagline right under it */}
         <div className="animate-fade-in flex flex-col items-center">
-          <Image
+          {/* Plain img so any uploaded logo keeps its natural aspect ratio
+              (height is sized; width follows the ratio). */}
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
             src={content.logo_url || "/logo.png"}
             alt={content.brand_name}
-            width={240}
-            height={240}
-            className="h-[var(--size-logo)] w-[var(--size-logo)] object-contain"
-            priority
+            className="w-auto object-contain"
+            style={{ height: "var(--size-logo)" }}
           />
           <p className="mt-3 max-w-[16em] text-center text-[length:var(--size-tagline)] uppercase leading-relaxed tracking-[0.3em] text-espresso">
             {content.tagline}
