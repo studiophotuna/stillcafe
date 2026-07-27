@@ -223,6 +223,11 @@ export async function saveSettings(formData: FormData) {
       .map((s) => s.trim())
       .filter(Boolean);
 
+    const serviceCities = ((formData.get("service_cities") as string) || "")
+      .split("\n")
+      .map((s) => s.trim())
+      .filter(Boolean);
+
     const { data, error } = await supabase
       .from("settings")
       .update({
@@ -234,7 +239,8 @@ export async function saveSettings(formData: FormData) {
         combo_discount_cents: toCents((formData.get("combo_discount") as string) || "0"),
         combo_min_packages: clampInt(formData.get("combo_min_packages"), 2, 1, 10),
         extra_hour_cents: toCents((formData.get("extra_hour_price") as string) || "0"),
-        service_area: (formData.get("service_area") as string) || "Metro Manila",
+        service_area: (formData.get("service_area") as string) || "your area",
+        service_cities: serviceCities,
         reference_prefix: ((formData.get("reference_prefix") as string) || "BK").toUpperCase().slice(0, 5),
         min_guests: clampInt(formData.get("min_guests"), 1, 1, 10000),
         max_guests: clampInt(formData.get("max_guests"), 500, 1, 10000),

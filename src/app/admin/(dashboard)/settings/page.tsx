@@ -117,6 +117,24 @@ export default async function SettingsPage({
                   defaultValue={settings.service_area}
                   className="field-input"
                 />
+                <p className="mt-1 text-xs text-espresso/35">
+                  A short label (e.g. &ldquo;Metro Manila&rdquo;) used in your
+                  booking policies text.
+                </p>
+              </div>
+              <div className="sm:col-span-2">
+                <label className="field-label">Service cities</label>
+                <textarea
+                  name="service_cities"
+                  rows={4}
+                  defaultValue={(settings.service_cities ?? []).join("\n")}
+                  placeholder={"One city per line\ne.g. Makati\ne.g. Quezon City"}
+                  className="field-input resize-none"
+                />
+                <p className="mt-1 text-xs text-espresso/35">
+                  One per line. These become the selectable city buttons on the
+                  booking form. Leave empty to let customers type their own city.
+                </p>
               </div>
               <div>
                 <label className="field-label">Standard coverage (hours)</label>
