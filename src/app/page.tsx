@@ -91,11 +91,69 @@ export default async function HomePage() {
   } as React.CSSProperties;
 
   const bookNowCls =
-    "rounded-full border border-espresso px-[1.4em] py-[0.6em] text-[length:var(--size-links)] uppercase tracking-[0.2em] text-espresso backdrop-blur-sm transition-all hover:bg-espresso hover:text-cream";
+    "whitespace-nowrap rounded-full border border-espresso px-[1.4em] py-[0.6em] text-[length:var(--size-links)] uppercase tracking-[0.2em] text-espresso backdrop-blur-sm transition-all hover:bg-espresso hover:text-cream";
+
+  const socials = (
+    <>
+      {content.social_instagram && (
+        <a
+          href={content.social_instagram}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="text-espresso transition-all hover:scale-110"
+          aria-label="Instagram"
+        >
+          <InstagramIcon />
+        </a>
+      )}
+      {content.social_facebook && (
+        <a
+          href={content.social_facebook}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="text-espresso transition-all hover:scale-110"
+          aria-label="Facebook"
+        >
+          <FacebookIcon />
+        </a>
+      )}
+      {content.social_tiktok && (
+        <a
+          href={content.social_tiktok}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="text-espresso transition-all hover:scale-110"
+          aria-label="TikTok"
+        >
+          <TikTokIcon />
+        </a>
+      )}
+    </>
+  );
+
+  const logoBlock = (
+    <div className="animate-fade-in flex flex-col items-center">
+      {/* Plain img so any uploaded logo keeps its natural aspect ratio
+          (height is sized; width follows the ratio). */}
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img
+        src={content.logo_url || "/logo.png"}
+        alt={content.brand_name}
+        className="w-auto max-w-[68vw] object-contain sm:max-w-none"
+        style={{ height: "var(--size-logo)" }}
+      />
+      <p
+        className="mt-3 max-w-[16em] text-center text-[length:var(--size-tagline)] uppercase leading-relaxed tracking-[0.3em] text-espresso"
+        style={{ fontWeight: "var(--weight-tagline)", fontStyle: "var(--italic-tagline)" }}
+      >
+        {content.tagline}
+      </p>
+    </div>
+  );
 
   return (
     <div
-      className="relative flex min-h-screen flex-col overflow-hidden"
+      className="relative flex min-h-screen flex-col overflow-x-hidden"
       style={landingFontStyle}
     >
       {/* Background image / carousel */}
@@ -113,86 +171,51 @@ export default async function HomePage() {
         <div className="absolute inset-0" style={overlayStyle} />
       </div>
 
-      {/* Top bar: links · logo · socials + book now */}
-      <nav className="relative z-10 grid grid-cols-[1fr_auto_1fr] items-start gap-2 px-4 pt-4 sm:gap-4 sm:px-10 sm:pt-5">
-        {/* Left: admin-managed nav pages */}
-        <div className="pt-2">
-          <NavPagesMenu pages={content.nav_pages} />
+      {/* Header */}
+      <header className="relative z-10 px-4 pt-4 sm:px-10 sm:pt-5">
+        {/* Nav row: links (left) · logo (center, desktop only) · actions (right) */}
+        <div className="flex items-start justify-between gap-3">
+          <div className="min-w-0 flex-1 pt-2">
+            <NavPagesMenu pages={content.nav_pages} />
+          </div>
+
+          {/* Logo sits inline-center on desktop; on mobile it drops below */}
+          <div className="hidden shrink-0 sm:block">{logoBlock}</div>
+
+          <div className="flex min-w-0 flex-1 items-center justify-end gap-3 pt-1 sm:gap-5">
+            <div className="hidden items-center gap-4 sm:flex sm:gap-5">
+              {socials}
+              {hasSocials && <div className="h-[1.2em] w-px bg-espresso/25" />}
+            </div>
+            <BookNowTrigger
+              className={bookNowCls}
+              style={{ fontWeight: "var(--weight-links)", fontStyle: "var(--italic-links)" }}
+            >
+              {copy.nav_book_now}
+            </BookNowTrigger>
+          </div>
         </div>
 
-        {/* Center: logo at the very top, tagline right under it */}
-        <div className="animate-fade-in flex flex-col items-center">
-          {/* Plain img so any uploaded logo keeps its natural aspect ratio
-              (height is sized; width follows the ratio). */}
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img
-            src={content.logo_url || "/logo.png"}
-            alt={content.brand_name}
-            className="w-auto object-contain"
-            style={{ height: "var(--size-logo)" }}
-          />
-          <p
-            className="mt-3 max-w-[16em] text-center text-[length:var(--size-tagline)] uppercase leading-relaxed tracking-[0.3em] text-espresso"
-            style={{ fontWeight: "var(--weight-tagline)", fontStyle: "var(--italic-tagline)" }}
-          >
-            {content.tagline}
-          </p>
-        </div>
-
-        {/* Right: social icons + book now */}
-        <div className="flex items-center justify-end gap-3 pt-1 sm:gap-5">
-          {content.social_instagram && (
-            <a
-              href={content.social_instagram}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="text-espresso transition-all hover:scale-110"
-              aria-label="Instagram"
-            >
-              <InstagramIcon />
-            </a>
-          )}
-          {content.social_facebook && (
-            <a
-              href={content.social_facebook}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="text-espresso transition-all hover:scale-110"
-              aria-label="Facebook"
-            >
-              <FacebookIcon />
-            </a>
-          )}
-          {content.social_tiktok && (
-            <a
-              href={content.social_tiktok}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="text-espresso transition-all hover:scale-110"
-              aria-label="TikTok"
-            >
-              <TikTokIcon />
-            </a>
-          )}
-          {hasSocials && <div className="hidden h-[1.2em] w-px bg-espresso/25 sm:block" />}
-          <BookNowTrigger
-            className={bookNowCls}
-            style={{ fontWeight: "var(--weight-links)", fontStyle: "var(--italic-links)" }}
-          >
-            {copy.nav_book_now}
-          </BookNowTrigger>
-        </div>
-      </nav>
+        {/* Mobile: logo centered below the nav row */}
+        <div className="mt-6 flex justify-center sm:hidden">{logoBlock}</div>
+      </header>
 
       {/* Open space: let the background photo breathe */}
       <main className="relative z-10 flex-1" />
 
-      {/* Bottom: copyright */}
-      <footer
-        className="relative z-10 py-5 text-center text-[length:var(--size-copyright)] uppercase tracking-[0.15em] text-espresso"
-        style={{ fontWeight: "var(--weight-copyright)", fontStyle: "var(--italic-copyright)" }}
-      >
-        {content.copyright_text}
+      {/* Bottom: mobile socials + copyright */}
+      <footer className="relative z-10 pb-5 pt-3 text-center">
+        {hasSocials && (
+          <div className="mb-3 flex justify-center gap-6 text-espresso sm:hidden">
+            {socials}
+          </div>
+        )}
+        <p
+          className="text-[length:var(--size-copyright)] uppercase tracking-[0.15em] text-espresso"
+          style={{ fontWeight: "var(--weight-copyright)", fontStyle: "var(--italic-copyright)" }}
+        >
+          {content.copyright_text}
+        </p>
       </footer>
 
       {/* Right slide-over booking panel */}
