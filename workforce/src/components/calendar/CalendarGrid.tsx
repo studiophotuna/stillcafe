@@ -71,8 +71,9 @@ export function CalendarGrid({ mgmt }: { mgmt?: boolean }) {
   const rows: Row[] = [];
   const rawMap = new Map<number, Cell[]>();
   if (mgmt) {
-    const within = v.mTower === "all" ? v.dept.id : v.mTower;
-    active = s.data.people.filter((p) => O.inN(p, within) && p.level !== "member" && c.alive(p, mStart));
+    // A tower shows its leaders plus those allocated to the whole department.
+    const inScope = (p: CalPerson) => O.inN(p, v.dept.id) && (v.mTower === "all" || O.inN(p, v.mTower) || p.assign.includes(v.dept.id));
+    active = s.data.people.filter((p) => inScope(p) && p.level !== "member" && c.alive(p, mStart));
     shown = active.filter((p) => !ql || p.name.toLowerCase().includes(ql));
     (["director", "manager", "lead"] as const).forEach((lv) => {
       const g = shown.filter((p) => p.level === lv).sort(byName);
