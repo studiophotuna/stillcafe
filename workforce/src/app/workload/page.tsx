@@ -5,7 +5,7 @@ import { TaskTable } from "@/components/TaskTable";
 import { Blueprint, Icon, Kpi, PageHead, pct } from "@/components/ui";
 import { dur } from "@/lib/workload/clock";
 import { AV, trPath } from "@/lib/workload/constants";
-import { canWork, doneToday, personMetrics, sortTasks, startWork } from "@/lib/workload/engine";
+import { canWork, doneToday, personMetrics, sortTasks } from "@/lib/workload/engine";
 import { useWorkload } from "@/lib/workload/store";
 import { taskDetail, taskRow } from "@/lib/workload/view";
 
@@ -115,7 +115,7 @@ export default function MyWorkPage() {
             <span>{idleText}</span>
           </div>
           {showStart && (
-            <Blueprint as="button" className="btn btn-primary btn-lg" disabled={unavailable} onClick={() => run((d, n) => startWork(d, me.id, n))}>
+            <Blueprint as="button" className="btn btn-primary btn-lg" disabled={unavailable} onClick={() => run({ type: "startWork", pid: me.id })}>
               <Icon name="play" size={20} />
               Start work
             </Blueprint>

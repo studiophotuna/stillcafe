@@ -1,7 +1,8 @@
 /** View models shared by task tables and the task detail screens. */
 import { H, dur, fmtS, fmtT } from "./clock";
 import { AV, PEOPLE, PR, ST, person, trPath } from "./constants";
-import { canWork, due, isBusy, resumeTask, startTask, type WorkloadData } from "./engine";
+import type { Action } from "./actions";
+import { canWork, due, isBusy, type WorkloadData } from "./engine";
 import type { Task } from "./types";
 
 export interface RowAction {
@@ -62,10 +63,9 @@ export function taskRow(d: WorkloadData, t: Task, me: number, isAdmin: boolean, 
   };
 }
 
-/** Engine call for a row action (details is handled by the caller). */
-export function rowActionFn(a: RowAction, me: number) {
-  if (a.kind === "resume") return (d: WorkloadData, now: number) => resumeTask(d, a.id, me, now);
-  return (d: WorkloadData, now: number) => startTask(d, a.id, me, now);
+/** The action for a row button (details is handled by the caller). */
+export function rowAction(a: RowAction, me: number): Action {
+  return a.kind === "resume" ? { type: "resume", id: a.id, pid: me } : { type: "startTask", id: a.id, pid: me };
 }
 
 export function taskDetail(d: WorkloadData, t: Task, now: number) {

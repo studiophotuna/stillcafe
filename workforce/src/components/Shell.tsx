@@ -27,7 +27,7 @@ const ADMIN_NAV: { href: string; key: NavKey; label: string }[] = [
 const isAdminRoute = (path: string) => path.startsWith("/workload/admin") || path.startsWith("/workload/dashboard");
 
 export function Shell({ children }: { children: React.ReactNode }) {
-  const { data, now, me, isAdmin, viewAs, setViewAs, sys, tr, setSys, setTr } = useWorkload();
+  const { data, now, mode, me, isAdmin, viewAs, setViewAs, sys, tr, setSys, setTr } = useWorkload();
   const path = usePathname();
   const router = useRouter();
   const blocked = !isAdmin && isAdminRoute(path);
@@ -125,6 +125,11 @@ export function Shell({ children }: { children: React.ReactNode }) {
               </div>
             )}
             <span className="filterbar-now">
+              {mode === "demo" && (
+                <span className="tag tag-neutral" title="No database is connected. Changes reset when the page reloads.">
+                  Sample data · not saved
+                </span>
+              )}
               <span className="tag tag-outline">{modeLabel(data.settings.mode)}</span>
               {fmtT(now)}
             </span>

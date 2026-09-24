@@ -7,16 +7,44 @@ Next.js (App Router) + TypeScript implementation of the **Workload** module from
 handoff (`Workload.dc.html`, handoff notes in `design_handoff_wfm/README.md`; the design bundle is
 kept outside this repo).
 
-This first build is **frontend-first**: every screen and rule from the design works, on
-in-memory sample data that resets on reload. The rules live in one pure module so the
-Supabase backend can take them over without touching the screens.
+Every screen and rule from the design works. Data is saved in Supabase when the server has
+database credentials; without them the app runs on in-memory sample data (marked
+“Sample data · not saved” in the top bar) that resets on reload.
+
+## Data and saving
+
+- **Database:** schema `workforce` in the stillcafe Supabase project (`qepcyhgtyhjnxxlrjebk`),
+  kept apart from the site's tables. Migration: `supabase/migrations/0001_workforce_schema.sql`.
+- **Access:** the schema is closed to Supabase's public API roles (`anon`, `authenticated`). Only
+  the server, holding the project's **secret key**, can call `workforce_snapshot` and
+  `workforce_apply`.
+- **Rules run on the server.** The browser applies an action on screen straight away and posts it
+  to `/api/wl/action`. The server re-runs the same rule (`src/lib/workload/actions.ts` →
+  `engine.ts`) on the stored data and saves only the rows that changed, with version checks. If
+  someone else changed those rows in the meantime, it reloads and retries. The database also
+  refuses a second in-progress task for one person, so two members pressing Start work at once
+  never get the same task.
+- **Live-ish:** each browser refreshes from `/api/wl/snapshot` every 20 s and on focus.
+- **First load** seeds the team with the sample tasks.
+
+Environment (server only, e.g. in Vercel › workforce › Settings › Environment Variables):
+
+| Variable | Value |
+| --- | --- |
+| `SUPABASE_URL` | `https://qepcyhgtyhjnxxlrjebk.supabase.co` |
+| `SUPABASE_SECRET_KEY` | Supabase › Project Settings › API Keys › a **secret** key (`sb_secret_…`), or the legacy `service_role` key |
+
+Never prefix these with `NEXT_PUBLIC_`; the secret key must not reach the browser.
+
+> There is no sign-in yet: anyone who can open the app can act as anyone via “view as”. Keep the
+> Vercel deployment protected until Entra ID sign-in is added.
 
 ## Run
 
 ```bash
 npm install
 npm run dev        # http://localhost:3000 → /workload
-npm test           # rule tests (vitest)
+npm test           # rule + persistence tests (vitest)
 npm run typecheck
 npm run build
 ```
@@ -27,7 +55,7 @@ switch later.
 
 The clock starts at the design's reference time (Thu 24 Sep 2026, 10:30 Manila) and runs
 forward, so the sample data looks the same as the design. Set `NEXT_PUBLIC_DEMO_CLOCK=off` to use
-the real clock.
+the real clock. Saved (database) data always uses the real clock.
 
 ## Screens
 
@@ -51,15 +79,19 @@ src/lib/workload/
   engine.ts     all Workload rules as pure functions (start work, take, hold, resume, done,
                 auto-feed, round-robin, assign, intake, upload validation, metrics)
   engine.test.ts
-  store.tsx     React context: in-memory data, toasts, view-as, System/Trade filter, dialogs
-  seed.ts       sample tasks, identical to the prototype's seed
+  actions.ts    serializable actions + applyAction (shared by browser and server)
+  server.ts     Supabase load/save with version checks and retry (server-only)
+  server.test.ts
+  store.tsx     React context: db/demo mode, optimistic actions, refresh, toasts, view-as, filters
+  seed.ts       sample tasks (identical to the prototype's seed) and a team's initial data
   constants.ts  org seed (GPM/RCM trades), people, labels
   clock.ts      Manila-time formatting + demo clock
   excel.ts      ExcelJS template download; .xlsx/.csv upload reader
   view.ts       row/detail view models shared by tables and dialogs
 src/components/ Shell (sidebar + filter bar), TaskTable, Dialogs (task details, hold, done), ui
+src/app/api/wl/ snapshot (GET) and action (POST) route handlers
 src/app/        routes; industry.css = design-system stylesheet (copied from the design bundle's `_ds/industry-…/styles.css`)
-supabase/migrations/0001_workload.sql  schema + atomic wl_start_work() (FOR UPDATE SKIP LOCKED)
+supabase/migrations/0001_workforce_schema.sql  workforce schema + snapshot/apply functions
 ```
 
 ## Where this differs from the prototype
@@ -80,8 +112,9 @@ Deliberate fixes to edge cases the prototype didn't handle:
 
 ## Next steps (build order from the handoff README)
 
-1. Supabase project → apply `supabase/migrations/0001_workload.sql`; add RLS by team allocation.
-2. Replace `initialData()` / `run()` in `store.tsx` with Supabase queries and RPCs
-   (`wl_start_work` is ready; add take / hold / resume / done / assign the same way).
-3. Entra ID SSO (replaces “view as”), availability from the Calendar module.
-4. Microsoft Graph mailbox webhook → tasks (replaces “Check mailbox now”).
+1. Microsoft Entra ID sign-in (replaces “view as”); take the acting person from the session on
+   the server instead of from the request.
+2. People, org and availability from the Calendar module (today they are constants in
+   `constants.ts`); then move task fields, targets and history into their own tables as the
+   handoff data model describes.
+3. Microsoft Graph mailbox webhook → tasks (replaces “Check mailbox now”).

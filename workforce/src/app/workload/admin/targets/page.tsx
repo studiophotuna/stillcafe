@@ -37,7 +37,7 @@ export default function TargetsPage() {
   const { data, run } = useWorkload();
   const s = data.settings;
   const w = s.work;
-  const set = (patch: Partial<Settings>) => run((d) => ({ data: { ...d, settings: { ...d.settings, ...patch } } }));
+  const set = (patch: Partial<Settings>) => run({ type: "setSettings", patch });
   const setW = (k: keyof WorkingTime, v: number) => set({ work: { ...w, [k]: v } });
   const other = Math.round(w.shift * 60 - w.b1 - w.b2 - w.prod * 60);
 

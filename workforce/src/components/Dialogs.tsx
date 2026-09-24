@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { TRADES, fieldOptions, trPath } from "@/lib/workload/constants";
-import { assignTask, completeTask, holdTask, missingRequired, resumeTask, setPriority, setTrade } from "@/lib/workload/engine";
+import { missingRequired } from "@/lib/workload/engine";
 import { useWorkload } from "@/lib/workload/store";
 import type { Priority, Task } from "@/lib/workload/types";
 import { assignOptions, taskDetail } from "@/lib/workload/view";
@@ -94,7 +94,7 @@ function TaskDialog({ id }: { id: string }) {
           <div className="admin-box">
             <div className="field">
               <label htmlFor="dt-trade">System › Trade</label>
-              <select id="dt-trade" className="input" value={t.trade} onChange={(e) => run((d, n) => setTrade(d, id, e.target.value, n))}>
+              <select id="dt-trade" className="input" value={t.trade} onChange={(e) => run({ type: "setTrade", id, trade: e.target.value })}>
                 <option value="">Needs trade</option>
                 {TRADES.map((o) => (
                   <option key={o.id} value={o.id}>
@@ -105,7 +105,7 @@ function TaskDialog({ id }: { id: string }) {
             </div>
             <div className="field">
               <label htmlFor="dt-pr">Priority</label>
-              <select id="dt-pr" className="input" value={t.pr} onChange={(e) => run((d, n) => setPriority(d, id, e.target.value as Priority, n))}>
+              <select id="dt-pr" className="input" value={t.pr} onChange={(e) => run({ type: "setPriority", id, pr: e.target.value as Priority })}>
                 <option value="high">High</option>
                 <option value="normal">Normal</option>
                 <option value="low">Low</option>
@@ -119,7 +119,7 @@ function TaskDialog({ id }: { id: string }) {
                 value={t.assignee === null ? "" : String(t.assignee)}
                 onChange={(e) => {
                   const val = e.target.value;
-                  run((d, n) => assignTask(d, id, val === "" ? null : Number(val), n));
+                  run({ type: "assign", id, pid: val === "" ? null : Number(val) });
                 }}
               >
                 <option value="">Unassigned (in queue)</option>
@@ -146,7 +146,7 @@ function TaskDialog({ id }: { id: string }) {
               className="btn btn-secondary btn-40"
               disabled={busy}
               onClick={() => {
-                run((d, n) => resumeTask(d, id, me.id, n));
+                run({ type: "resume", id, pid: me.id });
                 close();
               }}
             >
@@ -203,7 +203,7 @@ function HoldDialog({ id }: { id: string }) {
           style={{ padding: "0 18px" }}
           disabled={!reason.trim()}
           onClick={() => {
-            run((d, n) => holdTask(d, id, reason, n));
+            run({ type: "hold", id, reason });
             close();
           }}
         >
@@ -275,7 +275,7 @@ function DoneDialog({ id }: { id: string }) {
             disabled={miss.length > 0}
             onClick={() => {
               close();
-              run((d, n) => completeTask(d, id, vals, ot, me.id, n));
+              run({ type: "complete", id, vals, ot, pid: me.id });
             }}
           >
             Mark done

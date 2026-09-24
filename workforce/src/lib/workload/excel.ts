@@ -118,7 +118,15 @@ export function rowsToObjects(table: unknown[][]): UploadRow[] {
   const [head = [], ...body] = table;
   const keys = head.map((h) => String(h ?? "").replace(/\s*\*$/, "").trim());
   return body
-    .map((r) => Object.fromEntries(keys.map((k, i) => [k, r[i] ?? ""])))
+    .map((r) =>
+      Object.fromEntries(
+        keys.map((k, i) => {
+          const v = r[i] ?? "";
+          // Dates as yyyy-mm-dd so rows survive the trip to the server as JSON.
+          return [k, v instanceof Date ? v.toISOString().slice(0, 10) : v];
+        }),
+      ),
+    )
     .filter((o) => Object.values(o).some((v) => String(v).trim()));
 }
 

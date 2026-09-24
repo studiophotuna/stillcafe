@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { Blueprint, Icon, PageHead } from "@/components/ui";
 import { TEAM, TRADES, trPath } from "@/lib/workload/constants";
-import { checkMail, checkRows, importRows, type UploadRow } from "@/lib/workload/engine";
+import { checkRows, type UploadRow } from "@/lib/workload/engine";
 import { downloadTaskTemplate, readTaskFile } from "@/lib/workload/excel";
 import { useWorkload } from "@/lib/workload/store";
 
@@ -13,7 +13,7 @@ export default function IntakePage() {
   const s = data.settings;
   const chk = upload ? checkRows(upload.rows, data.fields) : [];
   const okN = chk.filter((c) => c.ok).length;
-  const setSetting = (patch: Partial<typeof s>) => run((d) => ({ data: { ...d, settings: { ...d.settings, ...patch } } }));
+  const setSetting = (patch: Partial<typeof s>) => run({ type: "setSettings", patch });
 
   const onFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -95,7 +95,7 @@ export default function IntakePage() {
                   style={{ padding: "0 18px" }}
                   disabled={!okN}
                   onClick={() => {
-                    run((d, n) => importRows(d, chk, n));
+                    run({ type: "importRows", rows: upload.rows });
                     setUpload(null);
                   }}
                 >
@@ -129,7 +129,7 @@ export default function IntakePage() {
           </div>
           <span className="small">If left blank, new emails wait in the queue as “Needs trade” until an admin sets it from the task details.</span>
           <div className="row">
-            <button className="btn btn-secondary btn-40" onClick={() => run((d, n) => checkMail(d, n))}>
+            <button className="btn btn-secondary btn-40" onClick={() => run({ type: "checkMail" })}>
               Check mailbox now
             </button>
             <span className="small">Checked automatically every 2 minutes in the live system.</span>
