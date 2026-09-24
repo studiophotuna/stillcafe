@@ -295,3 +295,50 @@ describe("org import", async () => {
     expect("error" in authorizeCal({ type: "importOrg", dept: "bss", rows: [] }, c, ANA)).toBe(true);
   });
 });
+
+describe("allocation depth by role", async () => {
+  const { authorizeCal } = await import("./authz");
+  const details = { name: "Lead Person", email: "lead.person@example.com" };
+  const add = (level: "director" | "manager" | "lead" | "member", assign: string[]) =>
+    run(fresh(), { type: "addPerson", details, level, shift: "D", adminHere: false, bid: "rm", assign });
+
+  it("directors need only a department, managers a tower, others a team", () => {
+    expect(add("director", ["bss"]).error).toBeUndefined();
+    expect(add("manager", ["bss"]).error).toMatch(/department and tower/);
+    expect(add("manager", ["t_rm"]).error).toBeUndefined();
+    expect(add("member", ["t_rm"]).error).toMatch(/department, tower and team/);
+    expect(add("lead", ["rm"]).error).toBeUndefined();
+    expect(add("director", ["rm"]).error).toBeUndefined(); // deeper is fine
+  });
+
+  it("gives a department-level director no team, and their leave is approved automatically", () => {
+    const r = add("director", ["bss"]);
+    const c = new Cal(r.data, TODAY);
+    const id = r.newPersonId!;
+    expect(c.O.branchesOf(c.person(id))).toHaveLength(0);
+    const q = run(r.data, { type: "submitRequest", pid: id, form: { type: "VL", start: "2026-10-12", end: "2026-10-12", half: "AM", reason: "" }, adminBid: null, actor: id });
+    expect(q.message).toMatch(/Approved automatically/);
+  });
+
+  it("stops a team admin from editing someone allocated above their team", () => {
+    const r = add("director", ["bss"]);
+    const c = new Cal(r.data, TODAY);
+    const edit = { type: "saveMember" as const, pid: r.newPersonId!, level: "member" as const, shift: "D", adminHere: false, bid: "rm", assign: ["rm"], isNew: false };
+    expect("error" in authorizeCal(edit, c, SAM)).toBe(true);
+  });
+
+  it("accepts upload rows by role", () => {
+    const c = new Cal(fresh(), TODAY);
+    const dept = c.O.by.bss.name;
+    const tower = c.O.by.t_rm.name;
+    const rows = checkUpload(c, "members", [
+      { Name: "Dee Rector", Email: "dee@example.com", Role: "Director", Department: dept },
+      { Name: "Manny Ger", Email: "manny@example.com", Role: "Manager", Department: dept, Tower: tower },
+      { Name: "Manny Two", Email: "manny2@example.com", Role: "Manager", Department: dept },
+      { Name: "Mem Ber", Email: "mem@example.com", Role: "Member", Department: dept, Tower: tower },
+    ], "rm");
+    expect(rows.map((x) => x.ok)).toEqual([true, true, false, false]);
+    expect(rows[0].member?.leaf).toBe("bss");
+    expect(rows[1].member?.leaf).toBe("t_rm");
+  });
+});

@@ -6,7 +6,7 @@ import { fmtT } from "../workload/clock";
 import { ANNUAL, CODES, LEVELS, TYPE_L, first } from "./constants";
 import { fmtY, MONL } from "./dates";
 import { Cal, logsDecision, logsSubmit } from "./engine";
-import { teamDefaults } from "./org";
+import { allocProblem, teamDefaults } from "./org";
 import { planOrgImport, type OrgRow } from "./orgImport";
 import { applyUpload, checkUpload, type UploadMode, type UploadRow } from "./uploads";
 import type {
@@ -263,7 +263,9 @@ export function applyCalAction(d: CalendarData, a: CalAction, today: string, now
     }
     case "addPerson": {
       const b = c.O.by[a.bid];
-      if (!b || !a.assign.length || !a.assign.every((x) => c.O.by[x]) || !LEVELS[a.level]) return { data: d, error: "Choose a department, tower and team for each allocation." };
+      if (!b || !LEVELS[a.level]) return { data: d, error: "Choose a role and team." };
+      const bad = allocProblem(c.O, a.level, a.assign);
+      if (bad) return { data: d, error: bad };
       const cl = cleanDetails(d, { hire: today, entitle: 25, elEnt: 5, carry: 0, ytd: 0, ytdEl: 0, wfhDays: [], ...a.details }, null);
       if ("error" in cl) return { data: d, error: cl.error };
       if (!cl.patch.name || !cl.patch.email) return { data: d, error: "Enter the person’s name and email." };
@@ -281,7 +283,9 @@ export function applyCalAction(d: CalendarData, a: CalAction, today: string, now
     case "saveMember": {
       const p = c.people.get(a.pid);
       const b = c.O.by[a.bid];
-      if (!p || !b || !a.assign.length || !a.assign.every((x) => c.O.by[x]) || !LEVELS[a.level]) return { data: d, error: "Choose a department, tower and team for each allocation." };
+      if (!p || !b || !LEVELS[a.level]) return { data: d, error: "Choose a role and team." };
+      const bad = allocProblem(c.O, a.level, a.assign);
+      if (bad) return { data: d, error: bad };
       const cl = cleanDetails(d, a.details ?? {}, a.pid);
       if ("error" in cl) return { data: d, error: cl.error };
       let next: CalendarData = {

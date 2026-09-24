@@ -53,6 +53,12 @@ the bottom of the side menu switches between the admin (Sam Delgado) and a membe
 
 ## Organization
 
+**Allocations by role:** directors need only a department, managers a department and tower,
+team leads and members a department, tower and team (deeper is always allowed). People
+allocated to a whole department or tower belong to no team: they appear in the Management
+view and in the Members list of every team under them, their leave is approved automatically,
+and only a system admin can edit them.
+
 Calendar › Admin › Organization › **Import from Excel**: paste the Tower and Team columns (and
 optionally System and Trade) straight from a spreadsheet. The dialog previews what will be added;
 names already there are skipped (a team that already exists as a system of a team in that tower,

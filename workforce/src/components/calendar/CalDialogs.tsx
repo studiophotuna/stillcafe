@@ -9,6 +9,7 @@ import {
 import { fmt, fmtY, MONL, rng2 } from "@/lib/calendar/dates";
 import { downloadMembersTemplate, downloadScheduleTemplate, readCalendarUpload } from "@/lib/calendar/excel";
 import { useCalendar, type Issued } from "@/lib/calendar/store";
+import { ALLOC_MIN, allocNeeds, allocProblem } from "@/lib/calendar/org";
 import { parseOrgText, planOrgImport } from "@/lib/calendar/orgImport";
 import { checkUpload, type UploadRow } from "@/lib/calendar/uploads";
 import { useCalView } from "@/lib/calendar/useCalView";
@@ -113,6 +114,9 @@ function RequestDialog({ date }: { date?: string }) {
         </div>
         <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
           <span className="small" style={{ fontSize: 12 }}>What happens next</span>
+          {routing.length === 0 && (
+            <span style={{ fontSize: 13.5 }}>You aren’t in a team, so this is approved automatically.</span>
+          )}
           {routing.map((r) => (
             <div key={r.id} style={{ display: "flex", gap: 10, alignItems: "flex-start", fontSize: 13.5 }}>
               <span className="tag tag-outline" style={{ flex: "none", minWidth: 120, justifyContent: "center" }}>
@@ -350,6 +354,10 @@ function MemberDialog({ pid: pid0 }: { pid: number | null }) {
     .sort((a, b) => a.name.localeCompare(b.name));
   const existing = isNew && who === "existing";
   const showDetails = !existing || pid !== null;
+  // Directors need only a department, managers a tower; everyone else a team.
+  const need = ALLOC_MIN[level];
+  const leafOf = (r: AllocRow) => r.trade || r.system || r.branch || r.tower || r.dept;
+  const assign = [...new Set(alloc.map(leafOf).filter(Boolean))];
 
   // Same checks as the server, so problems show before saving.
   const email = f.email.trim().toLowerCase();
@@ -374,7 +382,7 @@ function MemberDialog({ pid: pid0 }: { pid: number | null }) {
                 const n = Number(f[k]);
                 return f[k].trim() === "" || !Number.isFinite(n) || n < lo || n > hi ? `${l} must be between ${lo} and ${hi}.` : "";
               }).find(Boolean) ??
-              (!alloc.length || !alloc.every((r) => r.dept && r.tower && r.branch) ? "Choose a department, tower and team for each allocation." : ""));
+              (!alloc.length || alloc.some((r) => !r.dept) ? `Choose ${allocNeeds(level)} for each allocation.` : allocProblem(s.cal.O, level, assign)));
   const emailChanged = !!init && email !== init.email.toLowerCase();
   const signIn =
     s.mode !== "db"
@@ -386,7 +394,6 @@ function MemberDialog({ pid: pid0 }: { pid: number | null }) {
           : "";
 
   const save = () => {
-    const assign = [...new Set(alloc.map((r) => r.trade || r.system || r.branch))];
     const details = {
       name: f.name,
       email: f.email,
@@ -536,6 +543,10 @@ function MemberDialog({ pid: pid0 }: { pid: number | null }) {
         )}
         <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
           {section("Allocations · their schedule and leave show on every calendar they’re allocated to")}
+          <span className="small" style={{ fontSize: 12, marginTop: -6 }}>
+            {LEVELS[level]}s need {allocNeeds(level)}
+            {need === "dept" ? "; tower and team are optional." : need === "tower" ? "; team is optional." : "."}
+          </span>
           {alloc.map((r, i) => (
             <div key={i} style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(140px,1fr)) 36px", gap: 8, alignItems: "end", padding: 12, border: "1px solid var(--color-divider)" }}>
               <div className="field">
@@ -546,16 +557,16 @@ function MemberDialog({ pid: pid0 }: { pid: number | null }) {
                 </select>
               </div>
               <div className="field">
-                <label>Tower *</label>
+                <label>Tower{need !== "dept" ? " *" : ""}</label>
                 <select className="input" value={r.tower} onChange={(e) => setA(i, "tower", e.target.value)}>
-                  <option value="">Choose</option>
+                  <option value="">{need !== "dept" ? "Choose" : "None"}</option>
                   {r.dept && opts(O.kids(r.dept, "tower"))}
                 </select>
               </div>
               <div className="field">
-                <label>Team *</label>
+                <label>Team{need === "branch" ? " *" : ""}</label>
                 <select className="input" value={r.branch} onChange={(e) => setA(i, "branch", e.target.value)}>
-                  <option value="">Choose</option>
+                  <option value="">{need === "branch" ? "Choose" : "None"}</option>
                   {r.tower && opts(O.kids(r.tower, "branch"))}
                 </select>
               </div>

@@ -57,6 +57,9 @@ export function authorizeCal(a: CalAction, c: Cal, me: number): { action: CalAct
       // (not someone just being added from another team), and system admins only by one.
       const p = c.people.get(a.pid);
       if (!p || !r.teamAdmin(a.bid)) return NO;
+      // Editing someone already allocated needs rights over them (a team admin can't
+      // change a director or manager allocated above their team).
+      if (!a.isNew && !r.adminOf(a.pid)) return NO;
       const mayEdit = r.adminOf(a.pid) && (!p.sysAdmin || r.sys) && !a.isNew;
       return ok(true, mayEdit ? a : { ...a, details: undefined });
     }

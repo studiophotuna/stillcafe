@@ -16,9 +16,12 @@ export function useCalView() {
     const meP = cal.person(me);
     const myBranches = O.branchesOf(meP);
     // System admins can open every team; everyone else sees the teams they're allocated to.
+    // Directors and managers allocated to a department or tower see the teams under it.
+    const above = meP.assign.filter((a) => O.by[a] && (O.by[a].type === "dept" || O.by[a].type === "tower"));
+    const scoped = above.flatMap((a) => O.desc(a, "branch")).filter((b) => !myBranches.includes(b));
     const viewBranches = meP.sysAdmin
       ? myBranches.concat(data.nodes.filter((n) => n.type === "branch" && !myBranches.includes(n)))
-      : myBranches;
+      : myBranches.concat([...new Set(scoped)]);
     const branch: OrgNode =
       viewBranches.find((b) => b.id === sel.branch && O.up(b.id, "dept")?.id === sel.dept) ||
       viewBranches.find((b) => b.id === sel.branch) ||
