@@ -32,10 +32,16 @@ export default function OrganizationPage() {
           <h1>Organization</h1>
           <span>Department › Tower › Team › System › Trade. Department, tower and team are required; system and trade are optional.</span>
         </div>
-        <button className="btn btn-secondary btn-36" onClick={() => s.setDialog({ kind: "node", mode: "add", ntype: "dept", parent: null })}>
-          <Icon name="plus" size={16} />
-          Add department
-        </button>
+        <div className="row">
+          <button className="btn btn-secondary btn-36" onClick={() => s.setDialog({ kind: "orgImport" })}>
+            <Icon name="upload" size={16} />
+            Import from Excel
+          </button>
+          <button className="btn btn-secondary btn-36" onClick={() => s.setDialog({ kind: "node", mode: "add", ntype: "dept", parent: null })}>
+            <Icon name="plus" size={16} />
+            Add department
+          </button>
+        </div>
       </div>
       <Blueprint>
         {rows.map(({ n, depth }) => {

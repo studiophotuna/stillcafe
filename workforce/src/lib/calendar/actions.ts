@@ -7,6 +7,7 @@ import { ANNUAL, CODES, LEVELS, TYPE_L, first } from "./constants";
 import { fmtY, MONL } from "./dates";
 import { Cal, logsDecision, logsSubmit } from "./engine";
 import { teamDefaults } from "./org";
+import { planOrgImport, type OrgRow } from "./orgImport";
 import { applyUpload, checkUpload, type UploadMode, type UploadRow } from "./uploads";
 import type {
   BcpEvent, BcpStatus, CalendarData, Code, Holiday, LeaveRequest, Level, NodeType, NotifLog, OrgNode, Shift,
@@ -31,6 +32,7 @@ export type CalAction =
   | { type: "addAdmin"; id: string; pid: number }
   | { type: "removeAdmin"; id: string; pid: number }
   | { type: "addNode"; ntype: NodeType; parent: string | null; name: string; actor: number }
+  | { type: "importOrg"; dept: string; rows: OrgRow[] }
   | { type: "renameNode"; id: string; name: string }
   | { type: "deleteNode"; id: string }
   | { type: "saveMember"; pid: number; level: Level; shift: string; adminHere: boolean; bid: string; assign: string[]; isNew: boolean; details?: MemberDetails }
@@ -226,6 +228,15 @@ export function applyCalAction(d: CalendarData, a: CalAction, today: string, now
         ...(a.ntype === "branch" ? teamDefaults({ admins: [a.actor] }) : {}),
       };
       return { data: { ...d, nodes: d.nodes.concat(n) }, message: `${TYPE_L[a.ntype]} “${nm}” added.` };
+    }
+    case "importOrg": {
+      if (!Array.isArray(a.rows) || a.rows.length > 2000) return { data: d, error: "Paste up to 2,000 rows." };
+      const plan = planOrgImport(d, a.dept, a.rows.map((r) => (Array.isArray(r) ? r.map(String) : [])), "n" + now.toString(36) + "_");
+      if (plan.errors.length) return { data: d, error: plan.errors[0] };
+      if (!plan.add.length) return { data: d, message: "Nothing new to add — everything in the list is already there." };
+      const n = (t: NodeType) => plan.add.filter((x) => x.type === t).length;
+      const parts = (["tower", "branch", "system", "trade"] as NodeType[]).filter((t) => n(t)).map((t) => `${n(t)} ${TYPE_L[t].toLowerCase()}${n(t) === 1 ? "" : "s"}`);
+      return { data: { ...d, nodes: plan.nodes }, message: `Added ${parts.join(", ")}.` };
     }
     case "renameNode": {
       const nm = a.name.trim();

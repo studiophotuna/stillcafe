@@ -67,6 +67,7 @@ export function authorizeCal(a: CalAction, c: Cal, me: number): { action: CalAct
       return ok(r.teamAdmin(a.bid) && a.pid !== me);
     case "addNode":
       return ok(r.anyAdmin, { ...a, actor: me });
+    case "importOrg":
     case "renameNode":
     case "deleteNode":
     case "saveShift":

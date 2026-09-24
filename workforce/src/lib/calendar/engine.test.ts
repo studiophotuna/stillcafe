@@ -257,3 +257,41 @@ describe("adding members and rights", async () => {
     expect(left).not.toContain(only[0]);
   });
 });
+
+describe("org import", async () => {
+  const { parseOrgText, planOrgImport } = await import("./orgImport");
+  const { emptyCalendar } = await import("./seed");
+  const text = "Tower\tTeam\nNorth Tower\tAlpha\nNorth Tower\tBeta \n  north tower \talpha\nA&S Support - Rate Management\tGPM\nA&S Support - Rate Management\tNew RM Team\n\nSouth\tGamma\tSys1\tTradeX";
+
+  it("parses pasted Excel rows and drops the header", () => {
+    const rows = parseOrgText(text);
+    expect(rows[0]).toEqual(["North Tower", "Alpha"]);
+    expect(rows).toHaveLength(6);
+    expect(parseOrgText("A,B\nC,D")).toEqual([["A", "B"], ["C", "D"]]);
+  });
+
+  it("adds missing towers and teams once, and treats a team that is already a system as there", () => {
+    const d = emptyCalendar();
+    const r = run(d, { type: "importOrg", dept: "bss", rows: parseOrgText(text) });
+    const c = new Cal(r.data, TODAY);
+    const byName = (n: string) => r.data.nodes.filter((x) => x.name === n);
+    expect(byName("North Tower")).toHaveLength(1);
+    expect(c.O.kids(byName("North Tower")[0].id, "branch").map((x) => x.name)).toEqual(["Alpha", "Beta"]);
+    expect(byName("GPM")).toHaveLength(1); // still the system inside Rate Management
+    expect(byName("New RM Team")[0].parent).toBe("t_rm");
+    expect(byName("New RM Team")[0]).toMatchObject({ mode: "approval", admins: [] });
+    expect(byName("TradeX")[0].parent).toBe(byName("Sys1")[0].id);
+    expect(r.message).toBe("Added 2 towers, 4 teams, 1 system, 1 trade.");
+    // Running it again adds nothing.
+    const again = run(r.data, { type: "importOrg", dept: "bss", rows: parseOrgText(text) });
+    expect(again.data).toBe(r.data);
+    expect(again.message).toMatch(/Nothing new/);
+  });
+
+  it("rejects rows without a team, and needs an admin", async () => {
+    const { authorizeCal } = await import("./authz");
+    expect(run(emptyCalendar(), { type: "importOrg", dept: "bss", rows: [["Only tower"]] }).error).toMatch(/Row 1/);
+    const c = new Cal(fresh(), TODAY);
+    expect("error" in authorizeCal({ type: "importOrg", dept: "bss", rows: [] }, c, ANA)).toBe(true);
+  });
+});

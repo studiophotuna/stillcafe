@@ -8,7 +8,7 @@ export const dynamic = "force-dynamic";
 
 const TYPES = new Set<CalAction["type"]>([
   "submitRequest", "decide", "cancelRequest", "setOverride", "setShiftDay", "teamSettings", "addAdmin", "removeAdmin",
-  "addNode", "renameNode", "deleteNode", "saveMember", "addPerson", "removeFromTeam", "setResign", "saveShift", "deleteShift",
+  "addNode", "importOrg", "renameNode", "deleteNode", "saveMember", "addPerson", "removeFromTeam", "setResign", "saveShift", "deleteShift",
   "saveHoliday", "deleteHoliday", "toggleReady", "checkin", "startEvent", "closeEvent", "importUpload",
 ]);
 

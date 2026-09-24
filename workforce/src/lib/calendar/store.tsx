@@ -44,6 +44,7 @@ export type CalDialog =
   | { kind: "upload"; mode: "members" | "schedule" }
   | { kind: "checkin"; pid: number; evId: string }
   | { kind: "event" }
+  | { kind: "orgImport" }
   | null;
 
 interface Store {

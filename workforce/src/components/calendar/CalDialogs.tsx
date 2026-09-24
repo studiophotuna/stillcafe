@@ -9,6 +9,7 @@ import {
 import { fmt, fmtY, MONL, rng2 } from "@/lib/calendar/dates";
 import { downloadMembersTemplate, downloadScheduleTemplate, readCalendarUpload } from "@/lib/calendar/excel";
 import { useCalendar, type Issued } from "@/lib/calendar/store";
+import { parseOrgText, planOrgImport } from "@/lib/calendar/orgImport";
 import { checkUpload, type UploadRow } from "@/lib/calendar/uploads";
 import { useCalView } from "@/lib/calendar/useCalView";
 import { EMAIL_RE } from "@/lib/calendar/actions";
@@ -1118,6 +1119,101 @@ function EventDialog() {
   );
 }
 
+// ── Import org structure (paste from Excel) ──
+function OrgImportDialog() {
+  const s = useCalendar();
+  const v = useCalView();
+  const depts = s.data.nodes.filter((n) => n.type === "dept");
+  const [dept, setDept] = useState(v.dept.id);
+  const [text, setText] = useState("");
+  const rows = useMemo(() => parseOrgText(text), [text]);
+  const plan = useMemo(() => planOrgImport(s.data, dept, rows, "preview"), [s.data, dept, rows]);
+  const close = () => s.setDialog(null);
+  const TL: Record<string, string> = { tower: "Tower", branch: "Team", system: "System", trade: "Trade" };
+  return (
+    <Modal onClose={close} width={760}>
+      <div className="dialog-scroll" style={{ padding: 20 }}>
+        <Title>Import towers and teams</Title>
+        <p style={{ margin: 0, fontSize: 13.5, color: "var(--color-neutral-800)" }}>
+          Copy the columns from Excel and paste them below: <strong>Tower, Team</strong>, and optionally <strong>System, Trade</strong>. A header row is
+          ignored. Anything already there is skipped, so you can paste the same list again after adding rows.
+        </p>
+        <div className="field" style={{ maxWidth: 360 }}>
+          <label htmlFor="oi-dept">Department</label>
+          <select id="oi-dept" className="input" value={dept} onChange={(e) => setDept(e.target.value)}>
+            {depts.map((d) => (
+              <option key={d.id} value={d.id}>
+                {d.name}
+              </option>
+            ))}
+          </select>
+        </div>
+        <div className="field">
+          <label htmlFor="oi-text">Rows</label>
+          <textarea
+            id="oi-text"
+            className="input"
+            rows={8}
+            style={{ fontFamily: "ui-monospace, monospace", fontSize: 13, resize: "vertical" }}
+            placeholder={"Tower\tTeam\nCustoms MNL\tAustralia\nCustoms MNL\tCanada"}
+            value={text}
+            onChange={(e) => setText(e.target.value)}
+          />
+        </div>
+        {rows.length > 0 && (
+          <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+            {plan.errors.map((e) => (
+              <div key={e} className="auth-error">
+                {e}
+              </div>
+            ))}
+            <span className="small" style={{ fontSize: 12 }}>
+              {rows.length} row{rows.length === 1 ? "" : "s"} · {plan.add.length} to add · {plan.skip.length} already there
+            </span>
+            {plan.add.length > 0 && (
+              <div style={{ maxHeight: 240, overflow: "auto", border: "1px solid var(--color-divider)" }}>
+                <table className="table">
+                  <tbody>
+                    {plan.add.map((x, i) => (
+                      <tr key={i}>
+                        <td style={{ width: 90 }}>
+                          <span className={"tag " + (x.type === "tower" ? "tag-accent" : x.type === "branch" ? "tag-outline" : "tag-neutral")}>{TL[x.type]}</span>
+                        </td>
+                        <td style={{ fontWeight: 500 }}>{x.name}</td>
+                        <td className="small">in {x.under}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+            {plan.skip.length > 0 && (
+              <span className="small" style={{ fontSize: 12 }}>
+                Skipped: {plan.skip.map((x) => `${x.name} (${x.why})`).join(", ")}
+              </span>
+            )}
+          </div>
+        )}
+        <Note>New teams start with admin approval and no team admin. Set each team’s admins under Settings, or tick “Admin of …” when adding a member.</Note>
+        <div className="dialog-actions" style={{ gap: 10 }}>
+          <button className="btn btn-secondary btn-40" onClick={close}>
+            Cancel
+          </button>
+          <PrimaryBtn
+            disabled={!plan.add.length || plan.errors.length > 0}
+            onClick={() => {
+              s.run({ type: "importOrg", dept, rows });
+              close();
+            }}
+          >
+            {plan.add.length ? `Add ${plan.add.length}` : "Add"}
+          </PrimaryBtn>
+        </div>
+      </div>
+    </Modal>
+  );
+}
+
 export function CalDialogs() {
   const { dialog: d } = useCalendar();
   if (!d) return null;
@@ -1144,5 +1240,7 @@ export function CalDialogs() {
       return <CheckinDialog pid={d.pid} evId={d.evId} />;
     case "event":
       return <EventDialog />;
+    case "orgImport":
+      return <OrgImportDialog />;
   }
 }

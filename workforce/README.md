@@ -51,6 +51,14 @@ the bottom of the side menu switches between the admin (Sam Delgado) and a membe
   BCP events and Workload settings.
 - **First administrator:** created directly in the database (see *Starting fresh* below).
 
+## Organization
+
+Calendar › Admin › Organization › **Import from Excel**: paste the Tower and Team columns (and
+optionally System and Trade) straight from a spreadsheet. The dialog previews what will be added;
+names already there are skipped (a team that already exists as a system of a team in that tower,
+such as GPM inside Rate Management, counts as there), so the same list can be pasted again after
+adding rows. New teams start with admin approval and no team admin.
+
 ## Data and saving
 
 Both modules save to Supabase: schema `workforce` in the stillcafe project

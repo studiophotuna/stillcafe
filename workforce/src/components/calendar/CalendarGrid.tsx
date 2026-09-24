@@ -41,7 +41,20 @@ export function CalendarGrid({ mgmt }: { mgmt?: boolean }) {
   const [scopeOverride, setScope] = useState<"all" | "me" | null>(null);
   const [cellMode, setCellMode] = useState<"status" | "shift">("status");
   const [q, setQ] = useState("");
-  const [countsOpen, setCountsOpen] = useState(true);
+  // Hidden by default; each viewer's choice is remembered in this browser.
+  const [countsOpen, setCountsOpenState] = useState(() => {
+    try {
+      return localStorage.getItem("wfm.counts") === "open";
+    } catch {
+      return false;
+    }
+  });
+  const setCountsOpen = (o: boolean) => {
+    setCountsOpenState(o);
+    try {
+      localStorage.setItem("wfm.counts", o ? "open" : "closed");
+    } catch {}
+  };
   const scope = scopeOverride ?? v.branch.defaultScope ?? "all";
   const shiftMode = cellMode === "shift";
   const shById = Object.fromEntries(s.data.shifts.map((x) => [x.id, x]));
