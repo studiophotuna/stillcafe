@@ -1,5 +1,6 @@
 import { H, M } from "./clock";
-import { CARRIERS, person, TRADES, trade } from "./constants";
+import { CARRIERS, FIELDS0, person, TRADES, trade } from "./constants";
+import type { WorkloadData } from "./engine";
 import type { Priority, Task, TaskStatus } from "./types";
 
 const KINDS = ["Rate filing", "Contract amendment", "New contract upload", "Surcharge update", "Rate sheet review"];
@@ -151,3 +152,25 @@ export const SAMPLE_MAIL: [string, string, string, string[]][] = [
   ["kam.inas@dsv.com", "Contract amendment – ONEY INAS", "Amendment 3 for the ONEY contract is attached.", ["ONEY_amd3.pdf"]],
   ["ops@dsv.com", "Question about last week’s filing", "Could someone confirm the filing reference?", []],
 ];
+
+/** A team's starting data: default settings and fields plus the sample tasks. */
+export function initialData(now: number): WorkloadData {
+  return {
+    tasks: seedTasks(now),
+    fields: FIELDS0.map((f) => ({ ...f })),
+    settings: {
+      mode: "fifo",
+      order: "priority",
+      skipUnavail: true,
+      autoFeed: true,
+      sla: { high: 4, normal: 24, low: 72 },
+      mailbox: "rm.requests@dsv.com",
+      mailTrade: "",
+      work: { shift: 9, b1: 60, b2: 30, prod: 6.8 },
+      targets: { fewb: 8, inas: 6, eu: 7, us: 6, asla: 6, lcl: 8 },
+      memberTargets: {},
+    },
+    seq: 2000,
+    mailCount: 0,
+  };
+}

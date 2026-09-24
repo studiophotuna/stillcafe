@@ -1,37 +1,24 @@
 "use client";
 
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
-import { nowMs } from "./clock";
-import { ADMIN_ID, EMPLOYEE_ID, FIELDS0, person } from "./constants";
-import type { Outcome, WorkloadData } from "./engine";
-import { seedTasks } from "./seed";
+import { applyAction, type Action } from "./actions";
+import { nowMs, setRealClock } from "./clock";
+import { ADMIN_ID, EMPLOYEE_ID, person } from "./constants";
+import type { WorkloadData } from "./engine";
+import { initialData } from "./seed";
 import type { Person, Toast, ViewAs } from "./types";
 
 /**
- * Client-side store for the Workload module. Data lives in memory and resets
- * on reload; swap `initialData` / `run` for Supabase queries and RPCs when the
- * backend is added (see supabase/migrations).
+ * Client store for the Workload module.
+ *
+ * On load it asks /api/wl/snapshot for saved data. With a database configured
+ * ("db" mode) every action is applied on screen straight away, then sent to
+ * /api/wl/action, where the server applies the same rules to the stored data
+ * and returns the result; the screen then shows what was saved. Data is also
+ * refreshed every 20 s so queues stay current. Without a database ("demo"
+ * mode) the sample data lives in memory and resets on reload.
  */
-function initialData(): WorkloadData {
-  return {
-    tasks: seedTasks(nowMs()),
-    fields: FIELDS0.map((f) => ({ ...f })),
-    settings: {
-      mode: "fifo",
-      order: "priority",
-      skipUnavail: true,
-      autoFeed: true,
-      sla: { high: 4, normal: 24, low: 72 },
-      mailbox: "rm.requests@dsv.com",
-      mailTrade: "",
-      work: { shift: 9, b1: 60, b2: 30, prod: 6.8 },
-      targets: { fewb: 8, inas: 6, eu: 7, us: 6, asla: 6, lcl: 8 },
-      memberTargets: {},
-    },
-    seq: 2000,
-    mailCount: 0,
-  };
-}
+export type DataMode = "demo" | "db";
 
 export type Dialog =
   | { kind: "task"; id: string }
@@ -42,8 +29,9 @@ export type Dialog =
 interface Store {
   data: WorkloadData;
   now: number;
-  /** Apply an engine action; its message (if any) is shown as a toast. */
-  run: (fn: (d: WorkloadData, now: number) => Outcome) => void;
+  /** Apply an action (and save it in db mode); its message, if any, is shown as a toast. */
+  run: (action: Action) => void;
+  mode: DataMode;
   toast: (text: string) => void;
   toasts: Toast[];
   viewAs: ViewAs;
@@ -60,9 +48,15 @@ interface Store {
 
 const Ctx = createContext<Store | null>(null);
 
+const REFRESH_MS = 20_000;
+
 export function WorkloadProvider({ children }: { children: React.ReactNode }) {
-  const [data, setData] = useState(initialData);
-  const dataRef = useRef(data);
+  const [data, setData] = useState<WorkloadData | null>(null);
+  const dataRef = useRef<WorkloadData | null>(null);
+  const [mode, setMode] = useState<DataMode | null>(null);
+  const modeRef = useRef<DataMode | null>(null);
+  const pending = useRef(0);
+  const queue = useRef<Promise<void>>(Promise.resolve());
   const [toasts, setToasts] = useState<Toast[]>([]);
   const [viewAs, setViewAsState] = useState<ViewAs>("admin");
   const [sys, setSysState] = useState("all");
@@ -70,17 +64,10 @@ export function WorkloadProvider({ children }: { children: React.ReactNode }) {
   const [now, setNow] = useState(nowMs);
   const [dialog, setDialog] = useState<Dialog>(null);
 
-  // Clock tick so waiting times, "started … ago" and metrics stay current.
-  useEffect(() => {
-    const iv = setInterval(() => setNow(nowMs()), 30_000);
-    return () => clearInterval(iv);
-  }, []);
-
-  useEffect(() => {
-    try {
-      const v = localStorage.getItem("wfm.viewAs");
-      if (v === "admin" || v === "employee") setViewAsState(v);
-    } catch {}
+  const commit = useCallback((d: WorkloadData) => {
+    dataRef.current = d;
+    setData(d);
+    setNow(nowMs());
   }, []);
 
   const toast = useCallback((text: string) => {
@@ -89,16 +76,95 @@ export function WorkloadProvider({ children }: { children: React.ReactNode }) {
     setTimeout(() => setToasts((t) => t.filter((x) => x.id !== id)), 5000);
   }, []);
 
+  /** Load saved data (skipped while this browser still has changes on the way). */
+  const refresh = useCallback(async () => {
+    if (modeRef.current !== "db" || pending.current) return;
+    try {
+      const r = await fetch("/api/wl/snapshot", { cache: "no-store" });
+      const j = await r.json();
+      if (j.mode === "db" && !pending.current) commit(j.data);
+    } catch {}
+  }, [commit]);
+
+  // Decide the mode once: saved data if the server has a database, else sample data.
+  useEffect(() => {
+    let live = true;
+    (async () => {
+      let next: DataMode = "demo";
+      let saved: WorkloadData | null = null;
+      try {
+        const r = await fetch("/api/wl/snapshot", { cache: "no-store" });
+        const j = await r.json();
+        if (j.mode === "db") [next, saved] = ["db", j.data];
+        else if (j.mode === "error") toast("The database couldn’t be reached, so this is sample data. Changes won’t be saved.");
+      } catch {}
+      if (!live) return;
+      if (next === "db") setRealClock();
+      modeRef.current = next;
+      setMode(next);
+      commit(saved ?? initialData(nowMs()));
+    })();
+    return () => {
+      live = false;
+    };
+  }, [commit, toast]);
+
+  // Clock tick, plus a refresh of saved data so queues stay current.
+  useEffect(() => {
+    const tick = setInterval(() => setNow(nowMs()), 30_000);
+    const poll = setInterval(refresh, REFRESH_MS);
+    const onFocus = () => refresh();
+    window.addEventListener("focus", onFocus);
+    return () => {
+      clearInterval(tick);
+      clearInterval(poll);
+      window.removeEventListener("focus", onFocus);
+    };
+  }, [refresh]);
+
+  useEffect(() => {
+    try {
+      const v = localStorage.getItem("wfm.viewAs");
+      if (v === "admin" || v === "employee") setViewAsState(v);
+    } catch {}
+  }, []);
+
   const run = useCallback(
-    (fn: (d: WorkloadData, now: number) => Outcome) => {
-      const t = nowMs();
-      const o = fn(dataRef.current, t);
-      dataRef.current = o.data;
-      setData(o.data);
-      setNow(t);
-      if (o.message) toast(o.message);
+    (action: Action) => {
+      if (!dataRef.current) return;
+      const local = applyAction(dataRef.current, action, nowMs());
+      commit(local.data);
+      if (modeRef.current !== "db") {
+        if (local.message) toast(local.message);
+        return;
+      }
+      pending.current++;
+      // Send actions one at a time, in order.
+      queue.current = queue.current.then(async () => {
+        try {
+          const r = await fetch("/api/wl/action", {
+            method: "POST",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify(action),
+          });
+          const j = await r.json().catch(() => ({}));
+          pending.current--;
+          if (!r.ok) {
+            toast(j.error || "That change couldn’t be saved.");
+            await refresh();
+            return;
+          }
+          // Show the saved result once nothing else from this browser is on the way.
+          if (!pending.current) commit(j.data);
+          if (j.message) toast(j.message);
+        } catch {
+          pending.current--;
+          toast("That change couldn’t be saved. Check your connection.");
+          await refresh();
+        }
+      });
     },
-    [toast],
+    [commit, toast, refresh],
   );
 
   const setViewAs = useCallback((v: ViewAs) => {
@@ -108,11 +174,12 @@ export function WorkloadProvider({ children }: { children: React.ReactNode }) {
     } catch {}
   }, []);
 
-  const value = useMemo<Store>(
-    () => ({
+  const value = useMemo<Store | null>(
+    () => data && mode && ({
       data,
       now,
       run,
+      mode,
       toast,
       toasts,
       viewAs,
@@ -129,9 +196,11 @@ export function WorkloadProvider({ children }: { children: React.ReactNode }) {
       dialog,
       setDialog,
     }),
-    [data, now, run, toast, toasts, viewAs, setViewAs, sys, tr, dialog],
+    [data, mode, now, run, toast, toasts, viewAs, setViewAs, sys, tr, dialog],
   );
 
+  // Nothing to show until we know whether this is saved or sample data.
+  if (!value) return null;
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
 }
 

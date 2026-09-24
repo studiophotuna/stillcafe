@@ -1,0 +1,945 @@
+"use client";
+
+import { useMemo, useState } from "react";
+import { Modal } from "@/components/Dialogs";
+import { Blueprint, Icon } from "@/components/ui";
+import {
+  ANNUAL, APPR_WORD, BCP_ST, BUCKETS, CI_DESC, CODES, HTYPE, LEVELS, OOO, POOL, REQ_TYPES, TYPE_L, first,
+} from "@/lib/calendar/constants";
+import { fmt, fmtY, MONL, rng2 } from "@/lib/calendar/dates";
+import { downloadMembersTemplate, downloadScheduleTemplate, readCalendarUpload } from "@/lib/calendar/excel";
+import { useCalendar } from "@/lib/calendar/store";
+import { checkUpload, type UploadRow } from "@/lib/calendar/uploads";
+import { useCalView } from "@/lib/calendar/useCalView";
+import type { BcpStatus, Bucket, Code, HolidayType, Level } from "@/lib/calendar/types";
+import { Chip, Seg } from "./bits";
+
+const PrimaryBtn = ({ children, disabled, onClick }: { children: React.ReactNode; disabled?: boolean; onClick: () => void }) => (
+  <Blueprint as="button" className="btn btn-primary btn-40" style={{ padding: "0 18px" }} disabled={disabled} onClick={onClick}>
+    {children}
+  </Blueprint>
+);
+const Title = ({ children }: { children: React.ReactNode }) => (
+  <div className="dialog-title" style={{ fontSize: 26 }}>
+    {children}
+  </div>
+);
+const Note = ({ children }: { children: React.ReactNode }) => (
+  <div className="banner">{children}</div>
+);
+
+// ── Request leave or schedule change ──
+function RequestDialog({ date }: { date?: string }) {
+  const s = useCalendar();
+  const v = useCalView();
+  const c = s.cal;
+  const [f, setF] = useState({ type: "VL" as Code, start: date || s.today, end: date || s.today, half: "AM" as "AM" | "PM", reason: "" });
+  const set = (k: keyof typeof f, val: string) =>
+    setF((x) => {
+      const n = { ...x, [k]: val };
+      if (k === "start" && n.end < val) n.end = val;
+      return n;
+    });
+  const close = () => s.setDialog(null);
+  const isHalf = f.type === "HD";
+  const nReq = isHalf ? (c.workdays(f.start, f.start) ? 0.5 : 0) : c.workdays(f.start, f.end);
+  const meP = v.meP;
+  const remaining = c.poolOf(meP) - c.usedOf(meP);
+  const elLeft = (meP.elEnt ?? 5) - c.elUsedOf(meP);
+  const left = POOL.includes(f.type) ? remaining - nReq : f.type === "EL" ? elLeft - nReq : null;
+  const daysLine =
+    nReq === 0
+      ? "The dates you picked have no working days. Choose a weekday that isn’t a holiday."
+      : `${nReq} working day${nReq === 1 ? "" : "s"}` +
+        (left === null
+          ? " · doesn’t use your leave balance"
+          : left < 0
+            ? ` · this is more than your ${f.type === "EL" ? "emergency leave" : "VL + SL"} balance`
+            : ` · ${left}${f.type === "EL" ? " emergency leave" : " VL + SL"} days left after this`);
+  const routing = v.myBranches.map((b) => {
+    const n = s.data.people.filter((x) => x.id !== s.me && c.O.inN(x, b.id) && !(x.resign && x.resign < s.today)).length;
+    const admins = (b.admins ?? []).map((i) => c.people.get(i)?.name).filter(Boolean);
+    return {
+      id: b.id,
+      name: b.name,
+      text: b.mode === "auto" ? "Approved automatically" : `Waits for approval from ${admins.join(", ") || "the team admin"}`,
+      sub:
+        b.mode === "auto"
+          ? b.invite && OOO.includes(f.type)
+            ? `Outlook reminder goes to ${n} team members`
+            : "You’ll get a confirmation email"
+          : b.notifyAdmin
+            ? "They’ll get an email with Approve and Decline buttons"
+            : "",
+    };
+  });
+  return (
+    <Modal onClose={close} width={540}>
+      <div className="dialog-scroll" style={{ gap: 12, padding: 20 }}>
+        <Title>Request leave or schedule change</Title>
+        <div className="field">
+          <label htmlFor="rq-type">Type</label>
+          <select id="rq-type" className="input" value={f.type} onChange={(e) => set("type", e.target.value)}>
+            {REQ_TYPES.map((k) => (
+              <option key={k} value={k}>
+                {CODES[k].label} ({k})
+              </option>
+            ))}
+          </select>
+        </div>
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+          <div className="field">
+            <label htmlFor="rq-start">{isHalf ? "Date" : "First day"}</label>
+            <input id="rq-start" className="input" type="date" value={f.start} onChange={(e) => set("start", e.target.value)} />
+          </div>
+          {isHalf ? (
+            <div className="field">
+              <label>Which half</label>
+              <Seg name="half" full value={f.half} options={[["AM", "Morning"], ["PM", "Afternoon"]]} onChange={(val) => set("half", val)} />
+            </div>
+          ) : (
+            <div className="field">
+              <label htmlFor="rq-end">Last day</label>
+              <input id="rq-end" className="input" type="date" value={f.end} min={f.start} onChange={(e) => set("end", e.target.value)} />
+            </div>
+          )}
+        </div>
+        <Note>{daysLine}</Note>
+        <div className="field">
+          <label htmlFor="rq-reason">Reason (optional)</label>
+          <textarea id="rq-reason" className="input" value={f.reason} onChange={(e) => set("reason", e.target.value)} placeholder="Visible to your team admins" style={{ minHeight: 70 }} />
+        </div>
+        <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+          <span className="small" style={{ fontSize: 12 }}>What happens next</span>
+          {routing.map((r) => (
+            <div key={r.id} style={{ display: "flex", gap: 10, alignItems: "flex-start", fontSize: 13.5 }}>
+              <span className="tag tag-outline" style={{ flex: "none", minWidth: 120, justifyContent: "center" }}>
+                {r.name}
+              </span>
+              <span style={{ display: "flex", flexDirection: "column" }}>
+                <span>{r.text}</span>
+                <span className="small" style={{ fontSize: 12 }}>{r.sub}</span>
+              </span>
+            </div>
+          ))}
+        </div>
+        <div className="dialog-actions" style={{ gap: 10 }}>
+          <button className="btn btn-secondary btn-40" onClick={close}>
+            Cancel
+          </button>
+          <PrimaryBtn
+            disabled={nReq === 0}
+            onClick={() => {
+              s.run({ type: "submitRequest", pid: s.me, form: f, adminBid: null, actor: s.me });
+              close();
+            }}
+          >
+            Submit request
+          </PrimaryBtn>
+        </div>
+      </div>
+    </Modal>
+  );
+}
+
+// ── Admin: change one person's day ──
+function CellDialog({ pid, date }: { pid: number; date: string }) {
+  const s = useCalendar();
+  const v = useCalView();
+  const c = s.cal;
+  const p = c.person(pid);
+  const cell = c.raw(p, date, v.bid);
+  const close = () => s.setDialog(null);
+  const codes: Code[] = (c.holFor(p, date) ? (["HDY"] as Code[]) : []).concat(["RTO", "WFH", "VL", "SL", "EL", "HD", "BT", "RD"]);
+  return (
+    <Modal onClose={close} width={480} pad>
+      <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
+        <Title>{p.name}</Title>
+        <span className="muted">
+          {fmt(date)} {date.slice(0, 4)} · currently {cell.code ? CODES[cell.code].label.toLowerCase() + (cell.pending ? " (pending)" : "") : "weekend"}
+        </span>
+      </div>
+      {cell.req && (
+        <div className="banner" style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10, fontSize: 13.5 }}>
+          <span>
+            {CODES[cell.req.type].label} {rng2(cell.req.start, cell.req.end)} · {APPR_WORD[cell.req.approvals[v.bid]]}
+          </span>
+          <button
+            className="btn btn-ghost"
+            style={{ color: "var(--color-accent-800)" }}
+            onClick={() => {
+              s.run({ type: "cancelRequest", rid: cell.req!.id, via: "admin" });
+              close();
+            }}
+          >
+            Remove leave
+          </button>
+        </div>
+      )}
+      <span className="small" style={{ fontSize: 12 }}>Set this day to</span>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(2,1fr)", gap: 8 }}>
+        {codes.map((k) => (
+          <button
+            key={k}
+            className="btn btn-secondary"
+            style={{ justifyContent: "flex-start", minHeight: 44, gap: 10 }}
+            onClick={() => {
+              if (ANNUAL.includes(k))
+                s.run({
+                  type: "submitRequest",
+                  pid,
+                  form: { type: k, start: date, end: date, half: "AM", reason: "Entered by " + v.meP.name },
+                  adminBid: v.bid,
+                  actor: s.me,
+                });
+              else s.run({ type: "setOverride", pid, date, code: k });
+              close();
+            }}
+          >
+            <Chip s={CODES[k]}>{k}</Chip>
+            {CODES[k].label}
+          </button>
+        ))}
+      </div>
+      <div className="field">
+        <label htmlFor="cell-shift">Shift this day</label>
+        <select id="cell-shift" className="input" value={c.shiftFor(p, date)} onChange={(e) => s.run({ type: "setShiftDay", pid, date, shift: e.target.value })}>
+          {s.data.shifts.map((x) => (
+            <option key={x.id} value={x.id}>
+              {x.name} ({x.start}–{x.end})
+            </option>
+          ))}
+        </select>
+      </div>
+      <span className="small">
+        Leave you enter here is approved for {v.branch.name}. Other teams {first(p.name)} belongs to follow their own approval setting.
+      </span>
+      <div className="dialog-actions" style={{ justifyContent: "space-between", gap: 10 }}>
+        <button
+          className="btn btn-ghost"
+          onClick={() => {
+            s.run({ type: "setOverride", pid, date, code: null });
+            close();
+          }}
+        >
+          Reset to usual schedule
+        </button>
+        <button className="btn btn-secondary btn-40" onClick={close}>
+          Close
+        </button>
+      </div>
+    </Modal>
+  );
+}
+
+// ── Resignation ──
+function ResignDialog({ pid }: { pid: number }) {
+  const s = useCalendar();
+  const p = s.cal.person(pid);
+  const [d, setD] = useState(p.resign || "");
+  const close = () => s.setDialog(null);
+  let nm = "";
+  if (d) {
+    const [y, m] = d.split("-").map(Number);
+    nm = `${MONL[m % 12]} ${m === 12 ? y + 1 : y}`;
+  }
+  return (
+    <Modal onClose={close} pad>
+      <Title>Resignation · {p.name}</Title>
+      <div className="field">
+        <label htmlFor="res-date">Last working day</label>
+        <input id="res-date" className="input" type="date" value={d} onChange={(e) => setD(e.target.value)} />
+      </div>
+      <Note>
+        {d
+          ? `${first(p.name)} stays on the calendar until ${fmtY(d)} and won’t appear from ${nm} onwards, on every calendar they’re allocated to. Leave requests after this date are cancelled.`
+          : "Pick the last working day."}
+      </Note>
+      <div className="dialog-actions" style={{ justifyContent: "space-between", gap: 10, flexWrap: "wrap" }}>
+        {p.resign && (
+          <button
+            className="btn btn-ghost"
+            onClick={() => {
+              s.run({ type: "setResign", pid, date: null });
+              close();
+            }}
+          >
+            Withdraw resignation
+          </button>
+        )}
+        <div style={{ display: "flex", gap: 10, marginLeft: "auto" }}>
+          <button className="btn btn-secondary btn-40" onClick={close}>
+            Cancel
+          </button>
+          <PrimaryBtn
+            disabled={!d}
+            onClick={() => {
+              s.run({ type: "setResign", pid, date: d });
+              close();
+            }}
+          >
+            Save
+          </PrimaryBtn>
+        </div>
+      </div>
+    </Modal>
+  );
+}
+
+// ── Add / edit member ──
+interface AllocRow {
+  dept: string;
+  tower: string;
+  branch: string;
+  system: string;
+  trade: string;
+}
+function MemberDialog({ pid: pid0 }: { pid: number | null }) {
+  const s = useCalendar();
+  const v = useCalView();
+  const { O } = s.cal;
+  const allocOf = (a: string): AllocRow => ({
+    dept: O.up(a, "dept")?.id ?? "",
+    tower: O.up(a, "tower")?.id ?? "",
+    branch: O.up(a, "branch")?.id ?? "",
+    system: O.up(a, "system")?.id ?? "",
+    trade: O.up(a, "trade")?.id ?? "",
+  });
+  const isNew = pid0 === null;
+  const init = pid0 !== null ? s.cal.person(pid0) : null;
+  const [pid, setPid] = useState<number | null>(pid0);
+  const [level, setLevel] = useState<Level>(init?.level ?? "member");
+  const [shift, setShift] = useState(init?.shift ?? "D");
+  const [adminHere, setAdminHere] = useState(init ? (v.branch.admins ?? []).includes(init.id) : false);
+  const [alloc, setAlloc] = useState<AllocRow[]>(
+    init
+      ? init.assign.map(allocOf)
+      : [{ dept: v.dept.id, tower: v.tower.id, branch: v.bid, system: v.system !== "all" ? v.system : "", trade: v.trade !== "all" ? v.trade : "" }],
+  );
+  const close = () => s.setDialog(null);
+  const setA = (i: number, k: keyof AllocRow, val: string) =>
+    setAlloc((rows) =>
+      rows.map((r, j) => {
+        if (j !== i) return r;
+        const n = { ...r, [k]: val };
+        if (k === "dept") Object.assign(n, { tower: "", branch: "", system: "", trade: "" });
+        if (k === "tower") Object.assign(n, { branch: "", system: "", trade: "" });
+        if (k === "branch") Object.assign(n, { system: "", trade: "" });
+        if (k === "system") n.trade = "";
+        return n;
+      }),
+    );
+  const cands = s.data.people
+    .filter((p) => !O.inN(p, v.bid) && !(p.resign && p.resign < s.today))
+    .sort((a, b) => a.name.localeCompare(b.name));
+  const valid = alloc.length > 0 && alloc.every((r) => r.dept && r.tower && r.branch) && pid !== null;
+  const opts = (l: { id: string; name: string }[]) =>
+    l.map((o) => (
+      <option key={o.id} value={o.id}>
+        {o.name}
+      </option>
+    ));
+  return (
+    <Modal onClose={close} width={980}>
+      <div className="dialog-scroll" style={{ padding: 20 }}>
+        <Title>{isNew ? "Add member" : "Edit " + init!.name}</Title>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(220px,1fr))", gap: 12 }}>
+          {isNew && (
+            <div className="field">
+              <label htmlFor="mem-p">Employee</label>
+              <select
+                id="mem-p"
+                className="input"
+                value={pid === null ? "" : String(pid)}
+                onChange={(e) => {
+                  const val = e.target.value;
+                  if (val === "") return setPid(null);
+                  const p = s.cal.person(Number(val));
+                  setPid(p.id);
+                  setLevel(p.level);
+                  setShift(p.shift);
+                  setAlloc(p.assign.map(allocOf).concat(alloc.filter((r) => r.branch === v.bid)));
+                }}
+              >
+                <option value="">Choose a person</option>
+                {cands.map((p) => (
+                  <option key={p.id} value={p.id}>
+                    {p.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
+          <div className="field">
+            <label htmlFor="mem-l">Role</label>
+            <select id="mem-l" className="input" value={level} onChange={(e) => setLevel(e.target.value as Level)}>
+              {(Object.keys(LEVELS) as Level[]).map((k) => (
+                <option key={k} value={k}>
+                  {LEVELS[k]}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div className="field">
+            <label htmlFor="mem-s">Default shift</label>
+            <select id="mem-s" className="input" value={shift} onChange={(e) => setShift(e.target.value)}>
+              {s.data.shifts.map((x) => (
+                <option key={x.id} value={x.id}>
+                  {x.name} ({x.start}–{x.end})
+                </option>
+              ))}
+            </select>
+          </div>
+          <label style={{ display: "flex", gap: 10, alignItems: "center", cursor: "pointer", alignSelf: "end", minHeight: 36 }}>
+            <input type="checkbox" className="check" checked={adminHere} onChange={() => setAdminHere(!adminHere)} />
+            Admin of {v.branch.name}
+          </label>
+        </div>
+        <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+          <span className="small" style={{ fontSize: 12 }}>
+            Allocations · their schedule and leave show on every calendar they’re allocated to
+          </span>
+          {alloc.map((r, i) => (
+            <div key={i} style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(140px,1fr)) 36px", gap: 8, alignItems: "end", padding: 12, border: "1px solid var(--color-divider)" }}>
+              <div className="field">
+                <label>Department *</label>
+                <select className="input" value={r.dept} onChange={(e) => setA(i, "dept", e.target.value)}>
+                  <option value="">Choose</option>
+                  {opts(s.data.nodes.filter((n) => n.type === "dept"))}
+                </select>
+              </div>
+              <div className="field">
+                <label>Tower *</label>
+                <select className="input" value={r.tower} onChange={(e) => setA(i, "tower", e.target.value)}>
+                  <option value="">Choose</option>
+                  {r.dept && opts(O.kids(r.dept, "tower"))}
+                </select>
+              </div>
+              <div className="field">
+                <label>Team *</label>
+                <select className="input" value={r.branch} onChange={(e) => setA(i, "branch", e.target.value)}>
+                  <option value="">Choose</option>
+                  {r.tower && opts(O.kids(r.tower, "branch"))}
+                </select>
+              </div>
+              <div className="field">
+                <label>System</label>
+                <select className="input" value={r.system} onChange={(e) => setA(i, "system", e.target.value)}>
+                  <option value="">None</option>
+                  {r.branch && opts(O.kids(r.branch, "system"))}
+                </select>
+              </div>
+              <div className="field">
+                <label>Trade</label>
+                <select className="input" value={r.trade} onChange={(e) => setA(i, "trade", e.target.value)}>
+                  <option value="">None</option>
+                  {r.system ? opts(O.kids(r.system, "trade")) : r.branch ? opts(O.kids(r.branch, "trade")) : null}
+                </select>
+              </div>
+              <button className="btn btn-ghost btn-icon" onClick={() => setAlloc(alloc.filter((_, j) => j !== i))} title="Remove allocation" aria-label="Remove allocation" style={{ color: "var(--color-neutral-700)" }}>
+                <Icon name="x" size={16} />
+              </button>
+            </div>
+          ))}
+          <div>
+            <button className="btn btn-secondary btn-36" onClick={() => setAlloc(alloc.concat({ dept: v.dept.id, tower: "", branch: "", system: "", trade: "" }))}>
+              <Icon name="plus" size={16} />
+              Add another allocation
+            </button>
+          </div>
+        </div>
+        <div className="dialog-actions" style={{ gap: 10 }}>
+          <button className="btn btn-secondary btn-40" onClick={close}>
+            Cancel
+          </button>
+          <PrimaryBtn
+            disabled={!valid}
+            onClick={() => {
+              const assign = [...new Set(alloc.map((r) => r.trade || r.system || r.branch))];
+              s.run({ type: "saveMember", pid: pid!, level, shift, adminHere, bid: v.bid, assign, isNew });
+              close();
+            }}
+          >
+            Save
+          </PrimaryBtn>
+        </div>
+      </div>
+    </Modal>
+  );
+}
+
+// ── Organization: add / rename / delete ──
+function NodeDialog({ mode, id, ntype, parent }: { mode: "add" | "rename"; id?: string; ntype: keyof typeof TYPE_L; parent?: string | null }) {
+  const s = useCalendar();
+  const { O } = s.cal;
+  const [name, setName] = useState(mode === "rename" && id ? O.by[id].name : "");
+  const close = () => s.setDialog(null);
+  const par = parent ? O.by[parent] : null;
+  const ph = {
+    dept: "e.g. BSS (Business Support Services)",
+    tower: "e.g. A&S Support - Rate Management",
+    branch: "e.g. Rate Management",
+    system: "e.g. GPM",
+    trade: "e.g. FEWB",
+  }[ntype];
+  return (
+    <Modal onClose={close} pad>
+      <Title>{mode === "add" ? `Add ${TYPE_L[ntype].toLowerCase()}${par ? " to " + par.name : ""}` : `Rename ${TYPE_L[ntype].toLowerCase()}`}</Title>
+      <div className="field">
+        <label htmlFor="node-name">Name</label>
+        <input id="node-name" className="input" autoFocus value={name} onChange={(e) => setName(e.target.value)} placeholder={ph} />
+      </div>
+      {mode === "add" && ntype === "branch" && <span className="small" style={{ fontSize: 13 }}>New teams start with admin approval and you as the admin. Change this in Settings.</span>}
+      <div className="dialog-actions" style={{ gap: 10 }}>
+        <button className="btn btn-secondary btn-40" onClick={close}>
+          Cancel
+        </button>
+        <PrimaryBtn
+          disabled={!name.trim()}
+          onClick={() => {
+            if (mode === "rename" && id) s.run({ type: "renameNode", id, name });
+            else s.run({ type: "addNode", ntype, parent: parent ?? null, name, actor: s.me });
+            close();
+          }}
+        >
+          Save
+        </PrimaryBtn>
+      </div>
+    </Modal>
+  );
+}
+
+function DelDialog({ id }: { id: string }) {
+  const s = useCalendar();
+  const { O } = s.cal;
+  const n = O.by[id];
+  const close = () => s.setDialog(null);
+  if (!n) return null;
+  const ids = [n.id].concat(O.desc(n.id).map((x) => x.id));
+  const affected = s.data.people.filter((p) => p.assign.some((a) => ids.includes(a)));
+  const soft = n.type === "system" || n.type === "trade";
+  const par = n.parent ? O.by[n.parent] : null;
+  const text =
+    (ids.length > 1 ? `This also deletes ${ids.length - 1} item(s) inside it. ` : "") +
+    (affected.length
+      ? soft
+        ? `${affected.length} people allocated here will stay in ${par?.name}.`
+        : `${affected.length} people will lose this allocation. Anyone left with no allocation drops off every calendar.`
+      : "No one is allocated here.");
+  return (
+    <Modal onClose={close} pad>
+      <Title>Delete {n.name}?</Title>
+      <p className="dialog-body" style={{ margin: 0, opacity: 1 }}>
+        {text}
+      </p>
+      <div className="dialog-actions" style={{ gap: 10 }}>
+        <button className="btn btn-secondary btn-40" onClick={close}>
+          Cancel
+        </button>
+        <PrimaryBtn
+          onClick={() => {
+            s.run({ type: "deleteNode", id });
+            close();
+          }}
+        >
+          Delete
+        </PrimaryBtn>
+      </div>
+    </Modal>
+  );
+}
+
+// ── Shifts ──
+function ShiftDialog({ orig }: { orig: string | null }) {
+  const s = useCalendar();
+  const x0 = orig ? s.data.shifts.find((x) => x.id === orig) : null;
+  const [r, setR] = useState({ id: x0?.id ?? "", name: x0?.name ?? "", start: x0?.start ?? "09:00", end: x0?.end ?? "18:00", bucket: (x0?.bucket ?? "morning") as Bucket });
+  const close = () => s.setDialog(null);
+  const dup = !orig && s.data.shifts.some((x) => x.id.toLowerCase() === r.id.toLowerCase());
+  const invalid = !r.id.trim() || !r.name.trim() || !r.start || !r.end || dup;
+  return (
+    <Modal onClose={close} width={460}>
+      <div className="dialog-scroll" style={{ gap: 12, padding: 20 }}>
+        <Title>{orig ? "Edit shift" : "Add shift"}</Title>
+        <div style={{ display: "grid", gridTemplateColumns: "120px 1fr", gap: 12 }}>
+          <div className="field">
+            <label htmlFor="sh-id">Code</label>
+            <input id="sh-id" className="input" value={r.id} disabled={!!orig} placeholder="e.g. MID" onChange={(e) => setR({ ...r, id: e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, "") })} />
+          </div>
+          <div className="field">
+            <label htmlFor="sh-name">Name</label>
+            <input id="sh-name" className="input" value={r.name} placeholder="e.g. Midshift" onChange={(e) => setR({ ...r, name: e.target.value })} />
+          </div>
+        </div>
+        {dup && <span style={{ fontSize: 12.5, color: "var(--color-accent-800)" }}>That code is already used.</span>}
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+          <div className="field">
+            <label htmlFor="sh-s">Starts</label>
+            <input id="sh-s" className="input" type="time" value={r.start} onChange={(e) => setR({ ...r, start: e.target.value })} />
+          </div>
+          <div className="field">
+            <label htmlFor="sh-e">Ends</label>
+            <input id="sh-e" className="input" type="time" value={r.end} onChange={(e) => setR({ ...r, end: e.target.value })} />
+          </div>
+        </div>
+        <div className="field">
+          <label htmlFor="sh-b">Manning group</label>
+          <select id="sh-b" className="input" value={r.bucket} onChange={(e) => setR({ ...r, bucket: e.target.value as Bucket })}>
+            {(Object.keys(BUCKETS) as Bucket[]).map((k) => (
+              <option key={k} value={k}>
+                {BUCKETS[k]}
+              </option>
+            ))}
+          </select>
+        </div>
+        <div className="dialog-actions" style={{ gap: 10 }}>
+          <button className="btn btn-secondary btn-40" onClick={close}>
+            Cancel
+          </button>
+          <PrimaryBtn
+            disabled={invalid}
+            onClick={() => {
+              s.run({ type: "saveShift", orig, rec: r });
+              close();
+            }}
+          >
+            Save
+          </PrimaryBtn>
+        </div>
+      </div>
+    </Modal>
+  );
+}
+
+// ── Holidays ──
+export function holidayScopeOpts(s: ReturnType<typeof useCalendar>) {
+  const { O } = s.cal;
+  const o = [{ id: "all", name: "Everyone (all departments)" }];
+  s.data.nodes
+    .filter((n) => n.type === "dept")
+    .forEach((d) => {
+      o.push({ id: d.id, name: d.name });
+      O.kids(d.id, "tower").forEach((t) => {
+        o.push({ id: t.id, name: "— " + t.name });
+        O.kids(t.id, "branch").forEach((b) => o.push({ id: b.id, name: "—— " + b.name }));
+      });
+    });
+  return o;
+}
+function HolDialog({ id }: { id: string | null }) {
+  const s = useCalendar();
+  const h0 = id ? s.data.holidays.find((x) => x.id === id) : null;
+  const [r, setR] = useState({ date: h0?.date ?? "", name: h0?.name ?? "", type: (h0?.type ?? "regular") as HolidayType, scope: h0?.scope ?? "all" });
+  const close = () => s.setDialog(null);
+  return (
+    <Modal onClose={close} pad>
+      <Title>{id ? "Edit holiday" : "Add holiday"}</Title>
+      <div className="field">
+        <label htmlFor="hol-d">Date</label>
+        <input id="hol-d" className="input" type="date" value={r.date} onChange={(e) => setR({ ...r, date: e.target.value })} />
+      </div>
+      <div className="field">
+        <label htmlFor="hol-n">Name</label>
+        <input id="hol-n" className="input" value={r.name} placeholder="e.g. Independence Day" onChange={(e) => setR({ ...r, name: e.target.value })} />
+      </div>
+      <div className="field">
+        <label htmlFor="hol-t">Type</label>
+        <select id="hol-t" className="input" value={r.type} onChange={(e) => setR({ ...r, type: e.target.value as HolidayType })}>
+          {(Object.keys(HTYPE) as HolidayType[]).map((k) => (
+            <option key={k} value={k}>
+              {HTYPE[k]}
+            </option>
+          ))}
+        </select>
+      </div>
+      <div className="field">
+        <label htmlFor="hol-s">Applies to</label>
+        <select id="hol-s" className="input" value={r.scope} onChange={(e) => setR({ ...r, scope: e.target.value })}>
+          {holidayScopeOpts(s).map((o) => (
+            <option key={o.id} value={o.id}>
+              {o.name}
+            </option>
+          ))}
+        </select>
+      </div>
+      <div className="dialog-actions" style={{ gap: 10 }}>
+        <button className="btn btn-secondary btn-40" onClick={close}>
+          Cancel
+        </button>
+        <PrimaryBtn
+          disabled={!r.date || !r.name.trim()}
+          onClick={() => {
+            s.run({ type: "saveHoliday", rec: { id: id ?? "H" + Date.now().toString(36), ...r }, isNew: !id });
+            close();
+          }}
+        >
+          Save
+        </PrimaryBtn>
+      </div>
+    </Modal>
+  );
+}
+
+// ── Uploads (members / schedule) ──
+function UploadDialog({ mode: mode0 }: { mode: "members" | "schedule" }) {
+  const s = useCalendar();
+  const v = useCalView();
+  const [mode, setMode] = useState(mode0);
+  const [file, setFile] = useState<{ name: string; rows: UploadRow[] } | null>(null);
+  const [month, setMonth] = useState(`${s.y}-${String(s.m + 1).padStart(2, "0")}`);
+  const close = () => s.setDialog(null);
+  const all = useMemo(() => (file ? checkUpload(s.cal, mode, file.rows, v.bid) : []), [file, s.cal, mode, v.bid]);
+  const checked = all.filter((c) => !c.skip);
+  const skipped = all.length - checked.length;
+  const okN = checked.filter((c) => c.ok).length;
+  const switchMode = (m: "members" | "schedule") => {
+    setMode(m);
+    setFile(null);
+  };
+  return (
+    <Modal onClose={close} width={760}>
+      <div className="dialog-scroll" style={{ gap: 12, padding: 20 }}>
+        <Title>{mode === "members" ? "Upload members" : "Upload schedule"}</Title>
+        <Seg name="upmode" value={mode} options={[["members", "Members"], ["schedule", "Schedule"]]} onChange={switchMode} style={{ alignSelf: "flex-start" }} />
+        <p style={{ margin: 0, fontSize: 13.5, color: "var(--color-neutral-800)", maxWidth: "70ch" }}>
+          {mode === "members"
+            ? `The Excel template has drop-downs for Role, Department, Tower, Team, System, Trade and Default Shift, filled from your current selection (${v.unitLabel}). One row per allocation; existing people (matched by email) get the new allocation added.`
+            : `The Excel template is a calendar for the month you pick: one row per person in ${v.unitLabel}, one column per day, with a Status tab and a Shift tab. Each cell has a drop-down and is pre-filled with the current schedule, so only change what you need. Leave codes are recorded as approved.`}
+        </p>
+        {mode === "schedule" && (
+          <div className="field" style={{ maxWidth: 220 }}>
+            <label htmlFor="up-month">Template month</label>
+            <input id="up-month" className="input" type="month" value={month} onChange={(e) => setMonth(e.target.value)} />
+          </div>
+        )}
+        <div className="row">
+          <button
+            className="btn btn-secondary btn-36"
+            onClick={async () => {
+              try {
+                const name =
+                  mode === "schedule"
+                    ? await downloadScheduleTemplate(s.cal, v.unitId, v.unitLabel, v.bid, month)
+                    : await downloadMembersTemplate(s.cal, v.dept, v.tower, v.branch);
+                s.toast(name + " downloaded.");
+              } catch {
+                s.toast("The template couldn’t be created. Try again.");
+              }
+            }}
+          >
+            <Icon name="download" size={16} />
+            Download template (.xlsx)
+          </button>
+          <label className="btn btn-secondary btn-36 file-btn">
+            Choose file (.xlsx or .csv)
+            <input
+              type="file"
+              accept=".xlsx,.csv"
+              onChange={async (e) => {
+                const f = e.target.files?.[0];
+                e.target.value = "";
+                if (!f) return;
+                try {
+                  setFile({ name: f.name, rows: await readCalendarUpload(f, mode) });
+                } catch {
+                  s.toast("That file couldn’t be read. Use .xlsx or .csv.");
+                }
+              }}
+            />
+          </label>
+          <span style={{ fontSize: 13, color: "var(--color-neutral-700)" }}>{file?.name}</span>
+        </div>
+        {file && (
+          <>
+            <Note>
+              {checked.length} changes · {okN} ready · {checked.length - okN} with errors{skipped ? ` · ${skipped} unchanged cells skipped` : ""}
+            </Note>
+            <div className="boxed-scroll" style={{ maxHeight: 280 }}>
+              <table className="table">
+                <thead>
+                  <tr>
+                    <th>Row</th>
+                    <th>Details</th>
+                    <th>Status</th>
+                    <th>Note</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {checked.slice(0, 200).map((u, i) => (
+                    <tr key={i}>
+                      <td className="muted">{u.n}</td>
+                      <td>{u.summary}</td>
+                      <td>
+                        <span className={"tag " + u.stCls}>{u.stText}</span>
+                      </td>
+                      <td style={{ fontSize: 13, color: "var(--color-neutral-800)" }}>{u.msg}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </>
+        )}
+        <div className="dialog-actions" style={{ gap: 10 }}>
+          <button className="btn btn-secondary btn-40" onClick={close}>
+            Cancel
+          </button>
+          {file && (
+            <PrimaryBtn
+              disabled={!okN}
+              onClick={() => {
+                s.run({ type: "importUpload", mode, rows: file.rows, bid: v.bid });
+                close();
+              }}
+            >
+              Import {okN} row{okN === 1 ? "" : "s"}
+            </PrimaryBtn>
+          )}
+        </div>
+      </div>
+    </Modal>
+  );
+}
+
+// ── BCP check-in and event ──
+function CheckinDialog({ pid, evId }: { pid: number; evId: string }) {
+  const s = useCalendar();
+  const ev = s.data.bcpEvents.find((e) => e.id === evId);
+  const cur = (s.data.checkins[evId] || {})[pid];
+  const [st, setSt] = useState<BcpStatus>(cur && cur.status !== "none" ? cur.status : "wfh");
+  const [note, setNote] = useState(cur?.note ?? "");
+  const close = () => s.setDialog(null);
+  if (!ev) return null;
+  const p = s.cal.person(pid);
+  return (
+    <Modal onClose={close} width={520}>
+      <div className="dialog-scroll" style={{ gap: 12, padding: 20 }}>
+        <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
+          <Title>{pid === s.me ? "BCP check-in" : "Update status · " + p.name}</Title>
+          <span className="muted">{ev.name}</span>
+        </div>
+        <div role="radiogroup" style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+          {(Object.keys(CI_DESC) as (keyof typeof CI_DESC)[]).map((k) => (
+            <button key={k} role="radio" aria-checked={st === k} className="pick-card" style={{ alignItems: "center", minHeight: 56 }} onClick={() => setSt(k)}>
+              <span className="mode-radio" style={{ marginTop: 0 }}>
+                <span style={{ background: st === k ? "var(--color-accent)" : "transparent" }} />
+              </span>
+              <span className="mode-text">
+                <strong style={{ fontWeight: 500, fontSize: 15 }}>{BCP_ST[k]}</strong>
+                <span>{CI_DESC[k]}</span>
+              </span>
+            </button>
+          ))}
+        </div>
+        <div className="field">
+          <label htmlFor="ci-note">Note (optional)</label>
+          <textarea id="ci-note" className="input" value={note} onChange={(e) => setNote(e.target.value)} placeholder="e.g. No power since 10:00, using mobile data" style={{ minHeight: 64 }} />
+        </div>
+        <div className="dialog-actions" style={{ gap: 10 }}>
+          <button className="btn btn-secondary btn-40" onClick={close}>
+            Cancel
+          </button>
+          <PrimaryBtn
+            onClick={() => {
+              s.run({ type: "checkin", evId, pid, status: st, note, actor: s.me });
+              close();
+            }}
+          >
+            Save status
+          </PrimaryBtn>
+        </div>
+      </div>
+    </Modal>
+  );
+}
+
+export function bcpScopeOpts(s: ReturnType<typeof useCalendar>, deptId: string) {
+  const { O } = s.cal;
+  const o = [{ id: deptId, name: O.by[deptId].name }];
+  O.kids(deptId, "tower").forEach((t) => {
+    o.push({ id: t.id, name: "— " + t.name });
+    O.kids(t.id, "branch").forEach((b) => o.push({ id: b.id, name: "—— " + b.name }));
+  });
+  return o;
+}
+function EventDialog() {
+  const s = useCalendar();
+  const v = useCalView();
+  const [r, setR] = useState({ name: "", start: s.today, scope: v.dept.id, note: "" });
+  const close = () => s.setDialog(null);
+  return (
+    <Modal onClose={close} width={500}>
+      <div className="dialog-scroll" style={{ gap: 12, padding: 20 }}>
+        <Title>Start BCP event</Title>
+        <div className="field">
+          <label htmlFor="ev-n">Event name</label>
+          <input id="ev-n" className="input" value={r.name} placeholder="e.g. Typhoon Helen – Signal No. 3" onChange={(e) => setR({ ...r, name: e.target.value })} />
+        </div>
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+          <div className="field">
+            <label htmlFor="ev-s">Start date</label>
+            <input id="ev-s" className="input" type="date" value={r.start} onChange={(e) => setR({ ...r, start: e.target.value })} />
+          </div>
+          <div className="field">
+            <label htmlFor="ev-sc">Who needs to check in</label>
+            <select id="ev-sc" className="input" value={r.scope} onChange={(e) => setR({ ...r, scope: e.target.value })}>
+              {bcpScopeOpts(s, v.dept.id).map((o) => (
+                <option key={o.id} value={o.id}>
+                  {o.name}
+                </option>
+              ))}
+            </select>
+          </div>
+        </div>
+        <div className="field">
+          <label htmlFor="ev-note">Message to staff</label>
+          <textarea id="ev-note" className="input" value={r.note} placeholder="e.g. Office is closed. Work from home if it is safe to do so." onChange={(e) => setR({ ...r, note: e.target.value })} style={{ minHeight: 70 }} />
+        </div>
+        <span className="small" style={{ fontSize: 13 }}>Everyone in scope sees a check-in banner in Workforce Management and gets an email.</span>
+        <div className="dialog-actions" style={{ gap: 10 }}>
+          <button className="btn btn-secondary btn-40" onClick={close}>
+            Cancel
+          </button>
+          <PrimaryBtn
+            disabled={!r.name.trim() || !r.start}
+            onClick={() => {
+              s.run({ type: "startEvent", ...r });
+              close();
+            }}
+          >
+            Start event
+          </PrimaryBtn>
+        </div>
+      </div>
+    </Modal>
+  );
+}
+
+export function CalDialogs() {
+  const { dialog: d } = useCalendar();
+  if (!d) return null;
+  switch (d.kind) {
+    case "request":
+      return <RequestDialog date={d.date} />;
+    case "cell":
+      return <CellDialog key={d.pid + d.date} pid={d.pid} date={d.date} />;
+    case "resign":
+      return <ResignDialog pid={d.pid} />;
+    case "member":
+      return <MemberDialog pid={d.pid} />;
+    case "node":
+      return <NodeDialog mode={d.mode} id={d.id} ntype={d.ntype} parent={d.parent} />;
+    case "del":
+      return <DelDialog id={d.id} />;
+    case "shift":
+      return <ShiftDialog orig={d.orig} />;
+    case "hol":
+      return <HolDialog id={d.id} />;
+    case "upload":
+      return <UploadDialog mode={d.mode} />;
+    case "checkin":
+      return <CheckinDialog pid={d.pid} evId={d.evId} />;
+    case "event":
+      return <EventDialog />;
+  }
+}

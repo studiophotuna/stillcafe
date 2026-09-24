@@ -8,7 +8,7 @@ import type { OrderRule, Priority, Settings } from "@/lib/workload/types";
 export default function AllocationPage() {
   const { data, run, toast } = useWorkload();
   const s = data.settings;
-  const set = (patch: Partial<Settings>) => run((d) => ({ data: { ...d, settings: { ...d.settings, ...patch } } }));
+  const set = (patch: Partial<Settings>) => run({ type: "setSettings", patch });
 
   return (
     <>

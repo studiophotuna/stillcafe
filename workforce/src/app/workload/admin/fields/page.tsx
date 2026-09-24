@@ -15,7 +15,7 @@ const BUILTIN = [
 
 export default function FieldsPage() {
   const { data, run, toast } = useWorkload();
-  const setFields = (fn: (f: TaskField[]) => TaskField[]) => run((d) => ({ data: { ...d, fields: fn(d.fields) } }));
+  const setFields = (fn: (f: TaskField[]) => TaskField[]) => run({ type: "setFields", fields: fn(data.fields) });
   const setF = (i: number, patch: Partial<TaskField>) => setFields((fs) => fs.map((f, j) => (j === i ? { ...f, ...patch } : f)));
   const move = (i: number, dir: number) =>
     setFields((fs) => {

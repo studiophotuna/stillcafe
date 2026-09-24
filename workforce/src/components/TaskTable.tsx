@@ -1,7 +1,7 @@
 "use client";
 
 import { useWorkload } from "@/lib/workload/store";
-import { rowActionFn, type TaskRowVM } from "@/lib/workload/view";
+import { rowAction, type TaskRowVM } from "@/lib/workload/view";
 
 /** Task list used by My work ("mine") and Queue ("queue"). */
 export function TaskTable({ rows, variant }: { rows: TaskRowVM[]; variant: "mine" | "queue" }) {
@@ -58,7 +58,7 @@ export function TaskTable({ rows, variant }: { rows: TaskRowVM[]; variant: "mine
                   onClick={() => {
                     const a = r.action!;
                     if (a.kind === "details") setDialog({ kind: "task", id: a.id });
-                    else run(rowActionFn(a, me.id));
+                    else run(rowAction(a, me.id));
                   }}
                 >
                   {r.action.label}

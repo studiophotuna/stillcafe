@@ -4,7 +4,7 @@ import { useState } from "react";
 import { TaskTable } from "@/components/TaskTable";
 import { Blueprint } from "@/components/ui";
 import { lc } from "@/lib/workload/constants";
-import { distribute, sortTasks } from "@/lib/workload/engine";
+import { sortTasks } from "@/lib/workload/engine";
 import { useWorkload } from "@/lib/workload/store";
 import { useUnit } from "@/lib/workload/useUnit";
 import { taskRow } from "@/lib/workload/view";
@@ -56,7 +56,7 @@ export default function QueuePage() {
           </div>
           <input className="input" type="search" aria-label="Search tasks" placeholder="Search tasks" value={q} onChange={(e) => setQ(e.target.value)} style={{ width: 220 }} />
           {canDistribute && (
-            <button className="btn btn-secondary btn-36" onClick={() => run((d, n) => distribute(d, n))}>
+            <button className="btn btn-secondary btn-36" onClick={() => run({ type: "distribute" })}>
               Share out queue now
             </button>
           )}

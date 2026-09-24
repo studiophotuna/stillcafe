@@ -12,7 +12,12 @@ export const TZ_OFFSET_H = 8;
 
 const DEMO_BASE = Date.parse("2026-09-24T10:30:00+08:00");
 const LOADED_AT = Date.now();
-const demo = process.env.NEXT_PUBLIC_DEMO_CLOCK !== "off";
+let demo = process.env.NEXT_PUBLIC_DEMO_CLOCK !== "off";
+
+/** Switch to the real clock, e.g. once data comes from the database. */
+export const setRealClock = () => {
+  demo = false;
+};
 
 export const nowMs = (): number => (demo ? DEMO_BASE + (Date.now() - LOADED_AT) : Date.now());
 
