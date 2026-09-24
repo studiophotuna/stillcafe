@@ -107,7 +107,7 @@ export class Cal {
     if (o) return { code: o, wk, shift: WORKING.includes(o) ? this.shiftFor(p, d) : null };
     if (wk) return { code: "", wk };
     const w = dowOf(d);
-    const wfh = p.pattern === "A" ? w === 1 || w === 2 : w === 4 || w === 5;
+    const wfh = p.wfhDays ? p.wfhDays.includes(w) : p.pattern === "A" ? w === 1 || w === 2 : w === 4 || w === 5;
     return { code: wfh ? "WFH" : "RTO", wk, shift: this.shiftFor(p, d) };
   }
 

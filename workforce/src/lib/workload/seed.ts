@@ -1,5 +1,5 @@
 import { H, M } from "./clock";
-import { CARRIERS, FIELDS0, person, TRADES, trade } from "./constants";
+import { CARRIERS, FIELDS0, PEOPLE, person, TRADES, trade } from "./constants";
 import type { WorkloadData } from "./engine";
 import type { Priority, Task, TaskStatus } from "./types";
 
@@ -153,10 +153,12 @@ export const SAMPLE_MAIL: [string, string, string, string[]][] = [
   ["ops@dsv.com", "Question about last week’s filing", "Could someone confirm the filing reference?", []],
 ];
 
-/** A team's starting data: default settings and fields plus the sample tasks. */
-export function initialData(now: number): WorkloadData {
+/** A team's starting data: default settings and fields, plus sample tasks and people unless `empty`. */
+export function initialData(now: number, empty = false): WorkloadData {
   return {
-    tasks: seedTasks(now),
+    tasks: empty ? [] : seedTasks(now),
+    people: empty ? [] : PEOPLE,
+    admins: empty ? [] : [23],
     fields: FIELDS0.map((f) => ({ ...f })),
     settings: {
       mode: "fifo",

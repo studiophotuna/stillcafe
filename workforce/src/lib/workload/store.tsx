@@ -3,8 +3,9 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 import { applyAction, type Action } from "./actions";
 import { nowMs, setRealClock } from "./clock";
+import { loadMe, toLogin } from "../session";
 import { ADMIN_ID, EMPLOYEE_ID, person } from "./constants";
-import type { WorkloadData } from "./engine";
+import { personOf, type WorkloadData } from "./engine";
 import { initialData } from "./seed";
 import type { Person, Toast, ViewAs } from "./types";
 
@@ -35,7 +36,8 @@ interface Store {
   toast: (text: string) => void;
   toasts: Toast[];
   viewAs: ViewAs;
-  setViewAs: (v: ViewAs) => void;
+  /** Only with sample data; signed-in people are who they signed in as. */
+  setViewAs?: (v: ViewAs) => void;
   me: Person;
   isAdmin: boolean;
   sys: string;
@@ -63,6 +65,7 @@ export function WorkloadProvider({ children }: { children: React.ReactNode }) {
   const [tr, setTr] = useState("all");
   const [now, setNow] = useState(nowMs);
   const [dialog, setDialog] = useState<Dialog>(null);
+  const [session, setSession] = useState<{ id: number; email: string } | null>(null);
 
   const commit = useCallback((d: WorkloadData) => {
     dataRef.current = d;
@@ -81,6 +84,7 @@ export function WorkloadProvider({ children }: { children: React.ReactNode }) {
     if (modeRef.current !== "db" || pending.current) return;
     try {
       const r = await fetch("/api/wl/snapshot", { cache: "no-store" });
+      if (r.status === 401 || r.status === 403) return toLogin(r.status === 403 ? "/change-password" : "/login");
       const j = await r.json();
       if (j.mode === "db" && !pending.current) commit(j.data);
     } catch {}
@@ -92,8 +96,12 @@ export function WorkloadProvider({ children }: { children: React.ReactNode }) {
     (async () => {
       let next: DataMode = "demo";
       let saved: WorkloadData | null = null;
+      const who = await loadMe();
+      if (!who || !live) return;
+      if (!who.demo) setSession({ id: who.personId, email: who.email });
       try {
         const r = await fetch("/api/wl/snapshot", { cache: "no-store" });
+        if (r.status === 401 || r.status === 403) return toLogin(r.status === 403 ? "/change-password" : "/login");
         const j = await r.json();
         if (j.mode === "db") [next, saved] = ["db", j.data];
         else if (j.mode === "error") toast("The database couldn’t be reached, so this is sample data. Changes won’t be saved.");
@@ -149,6 +157,7 @@ export function WorkloadProvider({ children }: { children: React.ReactNode }) {
           });
           const j = await r.json().catch(() => ({}));
           pending.current--;
+          if (r.status === 401) return toLogin();
           if (!r.ok) {
             toast(j.error || "That change couldn’t be saved.");
             await refresh();
@@ -183,9 +192,20 @@ export function WorkloadProvider({ children }: { children: React.ReactNode }) {
       toast,
       toasts,
       viewAs,
-      setViewAs,
-      me: person(viewAs === "employee" ? EMPLOYEE_ID : ADMIN_ID)!,
-      isAdmin: viewAs !== "employee",
+      setViewAs: mode === "demo" ? setViewAs : undefined,
+      me:
+        mode === "db" && session
+          ? (personOf(data, session.id) ?? {
+              // Signed in but not a member of this team: can look, not take work.
+              id: session.id,
+              name: session.email.split("@")[0].replace(/[._]/g, " "),
+              trades: [],
+              avail: "offshift",
+              shift: "—",
+              shiftStart: 8,
+            })
+          : person(viewAs === "employee" ? EMPLOYEE_ID : ADMIN_ID)!,
+      isAdmin: mode === "db" ? !!session && data.admins.includes(session.id) : viewAs !== "employee",
       sys,
       tr,
       setSys: (v: string) => {
@@ -196,7 +216,7 @@ export function WorkloadProvider({ children }: { children: React.ReactNode }) {
       dialog,
       setDialog,
     }),
-    [data, mode, now, run, toast, toasts, viewAs, setViewAs, sys, tr, dialog],
+    [data, mode, now, run, toast, toasts, viewAs, setViewAs, sys, tr, dialog, session],
   );
 
   // Nothing to show until we know whether this is saved or sample data.

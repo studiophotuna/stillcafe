@@ -20,14 +20,50 @@ Both modules share one shell (sidebar with the Calendar / Workload switch), one 
 
 ```bash
 npm install
-npm run dev        # http://localhost:3000 → /workload ; /calendar
+npm run dev        # http://localhost:3000 → /calendar ; /workload
 npm test           # rules + persistence tests (vitest)
 npm run typecheck
 npm run build
 ```
 
-Use **Prototype · view as** at the bottom of the side menu to switch between the admin
-(Sam Delgado) and a member (Ana Reyes). Microsoft Entra ID sign-in replaces this switch later.
+With the database (the default) everyone signs in with **email and password** at `/login`.
+With `WORKFORCE_DB=off` the app runs on fictional sample data, and **Sample data · view as** at
+the bottom of the side menu switches between the admin (Sam Delgado) and a member (Ana Reyes).
+
+## Sign-in
+
+- **Accounts come from members.** When an admin adds a member (Calendar › Admin › Members ›
+  Add member, or a members upload), their work email becomes their sign-in and the app shows a
+  **temporary password once** (copy, or download CSV for several). Changing someone's email
+  replaces their sign-in with a new temporary password.
+- **First sign-in** with a temporary password goes to *Set your password*: at least 10 characters
+  with letters and numbers. Nothing else opens until it is changed.
+- **Forgotten password:** an admin presses *Reset password* on the Members page (new temporary
+  password; the person's open sessions end). *Remove sign-in* appears for people who have left.
+- Passwords are bcrypt-hashed in the database; sessions are random tokens in an httpOnly cookie
+  (only their SHA-256 is stored), valid 12 hours. Five wrong passwords lock the account for
+  15 minutes.
+- **Who may do what** is checked on the server for every action (`src/lib/calendar/authz.ts`,
+  `src/lib/workload/authz.ts`): members act only as themselves; team admins manage their team's
+  people, schedule and settings; a **system admin** (`sysAdmin` on the person, set for the first
+  administrator) can do everything, and only a system admin can change another system admin.
+  The database also refuses non-admin changes to people, org, schedules, shifts, holidays,
+  BCP events and Workload settings.
+- **First administrator:** created directly in the database (see *Starting fresh* below).
+
+## Organization
+
+**Allocations by role:** directors need only a department, managers a department and tower,
+team leads and members a department, tower and team (deeper is always allowed). People
+allocated to a whole department or tower belong to no team: they appear in the Management
+view and in the Members list of every team under them, their leave is approved automatically,
+and only a system admin can edit them.
+
+Calendar › Admin › Organization › **Import from Excel**: paste the Tower and Team columns (and
+optionally System and Trade) straight from a spreadsheet. The dialog previews what will be added;
+names already there are skipped (a team that already exists as a system of a team in that tower,
+such as GPM inside Rate Management, counts as there), so the same list can be pasted again after
+adding rows. New teams start with admin approval and no team admin.
 
 ## Data and saving
 
@@ -43,7 +79,17 @@ Both modules save to Supabase: schema `workforce` in the stillcafe project
 - **Calendar** stores the whole calendar as one versioned document (`workforce.cal_state`) — an
   interim design so it is usable now; the normalized tables in the handoff data model replace it
   when real data moves in.
-- Each browser refreshes every 20 s and on focus. First load seeds the sample data.
+- Each browser refreshes every 20 s and on focus.
+- **Workload people come from the Calendar:** the members of Rate Management, their trades from
+  their allocations, and whether they can take work now from today's calendar (leave, rest day,
+  holiday, or outside their shift). Workload admins are the team's admins plus system admins.
+
+### Starting fresh
+
+The live database was cleared to start with real data: no tasks, the org tree (BSS › A&S
+Support – Rate Management › Rate Management with its systems and trades), the standard shifts,
+and one person — the first system admin, with a temporary password. Everything else is added in
+the app.
 
 ### Keys — read before storing real data
 
@@ -52,10 +98,12 @@ The server only calls `workforce_*` functions; the tables are closed to Supabase
 | Server env | Key used | Who else can call the functions |
 | --- | --- | --- |
 | `SUPABASE_SECRET_KEY` set | secret key | nobody (after applying `supabase/pending/workforce_secret_key_only.sql`) |
-| not set (current) | the project's **publishable** key, built in | anyone who has the publishable key + URL (both public) |
+| not set (current) | the project's **publishable** key, built in | anyone with the publishable key + URL, **but only with a valid session** |
 
-The publishable-key setup (migrations `0002`, `0003`) is for the fictional sample data only.
-Before real data goes in:
+With the publishable key, every data function still requires a signed-in session and the database
+enforces the admin-only parts. What it cannot stop: a signed-in member calling the functions
+directly (outside the app) could change data the app keeps them out of, such as other people's
+leave requests, BCP check-ins, readiness or Workload tasks. To close that:
 1. Vercel › workforce › Settings › Environment Variables: add `SUPABASE_SECRET_KEY` (Supabase ›
    Project Settings › API Keys › a secret key). Never prefix it with `NEXT_PUBLIC_`. Redeploy.
 2. Apply `supabase/pending/workforce_secret_key_only.sql`.
@@ -64,9 +112,6 @@ Optional env: `SUPABASE_URL` (defaults to the stillcafe project), `WORKFORCE_DB=
 sample data, marked “Sample data · not saved” in the top bar), `NEXT_PUBLIC_DEMO_CLOCK=off`
 (sample mode uses a clock that starts at Thu 24 Sep 2026 10:30 Manila; saved data always uses the
 real clock).
-
-> There is no sign-in yet: anyone who can open the app can act as anyone via “view as”. Keep the
-> Vercel deployment protected until Entra ID sign-in is added.
 
 ## Screens
 
@@ -89,15 +134,19 @@ Admin-only routes send others back to the module's home.
 
 ```
 src/lib/
-  db.ts                 Supabase client (server only), key selection, ConflictError
+  db.ts                 Supabase client (server only), key selection, ConflictError, ForbiddenError
+  auth.ts               sessions (cookie), temporary passwords, error → HTTP mapping
+  session.ts            browser side: who is signed in, redirects to /login, sign out
   calendar/             engine.ts (cell resolution, balances, messages), actions.ts,
                         uploads.ts, reports.ts, seed.ts, org.ts, excel.ts (templates/reading),
-                        store.tsx, useCalView.ts, server.ts, engine.test.ts
-  workload/             engine.ts, actions.ts, seed.ts, excel.ts, store.tsx, server.ts, tests
+                        store.tsx, useCalView.ts, server.ts, authz.ts, engine.test.ts
+  workload/             engine.ts, actions.ts, seed.ts, excel.ts, store.tsx, server.ts,
+                        people.ts (people from the Calendar), authz.ts, tests
 src/components/         AppFrame (shared shell), Workload Shell/TaskTable/Dialogs,
                         calendar/ (CalShell, CalendarGrid, CalDialogs)
-src/app/                routes; api/wl/*, api/cal/*
-supabase/migrations/    0001 workload schema · 0002 public-key access (temporary) · 0003 calendar
+src/app/                routes; /login, /change-password; api/auth/*, api/wl/*, api/cal/*
+supabase/migrations/    0001 workload schema · 0002 public-key access · 0003 calendar ·
+                        0004 sign-in, sessions and session-gated functions
 supabase/pending/       workforce_secret_key_only.sql — apply once the secret key is configured
 ```
 
@@ -112,8 +161,8 @@ supabase/pending/       workforce_secret_key_only.sql — apply once the secret 
 
 ## Next steps (build order from the handoff README)
 
-1. Microsoft Entra ID sign-in (replaces “view as”); the server takes the acting person from the
-   session and enforces who may do what.
-2. Workload reads people, trades and availability from the Calendar data.
+1. Set `SUPABASE_SECRET_KEY` and apply the pending script (see *Keys*).
+2. Microsoft Entra ID sign-in can replace passwords later, once approved; accounts are already
+   keyed by work email.
 3. Microsoft Graph: send the recorded emails and Outlook reminders; mailbox webhook → tasks.
 4. Normalize the Calendar document into the handoff tables before real data; Excel data migration.

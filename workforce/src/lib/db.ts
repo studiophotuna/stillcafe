@@ -33,3 +33,6 @@ export function db() {
 
 /** Raised when someone else saved first; callers reload and retry. */
 export class ConflictError extends Error {}
+
+/** The signed-in person may not do this. */
+export class ForbiddenError extends Error {}

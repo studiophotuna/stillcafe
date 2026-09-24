@@ -1,11 +1,12 @@
 "use client";
 
-import { useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { Blueprint, Icon } from "@/components/ui";
 import { LEVELS } from "@/lib/calendar/constants";
 import { fmtY } from "@/lib/calendar/dates";
 import { useCalendar } from "@/lib/calendar/store";
 import { useCalView } from "@/lib/calendar/useCalView";
+import type { CalPerson } from "@/lib/calendar/types";
 
 export default function MembersPage() {
   const s = useCalendar();
@@ -13,11 +14,48 @@ export default function MembersPage() {
   const c = s.cal;
   const { O } = c;
   const [q, setQ] = useState("");
+  // Sign-in status per person (database only).
+  const [logins, setLogins] = useState<Record<number, { mustChange: boolean }> | null>(null);
+  const [busy, setBusy] = useState<number | null>(null);
+  const loadLogins = useCallback(async () => {
+    if (s.mode !== "db") return;
+    try {
+      const r = await fetch("/api/auth/logins", { cache: "no-store" });
+      if (!r.ok) return;
+      const j = (await r.json()) as { logins: { personId: number; mustChange: boolean }[] };
+      setLogins(Object.fromEntries(j.logins.map((l) => [l.personId, { mustChange: l.mustChange }])));
+    } catch {}
+  }, [s.mode]);
+  // Reload when people change (a new member gets a sign-in).
+  useEffect(() => {
+    loadLogins();
+  }, [loadLogins, s.data.people]);
+  const resetPw = async (pid: number, remove = false) => {
+    setBusy(pid);
+    try {
+      const r = await fetch("/api/auth/reset", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ personId: pid, remove }),
+      });
+      const j = await r.json().catch(() => ({}));
+      if (!r.ok) s.toast(j.error || "That didn’t work. Try again.");
+      else if (remove) s.toast("Sign-in removed.");
+      else s.showIssued(j.issued);
+      await loadLogins();
+    } finally {
+      setBusy(null);
+    }
+  };
   const mq = q.trim().toLowerCase();
   const shById = Object.fromEntries(s.data.shifts.map((x) => [x.id, x]));
+  // Directors and managers allocated to this team's department or tower are listed too.
+  const above = (p: CalPerson) => v.unitId === v.bid && !O.inN(p, v.bid) && p.assign.some((a) => O.by[a] && (O.by[a].type === "dept" || O.by[a].type === "tower") && O.anc(v.bid).includes(a));
   const members = s.data.people
-    .filter((p) => O.inN(p, v.unitId) && (!mq || p.name.toLowerCase().includes(mq)))
-    .sort((a, b) => a.name.localeCompare(b.name));
+    .filter((p) => (O.inN(p, v.unitId) || above(p)) && (!mq || p.name.toLowerCase().includes(mq)))
+    .sort((a, b) => Number(above(b)) - Number(above(a)) || a.name.localeCompare(b.name));
+  // Team admins manage the people in their teams; system admins manage everyone.
+  const canManage = (p: CalPerson) => !!v.meP.sysAdmin || O.branchesOf(p).some((b) => (b.admins ?? []).includes(s.me));
   return (
     <>
       <div className="page-head-row">
@@ -38,7 +76,7 @@ export default function MembersPage() {
         </div>
       </div>
       <Blueprint className="scroll-x">
-        <table className="table" style={{ minWidth: 980 }}>
+        <table className="table" style={{ minWidth: logins ? 1180 : 980 }}>
           <thead>
             <tr>
               <th>Name</th>
@@ -46,6 +84,7 @@ export default function MembersPage() {
               <th>Allocations</th>
               <th>Annual leave</th>
               <th>Status</th>
+              {logins && <th>Sign-in</th>}
               <th style={{ textAlign: "right" }}>Actions</th>
             </tr>
           </thead>
@@ -80,9 +119,10 @@ export default function MembersPage() {
                       {p.assign.map((a) => {
                         const b = O.up(a, "branch");
                         const sb = O.sub(a);
+                        const n = O.by[a];
                         return (
                           <span key={a} className={"tag " + (O.anc(a).includes(v.bid) ? "tag-accent" : "tag-neutral")}>
-                            {(b ? b.name : "") + (sb ? " › " + sb.replace(/ · /g, " › ") : "")}
+                            {b ? b.name + (sb ? " › " + sb.replace(/ · /g, " › ") : "") : n ? `${n.name} · whole ${n.type === "dept" ? "department" : "tower"}` : "—"}
                           </span>
                         );
                       })}
@@ -96,17 +136,50 @@ export default function MembersPage() {
                       {gone ? "Resigned " + fmtY(p.resign!) : p.resign ? "Leaving " + fmtY(p.resign) : "Active"}
                     </span>
                   </td>
+                  {logins && (
+                    <td className="nowrap">
+                      {!logins[p.id] ? (
+                        <span className="tag tag-neutral">None</span>
+                      ) : logins[p.id].mustChange ? (
+                        <span className="tag tag-outline" title="Hasn’t signed in and set their own password yet">
+                          Temporary password
+                        </span>
+                      ) : (
+                        <span className="tag tag-accent">Active</span>
+                      )}
+                    </td>
+                  )}
                   <td>
                     <div style={{ display: "flex", gap: 2, justifyContent: "flex-end" }}>
-                      <button className="btn btn-ghost" onClick={() => s.setDialog({ kind: "member", pid: p.id })}>
-                        Edit
-                      </button>
-                      <button className="btn btn-ghost" onClick={() => s.setDialog({ kind: "resign", pid: p.id })}>
-                        {p.resign ? "Edit resignation" : "Resignation"}
-                      </button>
-                      <button className="btn btn-ghost" style={{ color: "var(--color-neutral-700)" }} onClick={() => s.run({ type: "removeFromTeam", pid: p.id, bid: v.bid })}>
-                        Remove
-                      </button>
+                      {!canManage(p) ? (
+                        <span className="small" style={{ fontSize: 12, alignSelf: "center" }} title="Allocated above this team; a system admin manages them">
+                          Managed by a system admin
+                        </span>
+                      ) : (
+                        <>
+                          <button className="btn btn-ghost" onClick={() => s.setDialog({ kind: "member", pid: p.id })}>
+                            Edit
+                          </button>
+                          <button className="btn btn-ghost" onClick={() => s.setDialog({ kind: "resign", pid: p.id })}>
+                            {p.resign ? "Edit resignation" : "Resignation"}
+                          </button>
+                          {logins && !gone && p.id !== s.me && (
+                            <button className="btn btn-ghost" disabled={busy === p.id} onClick={() => resetPw(p.id)}>
+                              {logins[p.id] ? "Reset password" : "Create sign-in"}
+                            </button>
+                          )}
+                          {logins && gone && logins[p.id] && (
+                            <button className="btn btn-ghost" disabled={busy === p.id} onClick={() => resetPw(p.id, true)}>
+                              Remove sign-in
+                            </button>
+                          )}
+                          {!above(p) && (
+                            <button className="btn btn-ghost" style={{ color: "var(--color-neutral-700)" }} onClick={() => s.run({ type: "removeFromTeam", pid: p.id, bid: v.bid })}>
+                              Remove
+                            </button>
+                          )}
+                        </>
+                      )}
                     </div>
                   </td>
                 </tr>

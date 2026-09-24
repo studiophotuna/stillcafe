@@ -1,4 +1,4 @@
-import type { CalPerson, NodeType, OrgNode } from "./types";
+import type { CalPerson, Level, NodeType, OrgNode } from "./types";
 
 /** Lookups over the Department › Tower › Team › System › Trade tree. */
 export interface Org {
@@ -69,3 +69,21 @@ export const teamDefaults = (o: Partial<OrgNode> = {}): Partial<OrgNode> => ({
   defaultScope: "all",
   ...o,
 });
+
+/**
+ * How deep an allocation must go, by role: directors need only a department,
+ * managers a department and tower, everyone else a department, tower and team.
+ * Deeper allocations (a manager on a team) are always fine.
+ */
+const DEPTH: Record<NodeType, number> = { dept: 0, tower: 1, branch: 2, system: 3, trade: 4 };
+export const ALLOC_MIN: Record<Level, NodeType> = { director: "dept", manager: "tower", lead: "branch", member: "branch" };
+export const allocNeeds = (level: Level) =>
+  ALLOC_MIN[level] === "dept" ? "a department" : ALLOC_MIN[level] === "tower" ? "a department and tower" : "a department, tower and team";
+
+/** Problem with a person's allocations for their role, or "" when fine. */
+export function allocProblem(O: Pick<Org, "by">, level: Level, assign: string[]): string {
+  const need = ALLOC_MIN[level] ?? "branch";
+  if (!assign.length || assign.some((x) => !O.by[x] || DEPTH[O.by[x].type] < DEPTH[need]))
+    return `Choose ${allocNeeds(level)} for each allocation.`;
+  return "";
+}

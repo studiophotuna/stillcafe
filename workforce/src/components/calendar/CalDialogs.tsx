@@ -8,10 +8,13 @@ import {
 } from "@/lib/calendar/constants";
 import { fmt, fmtY, MONL, rng2 } from "@/lib/calendar/dates";
 import { downloadMembersTemplate, downloadScheduleTemplate, readCalendarUpload } from "@/lib/calendar/excel";
-import { useCalendar } from "@/lib/calendar/store";
+import { useCalendar, type Issued } from "@/lib/calendar/store";
+import { ALLOC_MIN, allocNeeds, allocProblem } from "@/lib/calendar/org";
+import { parseOrgText, planOrgImport } from "@/lib/calendar/orgImport";
 import { checkUpload, type UploadRow } from "@/lib/calendar/uploads";
 import { useCalView } from "@/lib/calendar/useCalView";
-import type { BcpStatus, Bucket, Code, HolidayType, Level } from "@/lib/calendar/types";
+import { EMAIL_RE } from "@/lib/calendar/actions";
+import type { BcpStatus, Bucket, CalPerson, Code, HolidayType, Level } from "@/lib/calendar/types";
 import { Chip, Seg } from "./bits";
 
 const PrimaryBtn = ({ children, disabled, onClick }: { children: React.ReactNode; disabled?: boolean; onClick: () => void }) => (
@@ -111,6 +114,9 @@ function RequestDialog({ date }: { date?: string }) {
         </div>
         <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
           <span className="small" style={{ fontSize: 12 }}>What happens next</span>
+          {routing.length === 0 && (
+            <span style={{ fontSize: 13.5 }}>You aren’t in a team, so this is approved automatically.</span>
+          )}
           {routing.map((r) => (
             <div key={r.id} style={{ display: "flex", gap: 10, alignItems: "flex-start", fontSize: 13.5 }}>
               <span className="tag tag-outline" style={{ flex: "none", minWidth: 120, justifyContent: "center" }}>
@@ -294,6 +300,7 @@ interface AllocRow {
   system: string;
   trade: string;
 }
+const WEEKDAYS: [number, string][] = [[1, "Mon"], [2, "Tue"], [3, "Wed"], [4, "Thu"], [5, "Fri"]];
 function MemberDialog({ pid: pid0 }: { pid: number | null }) {
   const s = useCalendar();
   const v = useCalView();
@@ -307,15 +314,27 @@ function MemberDialog({ pid: pid0 }: { pid: number | null }) {
   });
   const isNew = pid0 === null;
   const init = pid0 !== null ? s.cal.person(pid0) : null;
+  // A new member is a new person, or someone already in another team.
+  const [who, setWho] = useState<"new" | "existing">("new");
   const [pid, setPid] = useState<number | null>(pid0);
+  const detailsOf = (p: CalPerson | null) => ({
+    name: p?.name ?? "",
+    email: p?.email ?? "",
+    hire: p?.hire ?? s.today,
+    entitle: String(p?.entitle ?? 25),
+    elEnt: String(p?.elEnt ?? 5),
+    carry: String(p?.carry ?? 0),
+    ytd: String(p?.ytd ?? 0),
+    ytdEl: String(p?.ytdEl ?? 0),
+  });
+  const wfhOf = (p: CalPerson | null) => p?.wfhDays ?? (p ? (p.pattern === "B" ? [4, 5] : [1, 2]) : []);
+  const [f, setF] = useState(() => detailsOf(init));
+  const [wfh, setWfh] = useState<number[]>(() => wfhOf(init));
   const [level, setLevel] = useState<Level>(init?.level ?? "member");
-  const [shift, setShift] = useState(init?.shift ?? "D");
+  const [shift, setShift] = useState(init?.shift ?? (s.data.shifts.some((x) => x.id === "D") ? "D" : s.data.shifts[0]?.id ?? "D"));
   const [adminHere, setAdminHere] = useState(init ? (v.branch.admins ?? []).includes(init.id) : false);
-  const [alloc, setAlloc] = useState<AllocRow[]>(
-    init
-      ? init.assign.map(allocOf)
-      : [{ dept: v.dept.id, tower: v.tower.id, branch: v.bid, system: v.system !== "all" ? v.system : "", trade: v.trade !== "all" ? v.trade : "" }],
-  );
+  const hereRow: AllocRow = { dept: v.dept.id, tower: v.tower.id, branch: v.bid, system: v.system !== "all" ? v.system : "", trade: v.trade !== "all" ? v.trade : "" };
+  const [alloc, setAlloc] = useState<AllocRow[]>(init ? init.assign.map(allocOf) : [hereRow]);
   const close = () => s.setDialog(null);
   const setA = (i: number, k: keyof AllocRow, val: string) =>
     setAlloc((rows) =>
@@ -329,75 +348,204 @@ function MemberDialog({ pid: pid0 }: { pid: number | null }) {
         return n;
       }),
     );
+  const setD = (k: keyof typeof f, val: string) => setF((x) => ({ ...x, [k]: val }));
   const cands = s.data.people
     .filter((p) => !O.inN(p, v.bid) && !(p.resign && p.resign < s.today))
     .sort((a, b) => a.name.localeCompare(b.name));
-  const valid = alloc.length > 0 && alloc.every((r) => r.dept && r.tower && r.branch) && pid !== null;
+  const existing = isNew && who === "existing";
+  const showDetails = !existing || pid !== null;
+  // Directors need only a department, managers a tower; everyone else a team.
+  const need = ALLOC_MIN[level];
+  const leafOf = (r: AllocRow) => r.trade || r.system || r.branch || r.tower || r.dept;
+  const assign = [...new Set(alloc.map(leafOf).filter(Boolean))];
+
+  // Same checks as the server, so problems show before saving.
+  const email = f.email.trim().toLowerCase();
+  const nums: [keyof typeof f, string, number, number][] = [
+    ["entitle", "VL + SL entitlement", 0, 60],
+    ["elEnt", "Emergency leave", 0, 30],
+    ["carry", "Carry-over", 0, 5],
+    ["ytd", "VL + SL already used", 0, 60],
+    ["ytdEl", "EL already used", 0, 30],
+  ];
+  const problem = !showDetails
+    ? "Choose a person."
+    : !f.name.trim()
+      ? "Enter the person’s name."
+      : !EMAIL_RE.test(email)
+        ? "Enter a valid work email. It’s what they sign in with."
+        : s.data.people.some((p) => p.id !== pid && p.email.toLowerCase() === email)
+          ? "Someone already has that email."
+          : !/^\d{4}-\d{2}-\d{2}$/.test(f.hire)
+            ? "Enter the hire date."
+            : (nums.map(([k, l, lo, hi]) => {
+                const n = Number(f[k]);
+                return f[k].trim() === "" || !Number.isFinite(n) || n < lo || n > hi ? `${l} must be between ${lo} and ${hi}.` : "";
+              }).find(Boolean) ??
+              (!alloc.length || alloc.some((r) => !r.dept) ? `Choose ${allocNeeds(level)} for each allocation.` : allocProblem(s.cal.O, level, assign)));
+  const emailChanged = !!init && email !== init.email.toLowerCase();
+  const signIn =
+    s.mode !== "db"
+      ? ""
+      : isNew && !existing
+        ? "Saving creates their sign-in. You’ll see a temporary password once; they change it at first sign-in."
+        : emailChanged
+          ? "Changing the email replaces their sign-in and creates a new temporary password."
+          : "";
+
+  const save = () => {
+    const details = {
+      name: f.name,
+      email: f.email,
+      hire: f.hire,
+      entitle: Number(f.entitle),
+      elEnt: Number(f.elEnt),
+      carry: Number(f.carry),
+      ytd: Number(f.ytd),
+      ytdEl: Number(f.ytdEl),
+      wfhDays: wfh,
+    };
+    if (isNew && !existing) s.run({ type: "addPerson", details, level, shift, adminHere, bid: v.bid, assign });
+    else s.run({ type: "saveMember", pid: pid!, level, shift, adminHere, bid: v.bid, assign, isNew, details });
+    close();
+  };
   const opts = (l: { id: string; name: string }[]) =>
     l.map((o) => (
       <option key={o.id} value={o.id}>
         {o.name}
       </option>
     ));
+  const numField = (k: keyof typeof f, label: string, hint?: string) => (
+    <div className="field">
+      <label htmlFor={"mem-" + k}>{label}</label>
+      <input id={"mem-" + k} className="input" type="number" min={0} step={0.5} value={f[k]} disabled={existing} onChange={(e) => setD(k, e.target.value)} />
+      {hint && <span className="small" style={{ fontSize: 12 }}>{hint}</span>}
+    </div>
+  );
+  const grid = { display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(200px,1fr))", gap: 12 } as const;
+  const section = (t: string) => (
+    <span className="small" style={{ fontSize: 12, textTransform: "uppercase", letterSpacing: "0.08em", color: "var(--color-accent-700)" }}>
+      {t}
+    </span>
+  );
   return (
     <Modal onClose={close} width={980}>
       <div className="dialog-scroll" style={{ padding: 20 }}>
-        <Title>{isNew ? "Add member" : "Edit " + init!.name}</Title>
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(220px,1fr))", gap: 12 }}>
-          {isNew && (
-            <div className="field">
-              <label htmlFor="mem-p">Employee</label>
-              <select
-                id="mem-p"
-                className="input"
-                value={pid === null ? "" : String(pid)}
-                onChange={(e) => {
-                  const val = e.target.value;
-                  if (val === "") return setPid(null);
-                  const p = s.cal.person(Number(val));
-                  setPid(p.id);
-                  setLevel(p.level);
-                  setShift(p.shift);
-                  setAlloc(p.assign.map(allocOf).concat(alloc.filter((r) => r.branch === v.bid)));
-                }}
-              >
-                <option value="">Choose a person</option>
-                {cands.map((p) => (
-                  <option key={p.id} value={p.id}>
-                    {p.name}
-                  </option>
-                ))}
-              </select>
+        <Title>{isNew ? "Add member to " + v.branch.name : "Edit " + init!.name}</Title>
+        {isNew && cands.length > 0 && (
+          <Seg
+            name="mem-who"
+            value={who}
+            options={[["new", "New person"], ["existing", "Someone from another team"]]}
+            onChange={(val) => {
+              setWho(val);
+              setPid(null);
+              setF(detailsOf(null));
+              setWfh([]);
+              setAlloc([hereRow]);
+            }}
+            style={{ alignSelf: "flex-start" }}
+          />
+        )}
+        {existing && (
+          <div className="field" style={{ maxWidth: 360 }}>
+            <label htmlFor="mem-p">Person</label>
+            <select
+              id="mem-p"
+              className="input"
+              value={pid === null ? "" : String(pid)}
+              onChange={(e) => {
+                const val = e.target.value;
+                if (val === "") return setPid(null);
+                const p = s.cal.person(Number(val));
+                setPid(p.id);
+                setF(detailsOf(p));
+                setWfh(wfhOf(p));
+                setLevel(p.level);
+                setShift(p.shift);
+                setAlloc(p.assign.map(allocOf).concat(hereRow));
+              }}
+            >
+              <option value="">Choose a person</option>
+              {cands.map((p) => (
+                <option key={p.id} value={p.id}>
+                  {p.name} · {p.email}
+                </option>
+              ))}
+            </select>
+          </div>
+        )}
+        {showDetails && (
+          <>
+            {section("Person")}
+            <div style={grid}>
+              <div className="field">
+                <label htmlFor="mem-name">Full name *</label>
+                <input id="mem-name" className="input" value={f.name} disabled={existing} onChange={(e) => setD("name", e.target.value)} autoComplete="off" />
+              </div>
+              <div className="field">
+                <label htmlFor="mem-email">Work email * · used to sign in</label>
+                <input id="mem-email" className="input" type="email" value={f.email} disabled={existing} onChange={(e) => setD("email", e.target.value)} autoComplete="off" />
+              </div>
+              <div className="field">
+                <label htmlFor="mem-hire">Hire date *</label>
+                <input id="mem-hire" className="input" type="date" value={f.hire} disabled={existing} onChange={(e) => setD("hire", e.target.value)} />
+              </div>
+              <div className="field">
+                <label htmlFor="mem-l">Role</label>
+                <select id="mem-l" className="input" value={level} onChange={(e) => setLevel(e.target.value as Level)}>
+                  {(Object.keys(LEVELS) as Level[]).map((k) => (
+                    <option key={k} value={k}>
+                      {LEVELS[k]}
+                    </option>
+                  ))}
+                </select>
+              </div>
             </div>
-          )}
-          <div className="field">
-            <label htmlFor="mem-l">Role</label>
-            <select id="mem-l" className="input" value={level} onChange={(e) => setLevel(e.target.value as Level)}>
-              {(Object.keys(LEVELS) as Level[]).map((k) => (
-                <option key={k} value={k}>
-                  {LEVELS[k]}
-                </option>
-              ))}
-            </select>
-          </div>
-          <div className="field">
-            <label htmlFor="mem-s">Default shift</label>
-            <select id="mem-s" className="input" value={shift} onChange={(e) => setShift(e.target.value)}>
-              {s.data.shifts.map((x) => (
-                <option key={x.id} value={x.id}>
-                  {x.name} ({x.start}–{x.end})
-                </option>
-              ))}
-            </select>
-          </div>
-          <label style={{ display: "flex", gap: 10, alignItems: "center", cursor: "pointer", alignSelf: "end", minHeight: 36 }}>
-            <input type="checkbox" className="check" checked={adminHere} onChange={() => setAdminHere(!adminHere)} />
-            Admin of {v.branch.name}
-          </label>
-        </div>
+            {section("Schedule")}
+            <div style={grid}>
+              <div className="field">
+                <label htmlFor="mem-s">Default shift</label>
+                <select id="mem-s" className="input" value={shift} onChange={(e) => setShift(e.target.value)}>
+                  {s.data.shifts.map((x) => (
+                    <option key={x.id} value={x.id}>
+                      {x.name} ({x.start}–{x.end})
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div className="field">
+                <span style={{ fontSize: 12 }}>Work from home on</span>
+                <div style={{ display: "flex", gap: 12, flexWrap: "wrap", minHeight: 36, alignItems: "center" }}>
+                  {WEEKDAYS.map(([d, l]) => (
+                    <label key={d} style={{ display: "flex", gap: 6, alignItems: "center", cursor: "pointer" }}>
+                      <input type="checkbox" className="check" checked={wfh.includes(d)} onChange={() => setWfh(wfh.includes(d) ? wfh.filter((x) => x !== d) : wfh.concat(d).sort())} />
+                      {l}
+                    </label>
+                  ))}
+                </div>
+                <span className="small" style={{ fontSize: 12 }}>Other weekdays are in the office (RTO).</span>
+              </div>
+              <label style={{ display: "flex", gap: 10, alignItems: "center", cursor: "pointer", alignSelf: "center", minHeight: 36 }}>
+                <input type="checkbox" className="check" checked={adminHere} onChange={() => setAdminHere(!adminHere)} />
+                Admin of {v.branch.name}
+              </label>
+            </div>
+            {section("Leave balance this year")}
+            <div style={grid}>
+              {numField("entitle", "VL + SL entitlement (days)")}
+              {numField("elEnt", "Emergency leave entitlement")}
+              {numField("carry", "Carried over (max 5)")}
+              {numField("ytd", "VL + SL already used", "Taken this year before using the app")}
+              {numField("ytdEl", "EL already used", "Taken this year before using the app")}
+            </div>
+          </>
+        )}
         <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-          <span className="small" style={{ fontSize: 12 }}>
-            Allocations · their schedule and leave show on every calendar they’re allocated to
+          {section("Allocations · their schedule and leave show on every calendar they’re allocated to")}
+          <span className="small" style={{ fontSize: 12, marginTop: -6 }}>
+            {LEVELS[level]}s need {allocNeeds(level)}
+            {need === "dept" ? "; tower and team are optional." : need === "tower" ? "; team is optional." : "."}
           </span>
           {alloc.map((r, i) => (
             <div key={i} style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(140px,1fr)) 36px", gap: 8, alignItems: "end", padding: 12, border: "1px solid var(--color-divider)" }}>
@@ -409,16 +557,16 @@ function MemberDialog({ pid: pid0 }: { pid: number | null }) {
                 </select>
               </div>
               <div className="field">
-                <label>Tower *</label>
+                <label>Tower{need !== "dept" ? " *" : ""}</label>
                 <select className="input" value={r.tower} onChange={(e) => setA(i, "tower", e.target.value)}>
-                  <option value="">Choose</option>
+                  <option value="">{need !== "dept" ? "Choose" : "None"}</option>
                   {r.dept && opts(O.kids(r.dept, "tower"))}
                 </select>
               </div>
               <div className="field">
-                <label>Team *</label>
+                <label>Team{need === "branch" ? " *" : ""}</label>
                 <select className="input" value={r.branch} onChange={(e) => setA(i, "branch", e.target.value)}>
-                  <option value="">Choose</option>
+                  <option value="">{need === "branch" ? "Choose" : "None"}</option>
                   {r.tower && opts(O.kids(r.tower, "branch"))}
                 </select>
               </div>
@@ -448,20 +596,87 @@ function MemberDialog({ pid: pid0 }: { pid: number | null }) {
             </button>
           </div>
         </div>
-        <div className="dialog-actions" style={{ gap: 10 }}>
+        {signIn && <Note>{signIn}</Note>}
+        <div className="dialog-actions" style={{ gap: 10, alignItems: "center" }}>
+          {problem && showDetails && (
+            <span style={{ marginRight: "auto", fontSize: 13, color: "var(--color-neutral-800)" }} role="status">
+              {problem}
+            </span>
+          )}
           <button className="btn btn-secondary btn-40" onClick={close}>
             Cancel
           </button>
-          <PrimaryBtn
-            disabled={!valid}
-            onClick={() => {
-              const assign = [...new Set(alloc.map((r) => r.trade || r.system || r.branch))];
-              s.run({ type: "saveMember", pid: pid!, level, shift, adminHere, bid: v.bid, assign, isNew });
-              close();
-            }}
-          >
-            Save
+          <PrimaryBtn disabled={!!problem} onClick={save}>
+            {isNew && !existing ? "Add member" : "Save"}
           </PrimaryBtn>
+        </div>
+      </div>
+    </Modal>
+  );
+}
+
+/** Temporary passwords, shown once after adding people or resetting a password. */
+export function IssuedPasswords() {
+  const s = useCalendar();
+  const [copied, setCopied] = useState("");
+  if (!s.issued.length) return null;
+  const text = (i: Issued) => `${i.name} <${i.email}>\nTemporary password: ${i.password}\nSign in at ${window.location.origin}/login`;
+  const copy = async (key: string, t: string) => {
+    try {
+      await navigator.clipboard.writeText(t);
+      setCopied(key);
+    } catch {}
+  };
+  const csv = () => {
+    const q = (x: string) => `"${x.replace(/"/g, '""')}"`;
+    const body = ["Name,Email,Temporary password"].concat(s.issued.map((i) => [i.name, i.email, i.password].map(q).join(","))).join("\n");
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(new Blob([body], { type: "text/csv" }));
+    a.download = "temporary-passwords.csv";
+    a.click();
+    URL.revokeObjectURL(a.href);
+  };
+  const close = () => s.showIssued([]);
+  return (
+    <Modal onClose={() => {}} width={640}>
+      <div className="dialog-scroll" style={{ padding: 20 }}>
+        <Title>Temporary passwords</Title>
+        <Note>
+          Give each person their password privately. It’s shown only now; they must choose their own password when they first sign in. If one is lost,
+          use Reset password under Members.
+        </Note>
+        <table className="table">
+          <thead>
+            <tr>
+              <th>Person</th>
+              <th>Temporary password</th>
+              <th />
+            </tr>
+          </thead>
+          <tbody>
+            {s.issued.map((i) => (
+              <tr key={i.email + i.password}>
+                <td>
+                  {i.name}
+                  <div className="small">{i.email}</div>
+                </td>
+                <td style={{ fontFamily: "ui-monospace, monospace", fontSize: 15 }}>{i.password}</td>
+                <td style={{ textAlign: "right" }}>
+                  <button className="btn btn-ghost" onClick={() => copy(i.email, text(i))}>
+                    {copied === i.email ? "Copied" : "Copy"}
+                  </button>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+        <div className="dialog-actions" style={{ gap: 10 }}>
+          {s.issued.length > 1 && (
+            <button className="btn btn-secondary btn-40" onClick={csv}>
+              Download CSV
+            </button>
+          )}
+          <PrimaryBtn onClick={close}>Done</PrimaryBtn>
         </div>
       </div>
     </Modal>
@@ -915,6 +1130,101 @@ function EventDialog() {
   );
 }
 
+// ── Import org structure (paste from Excel) ──
+function OrgImportDialog() {
+  const s = useCalendar();
+  const v = useCalView();
+  const depts = s.data.nodes.filter((n) => n.type === "dept");
+  const [dept, setDept] = useState(v.dept.id);
+  const [text, setText] = useState("");
+  const rows = useMemo(() => parseOrgText(text), [text]);
+  const plan = useMemo(() => planOrgImport(s.data, dept, rows, "preview"), [s.data, dept, rows]);
+  const close = () => s.setDialog(null);
+  const TL: Record<string, string> = { tower: "Tower", branch: "Team", system: "System", trade: "Trade" };
+  return (
+    <Modal onClose={close} width={760}>
+      <div className="dialog-scroll" style={{ padding: 20 }}>
+        <Title>Import towers and teams</Title>
+        <p style={{ margin: 0, fontSize: 13.5, color: "var(--color-neutral-800)" }}>
+          Copy the columns from Excel and paste them below: <strong>Tower, Team</strong>, and optionally <strong>System, Trade</strong>. A header row is
+          ignored. Anything already there is skipped, so you can paste the same list again after adding rows.
+        </p>
+        <div className="field" style={{ maxWidth: 360 }}>
+          <label htmlFor="oi-dept">Department</label>
+          <select id="oi-dept" className="input" value={dept} onChange={(e) => setDept(e.target.value)}>
+            {depts.map((d) => (
+              <option key={d.id} value={d.id}>
+                {d.name}
+              </option>
+            ))}
+          </select>
+        </div>
+        <div className="field">
+          <label htmlFor="oi-text">Rows</label>
+          <textarea
+            id="oi-text"
+            className="input"
+            rows={8}
+            style={{ fontFamily: "ui-monospace, monospace", fontSize: 13, resize: "vertical" }}
+            placeholder={"Tower\tTeam\nCustoms MNL\tAustralia\nCustoms MNL\tCanada"}
+            value={text}
+            onChange={(e) => setText(e.target.value)}
+          />
+        </div>
+        {rows.length > 0 && (
+          <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+            {plan.errors.map((e) => (
+              <div key={e} className="auth-error">
+                {e}
+              </div>
+            ))}
+            <span className="small" style={{ fontSize: 12 }}>
+              {rows.length} row{rows.length === 1 ? "" : "s"} · {plan.add.length} to add · {plan.skip.length} already there
+            </span>
+            {plan.add.length > 0 && (
+              <div style={{ maxHeight: 240, overflow: "auto", border: "1px solid var(--color-divider)" }}>
+                <table className="table">
+                  <tbody>
+                    {plan.add.map((x, i) => (
+                      <tr key={i}>
+                        <td style={{ width: 90 }}>
+                          <span className={"tag " + (x.type === "tower" ? "tag-accent" : x.type === "branch" ? "tag-outline" : "tag-neutral")}>{TL[x.type]}</span>
+                        </td>
+                        <td style={{ fontWeight: 500 }}>{x.name}</td>
+                        <td className="small">in {x.under}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+            {plan.skip.length > 0 && (
+              <span className="small" style={{ fontSize: 12 }}>
+                Skipped: {plan.skip.map((x) => `${x.name} (${x.why})`).join(", ")}
+              </span>
+            )}
+          </div>
+        )}
+        <Note>New teams start with admin approval and no team admin. Set each team’s admins under Settings, or tick “Admin of …” when adding a member.</Note>
+        <div className="dialog-actions" style={{ gap: 10 }}>
+          <button className="btn btn-secondary btn-40" onClick={close}>
+            Cancel
+          </button>
+          <PrimaryBtn
+            disabled={!plan.add.length || plan.errors.length > 0}
+            onClick={() => {
+              s.run({ type: "importOrg", dept, rows });
+              close();
+            }}
+          >
+            {plan.add.length ? `Add ${plan.add.length}` : "Add"}
+          </PrimaryBtn>
+        </div>
+      </div>
+    </Modal>
+  );
+}
+
 export function CalDialogs() {
   const { dialog: d } = useCalendar();
   if (!d) return null;
@@ -941,5 +1251,7 @@ export function CalDialogs() {
       return <CheckinDialog pid={d.pid} evId={d.evId} />;
     case "event":
       return <EventDialog />;
+    case "orgImport":
+      return <OrgImportDialog />;
   }
 }

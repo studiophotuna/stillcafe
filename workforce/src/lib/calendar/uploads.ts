@@ -2,6 +2,7 @@
 import { ANNUAL, CODES, LEVELS, WORKING, lc } from "./constants";
 import { fmt, toIso } from "./dates";
 import type { Cal } from "./engine";
+import { ALLOC_MIN } from "./org";
 import type { CalPerson, CalendarData, Code, Level, LeaveRequest, OrgNode } from "./types";
 
 export type UploadMode = "members" | "schedule";
@@ -53,6 +54,12 @@ export function checkUpload(c: Cal, mode: UploadMode, rows: UploadRow[], bid: st
     if (mode === "members") {
       const name = String(col(r, "name", "employee name") ?? "").trim();
       const email = lc(col(r, "email"));
+      const lvRaw = lc(col(r, "role", "level"));
+      const lv = (Object.keys(LEVELS) as Level[]).find((k) => lc(LEVELS[k]) === lvRaw) || (lvRaw ? null : "member");
+      // Directors need only a department, managers a tower; everyone else a team.
+      const need = lv ? ALLOC_MIN[lv] : "branch";
+      const twv = col(r, "tower");
+      const tmv = col(r, "team");
       const d = depts.find((n) => nmEq(n, col(r, "department")));
       const tw = d && O.kids(d.id, "tower").find((n) => nmEq(n, col(r, "tower")));
       const tm = tw && O.kids(tw.id, "branch").find((n) => nmEq(n, col(r, "team")));
@@ -60,32 +67,32 @@ export function checkUpload(c: Cal, mode: UploadMode, rows: UploadRow[], bid: st
       const tv = col(r, "trade");
       const sy = tm && sv ? O.kids(tm.id, "system").find((n) => nmEq(n, sv)) : undefined;
       const tr = tm && tv ? O.kids((sy || tm).id, "trade").find((n) => nmEq(n, tv)) : undefined;
-      const lvRaw = lc(col(r, "role", "level"));
-      const lv = (Object.keys(LEVELS) as Level[]).find((k) => lc(LEVELS[k]) === lvRaw) || (lvRaw ? null : "member");
       const ex = c.d.people.find((p) => p.email === email);
       const err = !name
         ? "Name is missing"
         : !/^[^@\s]+@[^@\s]+$/.test(email)
           ? "Email is missing or invalid"
-          : !d
+          : !lv
+            ? "Role must be Member, Team lead, Manager or Director"
+            : !d
             ? "Department not found"
-            : !tw
+            : !tw && (need !== "dept" || twv)
               ? `Tower not found in ${d.name}`
-              : !tm
-                ? `Team not found in ${tw.name}`
+              : !tm && (need === "branch" || tmv)
+                ? tw ? `Team not found in ${tw.name}` : "Choose a tower before a team"
+                : (sv || tv) && !tm
+                  ? "A system or trade needs a team"
                 : sv && !sy
-                  ? `System “${sv}” not found in ${tm.name}`
+                  ? `System “${sv}” not found in ${tm!.name}`
                   : tv && !tr
                     ? `Trade “${tv}” not found`
-                    : !lv
-                      ? "Role must be Member, Team lead, Manager or Director"
-                      : "";
-      const leaf = tr || sy || tm;
+                    : "";
+      const leaf = tr || sy || tm || tw || d;
       const shv = lc(col(r, "default shift"));
       const shift = c.d.shifts.find((y) => lc(y.id) === shv || lc(y.name) === shv)?.id ?? null;
       return {
         n: i + 2,
-        summary: `${name} · ${email}` + (tm ? " · " + [tm.name, sy?.name, tr?.name].filter(Boolean).join(" › ") : ""),
+        summary: `${name} · ${email}` + (leaf ? " · " + [tm ? tm.name : tw ? tw.name : d?.name, sy?.name, tr?.name].filter(Boolean).join(" › ") : ""),
         ok: !err,
         msg:
           err ||

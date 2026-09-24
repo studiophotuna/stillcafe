@@ -167,3 +167,25 @@ export function initialCalendar(today: string): CalendarData {
   };
   return { ...data, logs, roster, bcpReady, bcpEvents, checkins, overrides, seq: 100 + data.requests.length };
 }
+
+/**
+ * A real (non-sample) calendar with no people: the org structure agreed in the
+ * design chat (BSS › 5 towers › Rate Management with GPM / RCM trades) and the
+ * shift list. The first administrator is added directly in the database.
+ */
+export function emptyCalendar(): CalendarData {
+  return {
+    people: [],
+    nodes: JSON.parse(JSON.stringify(NODES0.filter((n) => n.id !== "cs").map((n) => (n.id === "rm" ? { ...n, admins: [] } : n)))),
+    requests: [],
+    overrides: {},
+    roster: {},
+    shifts: SHIFTS0.map((s) => ({ ...s })),
+    holidays: [],
+    bcpReady: {},
+    bcpEvents: [],
+    checkins: {},
+    logs: [],
+    seq: 1,
+  };
+}

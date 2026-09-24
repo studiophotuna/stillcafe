@@ -199,3 +199,146 @@ describe("reports", () => {
     expect(toCsv([["a,b", 'q"'], [1, 2]])).toBe('﻿"a,b","q"""\r\n1,2');
   });
 });
+
+describe("adding members and rights", async () => {
+  const { authorizeCal } = await import("./authz");
+  const details = { name: " New  Person ", email: "New.Person@Example.com" };
+  const add = (extra = {}) => ({ type: "addPerson" as const, details, level: "member" as const, shift: "D", adminHere: false, bid: "rm", assign: ["rm"], ...extra });
+
+  it("adds a new person with details and defaults", () => {
+    const d = fresh();
+    const r = run(d, add({ details: { ...details, entitle: 20, wfhDays: [5, 1, 1] } }));
+    expect(r.error).toBeUndefined();
+    const p = r.data.people.find((x) => x.id === r.newPersonId)!;
+    expect(p).toMatchObject({ name: "New Person", email: "new.person@example.com", entitle: 20, elEnt: 5, hire: TODAY, wfhDays: [1, 5], resign: null });
+    expect(r.newPersonId).toBe(Math.max(...d.people.map((x) => x.id)) + 1);
+  });
+
+  it("rejects duplicate emails, missing names and bad numbers", () => {
+    const d = fresh();
+    const taken = d.people[0].email.toUpperCase();
+    expect(run(d, add({ details: { ...details, email: taken } })).error).toMatch(/already/);
+    expect(run(d, add({ details: { ...details, name: "  " } })).error).toMatch(/name/);
+    expect(run(d, add({ details: { ...details, carry: 9 } })).error).toMatch(/Carry-over/);
+    expect(run(d, add({ assign: [] })).error).toMatch(/allocation/);
+  });
+
+  it("uses WFH weekdays over the A/B pattern", () => {
+    const d = fresh();
+    const r = run(d, add({ details: { ...details, wfhDays: [3] } }));
+    const c = new Cal(r.data, TODAY);
+    const p = c.person(r.newPersonId!);
+    expect(c.raw(p, "2026-09-23", "rm").code).toBe("WFH"); // Wednesday
+    expect(c.raw(p, "2026-09-24", "rm").code).toBe("RTO"); // Thursday
+  });
+
+  it("lets team admins add people, not members", () => {
+    const c = new Cal(fresh(), TODAY);
+    expect("error" in authorizeCal(add(), c, ANA)).toBe(true);
+    expect("action" in authorizeCal(add(), c, SAM)).toBe(true);
+  });
+
+  it("only lets a system admin change a system admin's details", () => {
+    const d = fresh();
+    d.people = d.people.map((p) => (p.id === ANA ? { ...p, sysAdmin: true } : p));
+    const c = new Cal(d, TODAY);
+    const edit = { type: "saveMember" as const, pid: ANA, level: "member" as const, shift: "D", adminHere: false, bid: "rm", assign: ["rm"], isNew: false, details: { email: "x@y.z" } };
+    const bySam = authorizeCal(edit, c, SAM);
+    expect("action" in bySam && bySam.action.type === "saveMember" && bySam.action.details).toBeFalsy();
+    const byAna = authorizeCal({ ...edit, pid: SAM, details: { email: "x@y.z" } }, c, ANA);
+    expect("action" in byAna && byAna.action.type === "saveMember" && byAna.action.details).toEqual({ email: "x@y.z" });
+  });
+
+  it("lets the last admin be removed from a team", () => {
+    const d = fresh();
+    const only = d.nodes.find((n) => n.id === "rm")!.admins!;
+    const r = run(d, { type: "saveMember", pid: only[0], level: "manager", shift: "D", adminHere: false, bid: "rm", assign: ["rm"], isNew: false });
+    const left = r.data.nodes.find((n) => n.id === "rm")!.admins!;
+    expect(left).not.toContain(only[0]);
+  });
+});
+
+describe("org import", async () => {
+  const { parseOrgText, planOrgImport } = await import("./orgImport");
+  const { emptyCalendar } = await import("./seed");
+  const text = "Tower\tTeam\nNorth Tower\tAlpha\nNorth Tower\tBeta \n  north tower \talpha\nA&S Support - Rate Management\tGPM\nA&S Support - Rate Management\tNew RM Team\n\nSouth\tGamma\tSys1\tTradeX";
+
+  it("parses pasted Excel rows and drops the header", () => {
+    const rows = parseOrgText(text);
+    expect(rows[0]).toEqual(["North Tower", "Alpha"]);
+    expect(rows).toHaveLength(6);
+    expect(parseOrgText("A,B\nC,D")).toEqual([["A", "B"], ["C", "D"]]);
+  });
+
+  it("adds missing towers and teams once, and treats a team that is already a system as there", () => {
+    const d = emptyCalendar();
+    const r = run(d, { type: "importOrg", dept: "bss", rows: parseOrgText(text) });
+    const c = new Cal(r.data, TODAY);
+    const byName = (n: string) => r.data.nodes.filter((x) => x.name === n);
+    expect(byName("North Tower")).toHaveLength(1);
+    expect(c.O.kids(byName("North Tower")[0].id, "branch").map((x) => x.name)).toEqual(["Alpha", "Beta"]);
+    expect(byName("GPM")).toHaveLength(1); // still the system inside Rate Management
+    expect(byName("New RM Team")[0].parent).toBe("t_rm");
+    expect(byName("New RM Team")[0]).toMatchObject({ mode: "approval", admins: [] });
+    expect(byName("TradeX")[0].parent).toBe(byName("Sys1")[0].id);
+    expect(r.message).toBe("Added 2 towers, 4 teams, 1 system, 1 trade.");
+    // Running it again adds nothing.
+    const again = run(r.data, { type: "importOrg", dept: "bss", rows: parseOrgText(text) });
+    expect(again.data).toBe(r.data);
+    expect(again.message).toMatch(/Nothing new/);
+  });
+
+  it("rejects rows without a team, and needs an admin", async () => {
+    const { authorizeCal } = await import("./authz");
+    expect(run(emptyCalendar(), { type: "importOrg", dept: "bss", rows: [["Only tower"]] }).error).toMatch(/Row 1/);
+    const c = new Cal(fresh(), TODAY);
+    expect("error" in authorizeCal({ type: "importOrg", dept: "bss", rows: [] }, c, ANA)).toBe(true);
+  });
+});
+
+describe("allocation depth by role", async () => {
+  const { authorizeCal } = await import("./authz");
+  const details = { name: "Lead Person", email: "lead.person@example.com" };
+  const add = (level: "director" | "manager" | "lead" | "member", assign: string[]) =>
+    run(fresh(), { type: "addPerson", details, level, shift: "D", adminHere: false, bid: "rm", assign });
+
+  it("directors need only a department, managers a tower, others a team", () => {
+    expect(add("director", ["bss"]).error).toBeUndefined();
+    expect(add("manager", ["bss"]).error).toMatch(/department and tower/);
+    expect(add("manager", ["t_rm"]).error).toBeUndefined();
+    expect(add("member", ["t_rm"]).error).toMatch(/department, tower and team/);
+    expect(add("lead", ["rm"]).error).toBeUndefined();
+    expect(add("director", ["rm"]).error).toBeUndefined(); // deeper is fine
+  });
+
+  it("gives a department-level director no team, and their leave is approved automatically", () => {
+    const r = add("director", ["bss"]);
+    const c = new Cal(r.data, TODAY);
+    const id = r.newPersonId!;
+    expect(c.O.branchesOf(c.person(id))).toHaveLength(0);
+    const q = run(r.data, { type: "submitRequest", pid: id, form: { type: "VL", start: "2026-10-12", end: "2026-10-12", half: "AM", reason: "" }, adminBid: null, actor: id });
+    expect(q.message).toMatch(/Approved automatically/);
+  });
+
+  it("stops a team admin from editing someone allocated above their team", () => {
+    const r = add("director", ["bss"]);
+    const c = new Cal(r.data, TODAY);
+    const edit = { type: "saveMember" as const, pid: r.newPersonId!, level: "member" as const, shift: "D", adminHere: false, bid: "rm", assign: ["rm"], isNew: false };
+    expect("error" in authorizeCal(edit, c, SAM)).toBe(true);
+  });
+
+  it("accepts upload rows by role", () => {
+    const c = new Cal(fresh(), TODAY);
+    const dept = c.O.by.bss.name;
+    const tower = c.O.by.t_rm.name;
+    const rows = checkUpload(c, "members", [
+      { Name: "Dee Rector", Email: "dee@example.com", Role: "Director", Department: dept },
+      { Name: "Manny Ger", Email: "manny@example.com", Role: "Manager", Department: dept, Tower: tower },
+      { Name: "Manny Two", Email: "manny2@example.com", Role: "Manager", Department: dept },
+      { Name: "Mem Ber", Email: "mem@example.com", Role: "Member", Department: dept, Tower: tower },
+    ], "rm");
+    expect(rows.map((x) => x.ok)).toEqual([true, true, false, false]);
+    expect(rows[0].member?.leaf).toBe("bss");
+    expect(rows[1].member?.leaf).toBe("t_rm");
+  });
+});

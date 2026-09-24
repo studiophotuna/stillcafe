@@ -41,7 +41,20 @@ export function CalendarGrid({ mgmt }: { mgmt?: boolean }) {
   const [scopeOverride, setScope] = useState<"all" | "me" | null>(null);
   const [cellMode, setCellMode] = useState<"status" | "shift">("status");
   const [q, setQ] = useState("");
-  const [countsOpen, setCountsOpen] = useState(true);
+  // Hidden by default; each viewer's choice is remembered in this browser.
+  const [countsOpen, setCountsOpenState] = useState(() => {
+    try {
+      return localStorage.getItem("wfm.counts") === "open";
+    } catch {
+      return false;
+    }
+  });
+  const setCountsOpen = (o: boolean) => {
+    setCountsOpenState(o);
+    try {
+      localStorage.setItem("wfm.counts", o ? "open" : "closed");
+    } catch {}
+  };
   const scope = scopeOverride ?? v.branch.defaultScope ?? "all";
   const shiftMode = cellMode === "shift";
   const shById = Object.fromEntries(s.data.shifts.map((x) => [x.id, x]));
@@ -58,7 +71,9 @@ export function CalendarGrid({ mgmt }: { mgmt?: boolean }) {
   const rows: Row[] = [];
   const rawMap = new Map<number, Cell[]>();
   if (mgmt) {
-    active = s.data.people.filter((p) => O.inN(p, v.dept.id) && p.level !== "member" && c.alive(p, mStart));
+    // A tower shows its leaders plus those allocated to the whole department.
+    const inScope = (p: CalPerson) => O.inN(p, v.dept.id) && (v.mTower === "all" || O.inN(p, v.mTower) || p.assign.includes(v.dept.id));
+    active = s.data.people.filter((p) => inScope(p) && p.level !== "member" && c.alive(p, mStart));
     shown = active.filter((p) => !ql || p.name.toLowerCase().includes(ql));
     (["director", "manager", "lead"] as const).forEach((lv) => {
       const g = shown.filter((p) => p.level === lv).sort(byName);
@@ -76,7 +91,9 @@ export function CalendarGrid({ mgmt }: { mgmt?: boolean }) {
 
   const subOf = (p: CalPerson) => {
     if (p.resign) return `Last day ${fmtY(p.resign)}`;
-    if (mgmt) return O.branchesOf(p).map((b) => b.name).join(", ");
+    if (mgmt)
+      // Teams, or the tower / department for leaders allocated above team level.
+      return [...new Set(p.assign.map((a) => (O.up(a, "branch") ?? O.by[a])?.name).filter(Boolean))].join(", ");
     const inHere = p.assign.filter((a) => O.anc(a).includes(bid)).map((a) => O.sub(a)).filter(Boolean);
     const other = O.branchesOf(p).filter((b) => b.id !== bid).map((b) => b.name);
     return [inHere.join(", "), other.length ? "Also in " + other.join(", ") : ""].filter(Boolean).join(" · ");
@@ -126,8 +143,11 @@ export function CalendarGrid({ mgmt }: { mgmt?: boolean }) {
     <>
       {mgmt && (
         <div className="page-head">
-          <h1>Management calendar · {v.deptShort}</h1>
-          <span>Directors, managers and team leads across every team of {v.deptShort}. Status reflects all of a person’s teams.</span>
+          <h1>Management calendar · {v.mTower === "all" ? v.deptShort : O.by[v.mTower].name}</h1>
+          <span>
+            Directors, managers and team leads {v.mTower === "all" ? `across every tower of ${v.deptShort}` : `in ${O.by[v.mTower].name}`}. Status reflects all of a
+            person’s teams.
+          </span>
         </div>
       )}
       <div className="page-head-row" style={{ alignItems: "center" }}>
@@ -246,7 +266,7 @@ export function CalendarGrid({ mgmt }: { mgmt?: boolean }) {
               ),
             )}
             {!rows.length && (
-              <div style={{ padding: "32px 14px", color: "var(--color-neutral-700)" }}>{ql ? `No one matches “${q}”.` : "No one is allocated here yet."}</div>
+              <div style={{ padding: "32px 14px", color: "var(--color-neutral-700)" }}>{ql ? `No one matches “${q}”.` : mgmt ? "No directors, managers or team leads here yet." : "No one is allocated here yet."}</div>
             )}
             {!mgmt && (
               <div className="grid-counts">

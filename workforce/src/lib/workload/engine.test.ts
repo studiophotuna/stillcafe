@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { H, M } from "./clock";
-import { FIELDS0 } from "./constants";
+import { FIELDS0, PEOPLE } from "./constants";
 import {
   addTasks,
   assignTask,
@@ -64,6 +64,8 @@ const data = (tasks: Task[], p: Partial<Settings> = {}): WorkloadData => ({
   settings: settings(p),
   seq: 2000,
   mailCount: 0,
+  people: PEOPLE,
+  admins: [23],
 });
 
 const get = (d: WorkloadData, id: string) => d.tasks.find((t) => t.id === id)!;
