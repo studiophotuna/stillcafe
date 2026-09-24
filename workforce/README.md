@@ -80,9 +80,18 @@ Both modules save to Supabase: schema `workforce` in the stillcafe project
   interim design so it is usable now; the normalized tables in the handoff data model replace it
   when real data moves in.
 - Each browser refreshes every 20 s and on focus.
-- **Workload people come from the Calendar:** the members of Rate Management, their trades from
-  their allocations, and whether they can take work now from today's calendar (leave, rest day,
-  holiday, or outside their shift). Workload admins are the team's admins plus system admins.
+- **The Calendar is Workload's source of truth.** Each Calendar team has its own Workload
+  (queue, settings, targets), picked from the Team filter. Everything else comes from Calendar ›
+  Organization and Members, read fresh on every load:
+  - **Where tasks go:** the team's trades. A system with no trades counts as one; a team with no
+    systems or trades is one unit itself, so every team can use Workload.
+  - **People:** the team's members; their trades from their allocations (a trade, or every trade
+    under an allocated system; in a single-unit team, everyone). Availability from today's
+    calendar (leave, rest day, holiday, outside their shift).
+  - **Admins:** the team's admins plus system admins.
+  - **Which teams someone can open:** their own teams, teams they administer, and the teams under
+    a department or tower they're allocated to (system admins: all). The server checks this.
+- The Outlook mailbox is not connected yet; with live data, tasks come in by upload only.
 
 ### Starting fresh
 

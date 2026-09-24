@@ -75,9 +75,9 @@ const ADMIN = 23;
 
 /** The team with the sample tasks already saved (a new team starts empty). */
 const getData = async () => {
-  await getData0(TOKEN);
+  await getData0(TOKEN, ADMIN);
   if (!db.tasks.size) seedTasks(Date.now()).forEach((t) => db.tasks.set(t.id, { t, v: 1 }));
-  return getData0(TOKEN);
+  return getData0(TOKEN, ADMIN);
 };
 const runAction = (a: Parameters<typeof runAction0>[2], me = ADMIN) => runAction0(TOKEN, me, a);
 
@@ -90,17 +90,36 @@ beforeEach(() => {
 
 describe("server persistence", () => {
   it("creates the team once, empty, with people from the calendar", async () => {
-    const d = await getData0(TOKEN);
+    const d = await getData0(TOKEN, ADMIN);
     expect(d.tasks).toHaveLength(0);
+    expect(d.org.team).toEqual({ id: "rm", name: "Rate Management" });
+    expect(d.org.trades.map((t) => t.id)).toEqual(["fewb", "inas", "eu", "us", "asla", "lcl"]);
+    expect(d.people.find((p) => p.id === ANA)?.trades).toEqual(["lcl"]);
     expect(d.people.map((p) => p.id)).toEqual(expect.arrayContaining([ANA, LEO]));
     expect(d.admins).toContain(ADMIN);
     expect(db.team?.version).toBe(1);
-    await getData0(TOKEN);
+    await getData0(TOKEN, ADMIN);
     expect(db.applies).toBe(1);
   });
 
   it("refuses a bad session", async () => {
-    await expect(getData0("nope")).rejects.toThrow(/workforce_unauthorized/);
+    await expect(getData0("nope", ADMIN)).rejects.toThrow(/workforce_unauthorized/);
+  });
+
+  it("opens any team a person is in, with that team's org and people from the calendar", async () => {
+    // Customer Service has no systems or trades: the team itself is where tasks go.
+    const d = await getData0(TOKEN, ANA, "cs");
+    expect(d.org.team.name).toBe("Customer Service");
+    expect(d.org.trades).toEqual([{ id: "cs", name: "Customer Service", sys: "" }]);
+    expect(d.people.find((p) => p.id === ANA)?.trades).toEqual(["cs"]);
+    expect(d.org.teams.map((t) => t.id).sort()).toEqual(["cs", "rm"]);
+    // Leo is only in Rate Management.
+    await expect(getData0(TOKEN, LEO, "cs")).rejects.toThrow(/can’t open that team/);
+    expect((await getData0(TOKEN, LEO)).org.team.id).toBe("rm");
+  });
+
+  it("refuses sample mailbox emails in live data", async () => {
+    await expect(runAction({ type: "checkMail" })).rejects.toThrow(/isn’t connected/);
   });
 
   it("keeps members to their own work", async () => {

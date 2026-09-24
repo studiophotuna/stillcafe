@@ -1,20 +1,20 @@
 "use client";
 
 import { Blueprint, Icon } from "@/components/ui";
-import { SYS, TEAM, TRADES } from "@/lib/workload/constants";
 import { useWorkload } from "@/lib/workload/store";
 import type { FieldType, TaskField } from "@/lib/workload/types";
 
-const BUILTIN = [
-  { label: "Title", type: "Text", opts: "Email subject for Outlook tasks", req: "Yes" },
-  { label: "System", type: "List", opts: Object.values(SYS).join(", "), req: "Yes" },
-  { label: "Trade", type: "List", opts: TRADES.map((t) => t.name).join(", "), req: "Yes" },
-  { label: "Priority", type: "List", opts: "High, Normal, Low", req: "No (Normal)" },
-  { label: "Received / Due", type: "Date", opts: "Due is set from the SLA", req: "Auto" },
-];
-
 export default function FieldsPage() {
   const { data, run, toast } = useWorkload();
+  // Built-in columns; systems and trades come from the team in Calendar › Organization.
+  const { org } = data;
+  const BUILTIN = [
+    { label: "Title", type: "Text", opts: "Email subject for Outlook tasks", req: "Yes" },
+    ...(org.systems.length ? [{ label: "System", type: "List", opts: org.systems.map((x) => x.name).join(", "), req: "When a trade name is in two systems" }] : []),
+    { label: "Trade", type: "List", opts: org.trades.map((t) => t.name).join(", "), req: org.trades.length > 1 ? "Yes" : "No (one trade)" },
+    { label: "Priority", type: "List", opts: "High, Normal, Low", req: "No (Normal)" },
+    { label: "Received / Due", type: "Date", opts: "Due is set from the SLA", req: "Auto" },
+  ];
   const setFields = (fn: (f: TaskField[]) => TaskField[]) => run({ type: "setFields", fields: fn(data.fields) });
   const setF = (i: number, patch: Partial<TaskField>) => setFields((fs) => fs.map((f, j) => (j === i ? { ...f, ...patch } : f)));
   const move = (i: number, dir: number) =>
@@ -30,7 +30,7 @@ export default function FieldsPage() {
     <>
       <div className="page-head-row">
         <div className="page-head">
-          <h1>Task fields · {TEAM.name}</h1>
+          <h1>Task fields · {org.team.name}</h1>
           <span style={{ maxWidth: "80ch" }}>
             Each team decides what information a task carries. Required fields must be filled in the upload file and before a task can be marked done. The upload template follows this list.
           </span>

@@ -2,16 +2,17 @@
 
 import { useState } from "react";
 import { Blueprint, Icon, PageHead } from "@/components/ui";
-import { TEAM, TRADES, trPath } from "@/lib/workload/constants";
+import { trPathOf } from "@/lib/workload/constants";
 import { checkRows, type UploadRow } from "@/lib/workload/engine";
 import { downloadTaskTemplate, readTaskFile } from "@/lib/workload/excel";
 import { useWorkload } from "@/lib/workload/store";
 
 export default function IntakePage() {
-  const { data, run, toast } = useWorkload();
+  const { data, run, toast, mode } = useWorkload();
+  const { org } = data;
   const [upload, setUpload] = useState<{ file: string; rows: UploadRow[] } | null>(null);
   const s = data.settings;
-  const chk = upload ? checkRows(upload.rows, data.fields) : [];
+  const chk = upload ? checkRows(upload.rows, data.fields, org) : [];
   const okN = chk.filter((c) => c.ok).length;
   const setSetting = (patch: Partial<typeof s>) => run({ type: "setSettings", patch });
 
@@ -28,7 +29,7 @@ export default function IntakePage() {
 
   return (
     <>
-      <PageHead title={`Intake · ${TEAM.name}`} sub="Tasks come in from an uploaded file or from the team’s shared Outlook mailbox." />
+      <PageHead title={`Intake · ${org.team.name}`} sub="Tasks come in from an uploaded file or from the team’s shared Outlook mailbox." />
       <div className="grid-2 wide">
         <Blueprint as="section" className="panel">
           <h2 className="h2">Upload tasks</h2>
@@ -40,7 +41,7 @@ export default function IntakePage() {
               className="btn btn-secondary btn-40"
               onClick={async () => {
                 try {
-                  await downloadTaskTemplate(data.fields);
+                  await downloadTaskTemplate(data.fields, org);
                   toast("Template downloaded.");
                 } catch {
                   toast("The template couldn’t be created. Try again.");
@@ -109,7 +110,7 @@ export default function IntakePage() {
         <Blueprint as="section" className="panel">
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10 }}>
             <h2 className="h2">Outlook mailbox</h2>
-            <span className="tag tag-accent">Connected</span>
+            {mode === "demo" ? <span className="tag tag-accent">Connected</span> : <span className="tag tag-neutral">Not connected yet</span>}
           </div>
           <div className="field">
             <label htmlFor="mailbox">Shared mailbox</label>
@@ -120,19 +121,25 @@ export default function IntakePage() {
             <label htmlFor="mailtrade">System › Trade for emails from this mailbox (optional)</label>
             <select id="mailtrade" className="input" value={s.mailTrade} onChange={(e) => setSetting({ mailTrade: e.target.value })}>
               <option value="">Set by an admin for each email</option>
-              {TRADES.map((o) => (
+              {org.trades.map((o) => (
                 <option key={o.id} value={o.id}>
-                  {trPath(o.id)}
+                  {trPathOf(org, o.id)}
                 </option>
               ))}
             </select>
           </div>
           <span className="small">If left blank, new emails wait in the queue as “Needs trade” until an admin sets it from the task details.</span>
           <div className="row">
-            <button className="btn btn-secondary btn-40" onClick={() => run({ type: "checkMail" })}>
-              Check mailbox now
-            </button>
-            <span className="small">Checked automatically every 2 minutes in the live system.</span>
+            {mode === "demo" ? (
+              <>
+                <button className="btn btn-secondary btn-40" onClick={() => run({ type: "checkMail" })}>
+                  Check mailbox now
+                </button>
+                <span className="small">Sample emails. Checked automatically every 2 minutes in the live system.</span>
+              </>
+            ) : (
+              <span className="small">Emails start arriving as tasks once the Microsoft Graph connection is set up. Until then, use Upload tasks.</span>
+            )}
           </div>
         </Blueprint>
       </div>

@@ -1,5 +1,5 @@
 import { H, M } from "./clock";
-import { CARRIERS, FIELDS0, PEOPLE, person, TRADES, trade } from "./constants";
+import { CARRIERS, DEMO_ORG, FIELDS0, PEOPLE, person, tradeOf } from "./constants";
 import type { WorkloadData } from "./engine";
 import type { Priority, Task, TaskStatus } from "./types";
 
@@ -40,14 +40,14 @@ export function seedTasks(now: number): Task[] {
   let n = 1040;
 
   const mk = (o: Opts): Task => {
-    const tr = o.trade !== undefined ? o.trade : pick(TRADES).id;
+    const tr = o.trade !== undefined ? o.trade : pick(DEMO_ORG.trades).id;
     const car = pick(CARRIERS);
     const kind = pick(KINDS);
     const pr: Priority = o.pr || (r() < 0.2 ? "high" : r() < 0.8 ? "normal" : "low");
     const rec = o.rec || now - Math.floor(r() * 30 * H);
     const src = r() < 0.65 ? "outlook" : "upload";
     const status = o.status || "new";
-    const trName = tr ? " " + trade(tr)!.name : "";
+    const trName = tr ? " " + tradeOf(DEMO_ORG, tr)!.name : "";
     const id = "T-" + n++;
     const ticket = "RM-" + (20400 + n);
     const contract = r() < 0.6 ? car + "-" + (1000 + Math.floor(r() * 8999)) : "";
@@ -153,12 +153,16 @@ export const SAMPLE_MAIL: [string, string, string, string[]][] = [
   ["ops@dsv.com", "Question about last week’s filing", "Could someone confirm the filing reference?", []],
 ];
 
-/** A team's starting data: default settings and fields, plus sample tasks and people unless `empty`. */
+/**
+ * A team's starting data: default settings and fields. Sample data (not `empty`)
+ * adds the sample tasks, people and org; a real team gets those from the Calendar.
+ */
 export function initialData(now: number, empty = false): WorkloadData {
   return {
     tasks: empty ? [] : seedTasks(now),
     people: empty ? [] : PEOPLE,
     admins: empty ? [] : [23],
+    org: DEMO_ORG,
     fields: FIELDS0.map((f) => ({ ...f })),
     settings: {
       mode: "fifo",
@@ -166,10 +170,10 @@ export function initialData(now: number, empty = false): WorkloadData {
       skipUnavail: true,
       autoFeed: true,
       sla: { high: 4, normal: 24, low: 72 },
-      mailbox: "rm.requests@dsv.com",
+      mailbox: empty ? "" : "rm.requests@dsv.com",
       mailTrade: "",
       work: { shift: 9, b1: 60, b2: 30, prod: 6.8 },
-      targets: { fewb: 8, inas: 6, eu: 7, us: 6, asla: 6, lcl: 8 },
+      targets: empty ? {} : { fewb: 8, inas: 6, eu: 7, us: 6, asla: 6, lcl: 8 },
       memberTargets: {},
     },
     seq: 2000,

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { H, M } from "./clock";
-import { FIELDS0, PEOPLE } from "./constants";
+import { DEMO_ORG, FIELDS0, PEOPLE } from "./constants";
 import {
   addTasks,
   assignTask,
@@ -66,6 +66,7 @@ const data = (tasks: Task[], p: Partial<Settings> = {}): WorkloadData => ({
   mailCount: 0,
   people: PEOPLE,
   admins: [23],
+  org: DEMO_ORG,
 });
 
 const get = (d: WorkloadData, id: string) => d.tasks.find((t) => t.id === id)!;
@@ -211,6 +212,7 @@ describe("upload validation", () => {
         { ...base, trade: "lcl", system: "rcm", Priority: "HIGH" },
       ],
       FIELDS0,
+      DEMO_ORG,
     );
     expect(res.map((r) => r.msg)).toEqual([
       "Ready",
@@ -252,5 +254,24 @@ describe("seed", () => {
     expect(t[0].id).toBe("T-1040");
     expect(t.filter((x) => x.status === "in_progress")).toHaveLength(6);
     expect(t.filter((x) => x.status === "new" && !x.trade)).toHaveLength(1);
+  });
+});
+
+describe("upload rows follow the team's org", () => {
+  const f: typeof FIELDS0 = [];
+  it("needs no System or Trade when the team is its one unit", () => {
+    const org = { team: { id: "cs", name: "Customer Service" }, systems: [], trades: [{ id: "cs", name: "Customer Service", sys: "" }], teams: [] };
+    const [r] = checkRows([{ Title: "Call back" }], f, org);
+    expect(r).toMatchObject({ ok: true, task: { trade: "cs" } });
+  });
+  it("asks for the System only when a trade name is in two systems", () => {
+    const org = {
+      team: { id: "t", name: "T" },
+      systems: [{ id: "a", name: "A" }, { id: "b", name: "B" }],
+      trades: [{ id: "a1", name: "EU", sys: "a" }, { id: "b1", name: "EU", sys: "b" }, { id: "b2", name: "US", sys: "b" }],
+      teams: [],
+    };
+    const res = checkRows([{ Title: "x", Trade: "EU" }, { Title: "x", System: "B", Trade: "EU" }, { Title: "x", Trade: "US" }, { Title: "x", System: "A", Trade: "US" }], f, org);
+    expect(res.map((r) => r.ok ? r.task!.trade : r.msg)).toEqual(["Add the System — that trade is in more than one", "b1", "b2", "US isn’t under A"]);
   });
 });

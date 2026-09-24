@@ -1,25 +1,58 @@
 /**
- * Workload people from the Calendar: members of the team, their trades (from
- * their allocations) and whether they can take work right now (not on leave,
- * a rest day or holiday, and inside their shift).
+ * Workload reads its team from the Calendar: the team's systems and trades, the
+ * members with the trades their allocations cover, whether they can take work
+ * right now (not on leave, a rest day or holiday, and inside their shift), and
+ * the admins.
  */
 import type { Cal } from "../calendar/engine";
+import type { OrgNode } from "../calendar/types";
 import { dayKey, localHour } from "./clock";
-import { TEAM, TRADES } from "./constants";
-import type { Availability, Person } from "./types";
+import type { Availability, Person, Trade, WlOrg } from "./types";
 
 const OUT = ["VL", "SL", "EL", "BT", "HOL", "RD"];
 
-export function peopleFromCalendar(c: Cal, now: number, teamId = TEAM.id): Person[] {
+/**
+ * Where tasks can go in a team: its trades; a system with no trades is one unit;
+ * a team with no systems or trades is a single unit (the team itself).
+ */
+export function unitsOf(c: Cal, teamId: string): Trade[] {
+  const { O } = c;
+  const units: Trade[] = [];
+  const systems = O.kids(teamId, "system");
+  for (const sy of systems) {
+    const trs = O.kids(sy.id, "trade");
+    if (trs.length) trs.forEach((t) => units.push({ id: t.id, name: t.name, sys: sy.id }));
+    else units.push({ id: sy.id, name: sy.name, sys: "" });
+  }
+  O.kids(teamId, "trade").forEach((t) => units.push({ id: t.id, name: t.name, sys: "" }));
+  if (!units.length && O.by[teamId]) units.push({ id: teamId, name: O.by[teamId].name, sys: "" });
+  return units;
+}
+
+export function orgFor(c: Cal, teamId: string, teams: OrgNode[]): WlOrg {
+  const team = c.O.by[teamId];
+  return {
+    team: { id: teamId, name: team?.name ?? teamId },
+    systems: c.O.kids(teamId, "system").map((s) => ({ id: s.id, name: s.name })),
+    trades: unitsOf(c, teamId),
+    teams: teams.map((b) => ({ id: b.id, name: b.name, tower: c.O.up(b.id, "tower")?.name ?? "" })),
+  };
+}
+
+export function peopleFromCalendar(c: Cal, now: number, teamId: string): Person[] {
   const today = dayKey(now);
   const hour = localHour(now);
   const { O } = c;
   if (!O.by[teamId]) return [];
+  const units = unitsOf(c, teamId);
   return c.d.people
     .filter((p) => O.inN(p, teamId) && c.alive(p, today))
     .sort((a, b) => a.name.localeCompare(b.name))
     .map((p) => {
-      const trades = TRADES.filter((t) => p.assign.some((a) => a === t.id || a === t.sys)).map((t) => t.id);
+      // A unit is covered by an allocation to it or to a system above it. An allocation
+      // to the team itself covers the team only when the team is its one unit.
+      const mine = p.assign.filter((a) => O.anc(a).includes(teamId));
+      const trades = units.filter((u) => mine.some((a) => a === u.id || (a !== teamId && O.anc(u.id).includes(a)))).map((u) => u.id);
       const cell = c.raw(p, today, teamId);
       const sh = c.d.shifts.find((x) => x.id === c.shiftFor(p, today));
       const start = sh ? Number(sh.start.slice(0, 2)) + Number(sh.start.slice(3, 5)) / 60 : 8;
@@ -38,8 +71,8 @@ export function peopleFromCalendar(c: Cal, now: number, teamId = TEAM.id): Perso
     });
 }
 
-/** Team admins of the Workload team plus system admins. */
-export function workloadAdmins(c: Cal, teamId = TEAM.id): number[] {
+/** Team admins of the team plus system admins. */
+export function workloadAdmins(c: Cal, teamId: string): number[] {
   const team = c.O.by[teamId];
   const ids = new Set<number>(team?.admins ?? []);
   c.d.people.forEach((p) => p.sysAdmin && ids.add(p.id));

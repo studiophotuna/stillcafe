@@ -5,6 +5,7 @@
  */
 import type { CalAction } from "./actions";
 import type { Cal } from "./engine";
+import type { OrgNode } from "./types";
 
 export interface Rights {
   sys: boolean;
@@ -23,6 +24,24 @@ export function rightsOf(c: Cal, me: number): Rights {
     return sys || (!!x && c.O.branchesOf(x).some((b) => (b.admins ?? []).includes(me)));
   };
   return { sys, teamAdmin, anyAdmin, adminOf };
+}
+
+/**
+ * Teams a person can open: their own teams, teams they administer, and every team
+ * under a department or tower they're allocated to. System admins: all teams.
+ */
+export function visibleTeams(c: Cal, me: number): OrgNode[] {
+  const p = c.people.get(me);
+  const all = c.d.nodes.filter((n) => n.type === "branch");
+  if (!p) return [];
+  if (p.sysAdmin) return all;
+  const ids = new Set(c.O.branchesOf(p).map((b) => b.id));
+  all.forEach((b) => (b.admins ?? []).includes(me) && ids.add(b.id));
+  p.assign.forEach((a) => {
+    const n = c.O.by[a];
+    if (n && (n.type === "dept" || n.type === "tower")) c.O.desc(a, "branch").forEach((b) => ids.add(b.id));
+  });
+  return all.filter((b) => ids.has(b.id));
 }
 
 const NO = { error: "You don’t have permission to do that." };

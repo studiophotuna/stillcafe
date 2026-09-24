@@ -19,7 +19,7 @@ export async function POST(req: Request) {
   const action = (await req.json().catch(() => null)) as Action | null;
   if (!action || !TYPES.has(action.type)) return NextResponse.json({ error: "Unknown action." }, { status: 400 });
   try {
-    return NextResponse.json(await runAction(s.token, s.personId, action));
+    return NextResponse.json(await runAction(s.token, s.personId, action, new URL(req.url).searchParams.get("team")));
   } catch (e) {
     if (e instanceof ForbiddenError) return NextResponse.json({ error: e.message }, { status: 403 });
     if (e instanceof Error && e.message.startsWith("Too many")) return NextResponse.json({ error: e.message }, { status: 409 });

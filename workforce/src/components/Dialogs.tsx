@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { TRADES, fieldOptions, trPath } from "@/lib/workload/constants";
+import { fieldOptions, trPathOf } from "@/lib/workload/constants";
 import { missingRequired } from "@/lib/workload/engine";
 import { useWorkload } from "@/lib/workload/store";
 import type { Priority, Task } from "@/lib/workload/types";
@@ -95,10 +95,12 @@ function TaskDialog({ id }: { id: string }) {
             <div className="field">
               <label htmlFor="dt-trade">System › Trade</label>
               <select id="dt-trade" className="input" value={t.trade} onChange={(e) => run({ type: "setTrade", id, trade: e.target.value })}>
-                <option value="">Needs trade</option>
-                {TRADES.map((o) => (
+                <option value="" disabled>
+                  Needs trade
+                </option>
+                {data.org.trades.map((o) => (
                   <option key={o.id} value={o.id}>
-                    {trPath(o.id)}
+                    {trPathOf(data.org, o.id)}
                   </option>
                 ))}
               </select>

@@ -4,7 +4,7 @@ import { EmailBox } from "@/components/Dialogs";
 import { TaskTable } from "@/components/TaskTable";
 import { Blueprint, Icon, Kpi, PageHead, pct } from "@/components/ui";
 import { dur } from "@/lib/workload/clock";
-import { AV, trPath } from "@/lib/workload/constants";
+import { AV, trPathOf } from "@/lib/workload/constants";
 import { canWork, doneToday, personMetrics, sortTasks } from "@/lib/workload/engine";
 import { useWorkload } from "@/lib/workload/store";
 import { taskDetail, taskRow } from "@/lib/workload/view";
@@ -12,7 +12,7 @@ import { taskDetail, taskRow } from "@/lib/workload/view";
 export default function MyWorkPage() {
   const { data, now, run, me, setDialog } = useWorkload();
   const s = data.settings;
-  const trades = me.trades.map(trPath).join(", ");
+  const trades = me.trades.map((x) => trPathOf(data.org, x)).join(", ");
   const cur = data.tasks.find((t) => t.assignee === me.id && t.status === "in_progress");
   const myDone = doneToday(data.tasks.filter((t) => t.assignee === me.id), now);
   const avg = myDone.length ? dur(myDone.reduce((a, t) => a + (t.doneAt! - t.startedAt!), 0) / myDone.length) : "—";

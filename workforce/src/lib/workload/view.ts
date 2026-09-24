@@ -1,6 +1,6 @@
 /** View models shared by task tables and the task detail screens. */
 import { H, dur, fmtS, fmtT } from "./clock";
-import { AV, PR, ST, trPath } from "./constants";
+import { AV, PR, ST, trPathOf } from "./constants";
 import type { Action } from "./actions";
 import { canWork, due, isBusy, personOf, type WorkloadData } from "./engine";
 import type { Task } from "./types";
@@ -47,7 +47,7 @@ export function taskRow(d: WorkloadData, t: Task, me: number, isAdmin: boolean, 
   return {
     id: t.id,
     title: t.title,
-    path: trPath(t.trade),
+    path: trPathOf(d.org, t.trade),
     priority: PR[t.pr][0],
     prCls: PR[t.pr][1],
     status: ST[t.status][0] + (t.status === "new" && !t.trade ? " · needs trade" : ""),
@@ -72,11 +72,11 @@ export function taskDetail(d: WorkloadData, t: Task, now: number) {
   const s = d.settings;
   const dueAt = due(t, s);
   const od = t.status !== "done" && now > dueAt;
-  const fieldRows = [{ label: "System › Trade", value: trPath(t.trade) }]
+  const fieldRows = [{ label: "System › Trade", value: trPathOf(d.org, t.trade) }]
     .concat(d.fields.map((f) => ({ label: f.label, value: (t.fields[f.key] ?? "") === "" ? "—" : String(t.fields[f.key]) })))
     .concat(t.hold ? [{ label: "On hold because", value: t.hold }] : []);
   return {
-    path: trPath(t.trade),
+    path: trPathOf(d.org, t.trade),
     priority: PR[t.pr][0],
     prCls: PR[t.pr][1],
     status: ST[t.status][0],

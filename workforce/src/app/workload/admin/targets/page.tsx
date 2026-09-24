@@ -2,7 +2,7 @@
 
 import { Blueprint, PageHead } from "@/components/ui";
 import { M, dur } from "@/lib/workload/clock";
-import { TEAM, TRADES, trPath } from "@/lib/workload/constants";
+import { trPathOf } from "@/lib/workload/constants";
 import { useWorkload } from "@/lib/workload/store";
 import type { Settings, WorkingTime } from "@/lib/workload/types";
 
@@ -44,7 +44,7 @@ export default function TargetsPage() {
   return (
     <>
       <PageHead
-        title={`Targets · ${TEAM.name}`}
+        title={`Targets · ${data.org.team.name}`}
         style={{ maxWidth: "85ch" }}
         sub="Working time sets the productive hours used for utilization. Targets set how many tasks a member should finish in a full day; productivity compares tasks done with the target, pro-rated for the part of the shift that has passed."
       />
@@ -87,9 +87,9 @@ export default function TargetsPage() {
               </tr>
             </thead>
             <tbody>
-              {TRADES.map((t) => (
+              {data.org.trades.map((t) => (
                 <tr key={t.id}>
-                  <td style={{ fontWeight: 500 }}>{trPath(t.id)}</td>
+                  <td style={{ fontWeight: 500 }}>{trPathOf(data.org, t.id)}</td>
                   <td>{data.people.filter((p) => p.trades[0] === t.id).length}</td>
                   <td>
                     <NumInput
@@ -123,7 +123,7 @@ export default function TargetsPage() {
                     <tr key={p.id}>
                       <td style={{ fontWeight: 500 }}>{p.name}</td>
                       <td style={{ color: "var(--color-neutral-800)" }}>
-                        {trPath(p.trades[0])} ({s.targets[p.trades[0]] ?? 0})
+                        {trPathOf(data.org, p.trades[0])} ({s.targets[p.trades[0]] ?? 0})
                       </td>
                       <td>
                         <NumInput

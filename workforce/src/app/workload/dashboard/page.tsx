@@ -2,7 +2,7 @@
 
 import { Blueprint, Kpi, PageHead, pct } from "@/components/ui";
 import { dur, fmtT } from "@/lib/workload/clock";
-import { AV, trPath, trade } from "@/lib/workload/constants";
+import { AV, tradeOf, trPathOf } from "@/lib/workload/constants";
 import { doneToday, isOverdue, personMetrics } from "@/lib/workload/engine";
 import { useWorkload } from "@/lib/workload/store";
 import type { Task } from "@/lib/workload/types";
@@ -46,7 +46,7 @@ export default function DashboardPage() {
     const god = g.filter((t) => isOverdue(t, s, now)).length;
     return {
       id: tr.id,
-      path: trPath(tr.id),
+      path: trPathOf(data.org, tr.id),
       queue: gq.length,
       assigned: g.filter((t) => t.status === "assigned").length,
       prog: g.filter((t) => t.status === "in_progress").length,
@@ -66,7 +66,7 @@ export default function DashboardPage() {
       const m = personMetrics(data, p, now);
       return {
         p,
-        trades: p.trades.map((x) => trade(x)!.name).join(", "),
+        trades: p.trades.map((x) => tradeOf(data.org, x)?.name ?? x).join(", "),
         working: w ? `${w.id} · ${dur(now - w.startedAt!)}` : "—",
         done: `${d.length} / ${m.target}`,
         m,

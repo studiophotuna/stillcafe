@@ -4,9 +4,9 @@
  * the same rules. See ../../../README.md › Workload rules.
  */
 import { H, dayKey, localHour } from "./clock";
-import { CARRIERS, PR, SYS, TRADES, fieldOptions, lc, trPath } from "./constants";
+import { CARRIERS, PR, fieldOptions, lc, sysName, trPathOf } from "./constants";
 import { SAMPLE_MAIL } from "./seed";
-import type { Person, Priority, Settings, Task, TaskField } from "./types";
+import type { Person, Priority, Settings, Task, TaskField, WlOrg } from "./types";
 
 export interface WorkloadData {
   tasks: Task[];
@@ -23,6 +23,8 @@ export interface WorkloadData {
   people: Person[];
   /** Person ids with Workload admin rights (team admins and system admins). */
   admins: number[];
+  /** The team, its systems and trades, and the teams this person can open (from the Calendar). */
+  org: WlOrg;
 }
 
 export const personOf = (d: Pick<WorkloadData, "people">, id: number | null) =>
@@ -176,6 +178,7 @@ export function distribute(d: WorkloadData, now: number): Outcome {
 // ── admin edits from task details ──
 
 export function setTrade(d: WorkloadData, id: string, tradeId: string, now: number): Outcome {
+  if (!d.org.trades.some((t) => t.id === tradeId)) return { data: d, message: "That trade isn’t in this team." };
   let data = patch(d, id, (x) => {
     const requeue = x.status === "new" || x.status === "assigned";
     return {
@@ -183,7 +186,7 @@ export function setTrade(d: WorkloadData, id: string, tradeId: string, now: numb
       trade: tradeId,
       assignee: requeue ? null : x.assignee,
       status: requeue ? "new" : x.status,
-      history: hist(x, now, "Trade set to " + trPath(tradeId)),
+      history: hist(x, now, "Trade set to " + trPathOf(d.org, tradeId)),
     };
   });
   if (d.settings.mode === "rr" && tradeId) data = { ...data, tasks: rrAssign(data.tasks, [id], d.settings, d.people, now).tasks };
@@ -259,7 +262,7 @@ export interface CheckedRow {
 }
 
 /** Validate uploaded rows against the team's task fields. Row numbers match the spreadsheet (header = row 1). */
-export function checkRows(rows: UploadRow[], fields: TaskField[]): CheckedRow[] {
+export function checkRows(rows: UploadRow[], fields: TaskField[], org: WlOrg): CheckedRow[] {
   const g = (r: UploadRow, l: string) => {
     const k = Object.keys(r).find((x) => lc(x) === lc(l));
     return k ? r[k] : "";
@@ -268,21 +271,26 @@ export function checkRows(rows: UploadRow[], fields: TaskField[]): CheckedRow[] 
     const title = String(g(r, "Title") ?? "").trim();
     const sysV = lc(g(r, "System"));
     const trV = lc(g(r, "Trade"));
-    const sys = Object.keys(SYS).find((k) => lc(SYS[k]) === sysV);
-    const tr = TRADES.find((t) => lc(t.name) === trV);
+    // System is needed only when a trade name is used under more than one system.
+    const sys = sysV ? org.systems.find((x) => lc(x.name) === sysV) : undefined;
+    const named = org.trades.filter((t) => lc(t.name) === trV);
+    const only = org.trades.length === 1 && !trV && !sysV ? org.trades[0] : undefined;
+    const tr = only ?? (sys ? named.find((t) => t.sys === sys.id) ?? (trV ? undefined : org.trades.find((t) => t.id === sys.id)) : named.length === 1 ? named[0] : undefined);
     const prV = lc(g(r, "Priority")) || "normal";
     const out: Task["fields"] = {};
     let err = !title
       ? "Title is missing"
-      : !sys
+      : sysV && !sys
         ? "System not found"
         : !tr
-          ? "Trade not found"
-          : tr.sys !== sys
-            ? `${tr.name} isn’t under ${SYS[sys]}`
-            : !(prV in PR)
-              ? "Priority must be High, Normal or Low"
-              : "";
+          ? named.length > 1
+            ? "Add the System — that trade is in more than one"
+            : sys && named.length
+              ? `${named[0].name} isn’t under ${sys.name}`
+              : "Trade not found"
+          : !(prV in PR)
+            ? "Priority must be High, Normal or Low"
+            : "";
     if (!err)
       for (const f of fields) {
         let raw = g(r, f.label);
@@ -295,7 +303,7 @@ export function checkRows(rows: UploadRow[], fields: TaskField[]): CheckedRow[] 
       }
     return {
       n: i + 2,
-      summary: title + (tr ? ` · ${SYS[tr.sys]} › ${tr.name}` : ""),
+      summary: title + (tr ? ` · ${tr.sys ? sysName(org, tr.sys) + " › " : ""}${tr.name}` : ""),
       ok: !err,
       msg: err || "Ready",
       task: err ? null : { title, trade: tr!.id, pr: prV as Priority, fields: out },
