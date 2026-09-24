@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import type { Action } from "@/lib/workload/actions";
-import { dbConfigured, runAction } from "@/lib/workload/server";
+import { dbConfigured } from "@/lib/db";
+import { runAction } from "@/lib/workload/server";
 
 export const dynamic = "force-dynamic";
 

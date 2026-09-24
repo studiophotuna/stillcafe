@@ -8,7 +8,7 @@ import type { Priority, Task } from "@/lib/workload/types";
 import { assignOptions, taskDetail } from "@/lib/workload/view";
 import { Blueprint, Icon } from "./ui";
 
-function Modal({ onClose, width, pad, children }: { onClose: () => void; width?: number; pad?: boolean; children: React.ReactNode }) {
+export function Modal({ onClose, width, pad, children }: { onClose: () => void; width?: number; pad?: boolean; children: React.ReactNode }) {
   useEffect(() => {
     const k = (e: KeyboardEvent) => e.key === "Escape" && onClose();
     window.addEventListener("keydown", k);
