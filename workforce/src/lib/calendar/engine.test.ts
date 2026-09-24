@@ -199,3 +199,61 @@ describe("reports", () => {
     expect(toCsv([["a,b", 'q"'], [1, 2]])).toBe('﻿"a,b","q"""\r\n1,2');
   });
 });
+
+describe("adding members and rights", async () => {
+  const { authorizeCal } = await import("./authz");
+  const details = { name: " New  Person ", email: "New.Person@Example.com" };
+  const add = (extra = {}) => ({ type: "addPerson" as const, details, level: "member" as const, shift: "D", adminHere: false, bid: "rm", assign: ["rm"], ...extra });
+
+  it("adds a new person with details and defaults", () => {
+    const d = fresh();
+    const r = run(d, add({ details: { ...details, entitle: 20, wfhDays: [5, 1, 1] } }));
+    expect(r.error).toBeUndefined();
+    const p = r.data.people.find((x) => x.id === r.newPersonId)!;
+    expect(p).toMatchObject({ name: "New Person", email: "new.person@example.com", entitle: 20, elEnt: 5, hire: TODAY, wfhDays: [1, 5], resign: null });
+    expect(r.newPersonId).toBe(Math.max(...d.people.map((x) => x.id)) + 1);
+  });
+
+  it("rejects duplicate emails, missing names and bad numbers", () => {
+    const d = fresh();
+    const taken = d.people[0].email.toUpperCase();
+    expect(run(d, add({ details: { ...details, email: taken } })).error).toMatch(/already/);
+    expect(run(d, add({ details: { ...details, name: "  " } })).error).toMatch(/name/);
+    expect(run(d, add({ details: { ...details, carry: 9 } })).error).toMatch(/Carry-over/);
+    expect(run(d, add({ assign: [] })).error).toMatch(/allocation/);
+  });
+
+  it("uses WFH weekdays over the A/B pattern", () => {
+    const d = fresh();
+    const r = run(d, add({ details: { ...details, wfhDays: [3] } }));
+    const c = new Cal(r.data, TODAY);
+    const p = c.person(r.newPersonId!);
+    expect(c.raw(p, "2026-09-23", "rm").code).toBe("WFH"); // Wednesday
+    expect(c.raw(p, "2026-09-24", "rm").code).toBe("RTO"); // Thursday
+  });
+
+  it("lets team admins add people, not members", () => {
+    const c = new Cal(fresh(), TODAY);
+    expect("error" in authorizeCal(add(), c, ANA)).toBe(true);
+    expect("action" in authorizeCal(add(), c, SAM)).toBe(true);
+  });
+
+  it("only lets a system admin change a system admin's details", () => {
+    const d = fresh();
+    d.people = d.people.map((p) => (p.id === ANA ? { ...p, sysAdmin: true } : p));
+    const c = new Cal(d, TODAY);
+    const edit = { type: "saveMember" as const, pid: ANA, level: "member" as const, shift: "D", adminHere: false, bid: "rm", assign: ["rm"], isNew: false, details: { email: "x@y.z" } };
+    const bySam = authorizeCal(edit, c, SAM);
+    expect("action" in bySam && bySam.action.type === "saveMember" && bySam.action.details).toBeFalsy();
+    const byAna = authorizeCal({ ...edit, pid: SAM, details: { email: "x@y.z" } }, c, ANA);
+    expect("action" in byAna && byAna.action.type === "saveMember" && byAna.action.details).toEqual({ email: "x@y.z" });
+  });
+
+  it("lets the last admin be removed from a team", () => {
+    const d = fresh();
+    const only = d.nodes.find((n) => n.id === "rm")!.admins!;
+    const r = run(d, { type: "saveMember", pid: only[0], level: "manager", shift: "D", adminHere: false, bid: "rm", assign: ["rm"], isNew: false });
+    const left = r.data.nodes.find((n) => n.id === "rm")!.admins!;
+    expect(left).not.toContain(only[0]);
+  });
+});

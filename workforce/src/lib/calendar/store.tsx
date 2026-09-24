@@ -1,6 +1,7 @@
 "use client";
 
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
+import { loadMe, toLogin } from "../session";
 import { dayKey, fmtT, nowMs, setRealClock } from "../workload/clock";
 import type { Toast, ViewAs } from "../workload/types";
 import { applyCalAction, type CalAction } from "./actions";
@@ -16,6 +17,13 @@ import type { CalendarData } from "./types";
  * 20 s. Without one, the sample calendar lives in memory.
  */
 export type DataMode = "demo" | "db";
+
+/** Temporary passwords just created, shown once to the admin. */
+export interface Issued {
+  name: string;
+  email: string;
+  password: string;
+}
 
 export interface Sel {
   dept: string;
@@ -48,8 +56,11 @@ interface Store {
   toast: (t: string) => void;
   toasts: Toast[];
   viewAs: ViewAs;
-  setViewAs: (v: ViewAs) => void;
+  /** Only with sample data; signed-in people are who they signed in as. */
+  setViewAs?: (v: ViewAs) => void;
   me: number;
+  issued: Issued[];
+  showIssued: (list: Issued[]) => void;
   sel: Sel;
   setSel: (p: Partial<Sel>) => void;
   y: number;
@@ -79,6 +90,8 @@ export function CalendarProvider({ children }: { children: React.ReactNode }) {
     return { y, m: m - 1 };
   });
   const [dialog, setDialog] = useState<CalDialog>(null);
+  const [sessionId, setSessionId] = useState<number | null>(null);
+  const [issued, setIssued] = useState<Issued[]>([]);
 
   const commit = useCallback((d: CalendarData) => {
     dataRef.current = d;
@@ -96,6 +109,7 @@ export function CalendarProvider({ children }: { children: React.ReactNode }) {
     if (modeRef.current !== "db" || pending.current) return;
     try {
       const r = await fetch("/api/cal/snapshot", { cache: "no-store" });
+      if (r.status === 401 || r.status === 403) return toLogin(r.status === 403 ? "/change-password" : "/login");
       const j = await r.json();
       if (j.mode === "db" && !pending.current) commit(j.data);
     } catch {}
@@ -106,8 +120,12 @@ export function CalendarProvider({ children }: { children: React.ReactNode }) {
     (async () => {
       let next: DataMode = "demo";
       let saved: CalendarData | null = null;
+      const who = await loadMe();
+      if (!who || !live) return;
+      if (!who.demo) setSessionId(who.personId);
       try {
         const r = await fetch("/api/cal/snapshot", { cache: "no-store" });
+        if (r.status === 401 || r.status === 403) return toLogin(r.status === 403 ? "/change-password" : "/login");
         const j = await r.json();
         if (j.mode === "db") [next, saved] = ["db", j.data];
         else if (j.mode === "error") toast("The database couldn’t be reached, so this is sample data. Changes won’t be saved.");
@@ -150,6 +168,10 @@ export function CalendarProvider({ children }: { children: React.ReactNode }) {
       if (!dataRef.current) return;
       const t = nowMs();
       const local = applyCalAction(dataRef.current, action, dayKey(t), t);
+      if (local.error) {
+        toast(local.error);
+        return;
+      }
       commit(local.data);
       if (modeRef.current !== "db") {
         if (local.message) toast(local.message);
@@ -165,6 +187,7 @@ export function CalendarProvider({ children }: { children: React.ReactNode }) {
           });
           const j = await r.json().catch(() => ({}));
           pending.current--;
+          if (r.status === 401) return toLogin();
           if (!r.ok) {
             toast(j.error || "That change couldn’t be saved.");
             await refresh();
@@ -172,6 +195,8 @@ export function CalendarProvider({ children }: { children: React.ReactNode }) {
           }
           if (!pending.current) commit(j.data);
           if (j.message) toast(j.message);
+          if (j.issued?.length) setIssued((x) => x.concat(j.issued));
+          (j.warnings ?? []).forEach((w: string) => toast(w));
         } catch {
           pending.current--;
           toast("That change couldn’t be saved. Check your connection.");
@@ -206,8 +231,10 @@ export function CalendarProvider({ children }: { children: React.ReactNode }) {
             toast,
             toasts,
             viewAs,
-            setViewAs,
-            me: viewAs === "employee" ? EMPLOYEE_ID : ADMIN_ID,
+            setViewAs: mode === "demo" ? setViewAs : undefined,
+            me: mode === "db" && sessionId !== null ? sessionId : viewAs === "employee" ? EMPLOYEE_ID : ADMIN_ID,
+            issued,
+            showIssued: setIssued,
             sel,
             setSel: (p: Partial<Sel>) => setSelState((s) => ({ ...s, ...p })),
             y: ym.y,
@@ -218,10 +245,11 @@ export function CalendarProvider({ children }: { children: React.ReactNode }) {
             nowLabel: () => fmtT(nowMs()),
           }
         : null,
-    [data, cal, today, now, mode, run, toast, toasts, viewAs, setViewAs, sel, ym, dialog],
+    [data, cal, today, now, mode, run, toast, toasts, viewAs, setViewAs, sel, ym, dialog, sessionId, issued],
   );
 
   if (!value) return null;
+  if (!value.cal.people.get(value.me)) return <NotLinked />;
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
 }
 
@@ -229,4 +257,27 @@ export function useCalendar() {
   const s = useContext(Ctx);
   if (!s) throw new Error("useCalendar must be used inside CalendarProvider");
   return s;
+}
+
+/** Signed in, but the calendar has no member with this sign-in (e.g. removed after the sign-in was made). */
+function NotLinked() {
+  return (
+    <div className="auth">
+      <div className="auth-card">
+        <h1 className="dialog-title" style={{ fontSize: 26, margin: 0 }}>
+          Your sign-in isn’t linked to a member
+        </h1>
+        <p className="auth-sub">Ask your team admin to add you under Members with this email address.</p>
+        <button
+          className="btn btn-secondary btn-40"
+          onClick={async () => {
+            await fetch("/api/auth/logout", { method: "POST" }).catch(() => null);
+            window.location.replace("/login");
+          }}
+        >
+          Sign out
+        </button>
+      </div>
+    </div>
+  );
 }

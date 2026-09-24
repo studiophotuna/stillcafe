@@ -1,8 +1,8 @@
 /** View models shared by task tables and the task detail screens. */
 import { H, dur, fmtS, fmtT } from "./clock";
-import { AV, PEOPLE, PR, ST, person, trPath } from "./constants";
+import { AV, PR, ST, trPath } from "./constants";
 import type { Action } from "./actions";
-import { canWork, due, isBusy, type WorkloadData } from "./engine";
+import { canWork, due, isBusy, personOf, type WorkloadData } from "./engine";
 import type { Task } from "./types";
 
 export interface RowAction {
@@ -35,7 +35,7 @@ export function taskRow(d: WorkloadData, t: Task, me: number, isAdmin: boolean, 
   const dueAt = due(t, s);
   const od = t.status !== "done" && now > dueAt;
   const soon = !od && t.status !== "done" && dueAt - now < 2 * H;
-  const meP = person(me)!;
+  const meP = personOf(d, me) ?? { id: me, name: "", trades: [], avail: "available" as const, shift: "", shiftStart: 8 };
   const busy = isBusy(d.tasks, me);
   let action: RowAction | null = null;
   if (t.status === "new" && s.mode === "self" && meP.trades.includes(t.trade))
@@ -43,7 +43,7 @@ export function taskRow(d: WorkloadData, t: Task, me: number, isAdmin: boolean, 
   else if (t.assignee === me && t.status === "assigned") action = { kind: "start", id: t.id, label: "Start", disabled: busy };
   else if (t.assignee === me && t.status === "on_hold") action = { kind: "resume", id: t.id, label: "Resume", disabled: busy };
   else if (isAdmin && t.status !== "done") action = { kind: "details", id: t.id, label: "Details", disabled: false };
-  const p = t.assignee !== null ? person(t.assignee) : null;
+  const p = personOf(d, t.assignee);
   return {
     id: t.id,
     title: t.title,
@@ -100,7 +100,7 @@ export function taskDetail(d: WorkloadData, t: Task, now: number) {
 }
 
 export function assignOptions(d: WorkloadData, t: Task) {
-  return PEOPLE.filter((p) => p.trades.includes(t.trade)).map((p) => ({
+  return d.people.filter((p) => p.trades.includes(t.trade)).map((p) => ({
     id: String(p.id),
     name:
       p.name +

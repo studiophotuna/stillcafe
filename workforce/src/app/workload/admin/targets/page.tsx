@@ -2,7 +2,7 @@
 
 import { Blueprint, PageHead } from "@/components/ui";
 import { M, dur } from "@/lib/workload/clock";
-import { PEOPLE, TEAM, TRADES, trPath } from "@/lib/workload/constants";
+import { TEAM, TRADES, trPath } from "@/lib/workload/constants";
 import { useWorkload } from "@/lib/workload/store";
 import type { Settings, WorkingTime } from "@/lib/workload/types";
 
@@ -90,7 +90,7 @@ export default function TargetsPage() {
               {TRADES.map((t) => (
                 <tr key={t.id}>
                   <td style={{ fontWeight: 500 }}>{trPath(t.id)}</td>
-                  <td>{PEOPLE.filter((p) => p.trades[0] === t.id).length}</td>
+                  <td>{data.people.filter((p) => p.trades[0] === t.id).length}</td>
                   <td>
                     <NumInput
                       min={0}
@@ -117,7 +117,7 @@ export default function TargetsPage() {
                 </tr>
               </thead>
               <tbody>
-                {PEOPLE.filter((p) => p.trades.length)
+                {data.people.filter((p) => p.trades.length)
                   .sort((a, b) => a.name.localeCompare(b.name))
                   .map((p) => (
                     <tr key={p.id}>

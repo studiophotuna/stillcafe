@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import type { ReactNode } from "react";
+import { signOut } from "@/lib/session";
 import type { ViewAs } from "@/lib/workload/types";
 import { Blueprint, Icon, type IconName } from "./ui";
 
@@ -36,8 +37,9 @@ export function AppFrame({
   nav: NavItem[];
   adminNav: NavItem[];
   user: { name: string; role: string };
-  viewAs: ViewAs;
-  setViewAs: (v: ViewAs) => void;
+  /** Sample data only: switch between the admin and employee views. Signed-in users get Sign out instead. */
+  viewAs?: ViewAs;
+  setViewAs?: (v: ViewAs) => void;
   filterBar?: ReactNode;
   banner?: ReactNode;
   children: ReactNode;
@@ -90,14 +92,24 @@ export function AppFrame({
               <span>{user.role}</span>
             </span>
           </div>
-          {/* Stand-in for Entra ID sign-in until auth is connected. */}
-          <label className="side-demo">
-            Prototype · view as
-            <select className="input" value={viewAs} onChange={(e) => setViewAs(e.target.value as ViewAs)}>
-              <option value="admin">Admin (Sam Delgado)</option>
-              <option value="employee">Employee (Ana Reyes)</option>
-            </select>
-          </label>
+          {viewAs && setViewAs ? (
+            <label className="side-demo">
+              Sample data · view as
+              <select className="input" value={viewAs} onChange={(e) => setViewAs(e.target.value as ViewAs)}>
+                <option value="admin">Admin (Sam Delgado)</option>
+                <option value="employee">Employee (Ana Reyes)</option>
+              </select>
+            </label>
+          ) : (
+            <div className="side-signout">
+              <a className="btn btn-ghost" href={`/change-password?next=${encodeURIComponent(path)}`}>
+                Change password
+              </a>
+              <button className="btn btn-ghost" onClick={signOut}>
+                Sign out
+              </button>
+            </div>
+          )}
         </aside>
         <div className="content">
           {banner}

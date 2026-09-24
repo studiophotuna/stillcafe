@@ -33,7 +33,8 @@ export type CalAction =
   | { type: "addNode"; ntype: NodeType; parent: string | null; name: string; actor: number }
   | { type: "renameNode"; id: string; name: string }
   | { type: "deleteNode"; id: string }
-  | { type: "saveMember"; pid: number; level: Level; shift: string; adminHere: boolean; bid: string; assign: string[]; isNew: boolean }
+  | { type: "saveMember"; pid: number; level: Level; shift: string; adminHere: boolean; bid: string; assign: string[]; isNew: boolean; details?: MemberDetails }
+  | { type: "addPerson"; details: MemberDetails & { name: string; email: string }; level: Level; shift: string; adminHere: boolean; bid: string; assign: string[] }
   | { type: "removeFromTeam"; pid: number; bid: string }
   | { type: "setResign"; pid: number; date: string | null }
   | { type: "saveShift"; orig: string | null; rec: Shift }
@@ -46,9 +47,70 @@ export type CalAction =
   | { type: "closeEvent"; id: string }
   | { type: "importUpload"; mode: UploadMode; rows: UploadRow[]; bid: string };
 
+/** Editable person details (Members › Add / Edit). */
+export interface MemberDetails {
+  name?: string;
+  email?: string;
+  hire?: string;
+  entitle?: number;
+  elEnt?: number;
+  carry?: number;
+  ytd?: number;
+  ytdEl?: number;
+  /** Weekdays worked from home by default, 1 = Mon … 5 = Fri. */
+  wfhDays?: number[];
+}
+
+export const EMAIL_RE = /^[^@\s]+@[^@\s]+\.[^@\s]+$/;
+
+/** Clean and validate details; returns an error message or the cleaned patch. */
+export function cleanDetails(d: CalendarData, m: MemberDetails, selfId: number | null): { error: string } | { patch: MemberDetails } {
+  const out: MemberDetails = {};
+  if (m.name !== undefined) {
+    const n = m.name.trim().replace(/\s+/g, " ");
+    if (!n) return { error: "Enter the person’s name." };
+    out.name = n;
+  }
+  if (m.email !== undefined) {
+    const e = m.email.trim().toLowerCase();
+    if (!EMAIL_RE.test(e)) return { error: "Enter a valid email address." };
+    if (d.people.some((p) => p.id !== selfId && p.email.toLowerCase() === e)) return { error: "Someone already has that email." };
+    out.email = e;
+  }
+  if (m.hire !== undefined) {
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(m.hire)) return { error: "Enter the hire date." };
+    out.hire = m.hire;
+  }
+  const num = (v: number | undefined, lo: number, hi: number, label: string) => {
+    if (v === undefined) return undefined;
+    if (!Number.isFinite(v) || v < lo || v > hi) throw new Error(`${label} must be between ${lo} and ${hi}.`);
+    return Math.round(v * 2) / 2;
+  };
+  try {
+    const e1 = num(m.entitle, 0, 60, "VL + SL entitlement");
+    const e2 = num(m.elEnt, 0, 30, "Emergency leave");
+    const e3 = num(m.carry, 0, 5, "Carry-over");
+    const e4 = num(m.ytd, 0, 60, "VL + SL already used");
+    const e5 = num(m.ytdEl, 0, 30, "EL already used");
+    if (e1 !== undefined) out.entitle = e1;
+    if (e2 !== undefined) out.elEnt = e2;
+    if (e3 !== undefined) out.carry = e3;
+    if (e4 !== undefined) out.ytd = e4;
+    if (e5 !== undefined) out.ytdEl = e5;
+  } catch (e) {
+    return { error: (e as Error).message };
+  }
+  if (m.wfhDays !== undefined) out.wfhDays = [...new Set(m.wfhDays.filter((x) => x >= 1 && x <= 5))].sort();
+  return { patch: out };
+}
+
 export interface CalOutcome {
   data: CalendarData;
   message?: string;
+  /** Validation problem; data is unchanged. */
+  error?: string;
+  /** Id of a person created by this action. */
+  newPersonId?: number;
 }
 
 const pushLogs = (d: CalendarData, ls: Omit<NotifLog, "id">[]): CalendarData => {
@@ -188,18 +250,37 @@ export function applyCalAction(d: CalendarData, a: CalAction, today: string, now
         message: `${TYPE_L[n.type]} “${n.name}” deleted.`,
       };
     }
+    case "addPerson": {
+      const b = c.O.by[a.bid];
+      if (!b || !a.assign.length || !a.assign.every((x) => c.O.by[x]) || !LEVELS[a.level]) return { data: d, error: "Choose a department, tower and team for each allocation." };
+      const cl = cleanDetails(d, { hire: today, entitle: 25, elEnt: 5, carry: 0, ytd: 0, ytdEl: 0, wfhDays: [], ...a.details }, null);
+      if ("error" in cl) return { data: d, error: cl.error };
+      if (!cl.patch.name || !cl.patch.email) return { data: d, error: "Enter the person’s name and email." };
+      const id = Math.max(0, ...d.people.map((p) => p.id)) + 1;
+      const person = {
+        id, name: cl.patch.name, email: cl.patch.email, level: a.level, assign: [...new Set(a.assign)], pattern: "A" as const,
+        shift: d.shifts.some((x) => x.id === a.shift) ? a.shift : d.shifts[0]?.id ?? "D", hire: cl.patch.hire!, resign: null,
+        ytd: cl.patch.ytd ?? 0, ytdEl: cl.patch.ytdEl ?? 0, carry: cl.patch.carry ?? 0, entitle: cl.patch.entitle ?? 25,
+        elEnt: cl.patch.elEnt ?? 5, wfhDays: cl.patch.wfhDays ?? [],
+      };
+      let next: CalendarData = { ...d, people: d.people.concat(person) };
+      if (a.adminHere && a.assign.some((x) => c.O.anc(x).includes(a.bid))) next = setNode(next, a.bid, { admins: (b.admins ?? []).concat(id) });
+      return { data: next, message: `${person.name} added.`, newPersonId: id };
+    }
     case "saveMember": {
       const p = c.people.get(a.pid);
       const b = c.O.by[a.bid];
-      if (!p || !b || !a.assign.length || !a.assign.every((x) => c.O.by[x]) || !LEVELS[a.level]) return { data: d };
+      if (!p || !b || !a.assign.length || !a.assign.every((x) => c.O.by[x]) || !LEVELS[a.level]) return { data: d, error: "Choose a department, tower and team for each allocation." };
+      const cl = cleanDetails(d, a.details ?? {}, a.pid);
+      if ("error" in cl) return { data: d, error: cl.error };
       let next: CalendarData = {
         ...d,
-        people: d.people.map((x) => (x.id === a.pid ? { ...x, assign: [...new Set(a.assign)], level: a.level, shift: a.shift || x.shift } : x)),
+        people: d.people.map((x) => (x.id === a.pid ? { ...x, ...cl.patch, assign: [...new Set(a.assign)], level: a.level, shift: a.shift || x.shift } : x)),
       };
       const inHere = a.assign.some((x) => c.O.anc(x).includes(a.bid));
       let na = (b.admins ?? []).filter((x) => x !== a.pid);
       if (a.adminHere && inHere) na = na.concat(a.pid);
-      if (na.length && na.join() !== (b.admins ?? []).join()) next = setNode(next, a.bid, { admins: na });
+      if (na.join() !== (b.admins ?? []).join()) next = setNode(next, a.bid, { admins: na });
       return { data: next, message: p.name + (a.isNew ? " added." : " updated.") };
     }
     case "removeFromTeam": {

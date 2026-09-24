@@ -4,7 +4,7 @@
  * the same rules. See ../../../README.md › Workload rules.
  */
 import { H, dayKey, localHour } from "./clock";
-import { CARRIERS, PEOPLE, PR, SYS, TRADES, fieldOptions, lc, person, trPath } from "./constants";
+import { CARRIERS, PR, SYS, TRADES, fieldOptions, lc, trPath } from "./constants";
 import { SAMPLE_MAIL } from "./seed";
 import type { Person, Priority, Settings, Task, TaskField } from "./types";
 
@@ -16,7 +16,17 @@ export interface WorkloadData {
   seq: number;
   /** Demo only: rotates the sample emails. */
   mailCount: number;
+  /**
+   * The team's people with their trades and today's availability. Not stored with
+   * the tasks: derived from the Calendar (or the sample people in demo mode).
+   */
+  people: Person[];
+  /** Person ids with Workload admin rights (team admins and system admins). */
+  admins: number[];
 }
+
+export const personOf = (d: Pick<WorkloadData, "people">, id: number | null) =>
+  id === null ? undefined : d.people.find((p) => p.id === id);
 
 /** Result of an action: the new data plus an optional message for a toast. */
 export interface Outcome {
@@ -64,7 +74,7 @@ function begin(d: WorkloadData, id: string, p: Person, now: number): WorkloadDat
  * unassigned task in their own trades. One task in progress at a time.
  */
 export function startWork(d: WorkloadData, pid: number, now: number): Outcome {
-  const me = person(pid);
+  const me = personOf(d, pid);
   if (!me || isBusy(d.tasks, pid)) return { data: d };
   if (!canWork(me, d.settings)) return { data: d, message: "You’re marked unavailable, so tasks aren’t given to you." };
   const s = d.settings;
@@ -77,7 +87,7 @@ export function startWork(d: WorkloadData, pid: number, now: number): Outcome {
 
 /** Start a specific task: take one from the queue ("Members pick") or start one assigned to you. */
 export function startTask(d: WorkloadData, id: string, pid: number, now: number): Outcome {
-  const me = person(pid);
+  const me = personOf(d, pid);
   const t = d.tasks.find((x) => x.id === id);
   if (!me || !t || isBusy(d.tasks, pid)) return { data: d };
   const take = t.status === "new" && d.settings.mode === "self" && me.trades.includes(t.trade) && canWork(me, d.settings);
@@ -125,19 +135,19 @@ export function completeTask(d: WorkloadData, id: string, vals: Task["fields"], 
 }
 
 /** Round-robin: the available member of the trade with the fewest open (assigned + in progress) tasks. */
-export function rrPick(tradeId: string, tasks: Task[], s: Settings): Person | null {
-  const cand = PEOPLE.filter((p) => p.trades.includes(tradeId) && canWork(p, s));
+export function rrPick(tradeId: string, tasks: Task[], s: Settings, people: Person[]): Person | null {
+  const cand = people.filter((p) => p.trades.includes(tradeId) && canWork(p, s));
   if (!cand.length) return null;
   const load = (p: Person) => tasks.filter((t) => t.assignee === p.id && (t.status === "assigned" || t.status === "in_progress")).length;
   return cand.slice().sort((a, b) => load(a) - load(b) || a.name.localeCompare(b.name))[0];
 }
 
-function rrAssign(tasks: Task[], ids: string[], s: Settings, now: number): { tasks: Task[]; n: number } {
+function rrAssign(tasks: Task[], ids: string[], s: Settings, people: Person[], now: number): { tasks: Task[]; n: number } {
   let n = 0;
   for (const id of ids) {
     const t = tasks.find((x) => x.id === id);
     if (!t || t.status !== "new" || !t.trade) continue;
-    const p = rrPick(t.trade, tasks, s);
+    const p = rrPick(t.trade, tasks, s, people);
     if (!p) continue;
     n++;
     tasks = tasks.map((x) =>
@@ -152,14 +162,14 @@ function rrAssign(tasks: Task[], ids: string[], s: Settings, now: number): { tas
 /** Add new tasks to the queue; in round-robin mode they are assigned straight away. */
 export function addTasks(d: WorkloadData, newTasks: Task[], label: string, now: number): Outcome {
   let tasks = d.tasks.concat(newTasks);
-  if (d.settings.mode === "rr") tasks = rrAssign(tasks, newTasks.map((t) => t.id), d.settings, now).tasks;
+  if (d.settings.mode === "rr") tasks = rrAssign(tasks, newTasks.map((t) => t.id), d.settings, d.people, now).tasks;
   return { data: { ...d, tasks }, message: `${plural(newTasks.length, "task")} added${label}.` };
 }
 
 /** "Share out queue now": round-robin every waiting task that has a trade. */
 export function distribute(d: WorkloadData, now: number): Outcome {
   const ids = sortTasks(d.tasks.filter((t) => t.status === "new" && t.trade), d.settings).map((t) => t.id);
-  const { tasks, n } = rrAssign(d.tasks, ids, d.settings, now);
+  const { tasks, n } = rrAssign(d.tasks, ids, d.settings, d.people, now);
   return { data: { ...d, tasks }, message: `${n} tasks shared out.` };
 }
 
@@ -176,7 +186,7 @@ export function setTrade(d: WorkloadData, id: string, tradeId: string, now: numb
       history: hist(x, now, "Trade set to " + trPath(tradeId)),
     };
   });
-  if (d.settings.mode === "rr" && tradeId) data = { ...data, tasks: rrAssign(data.tasks, [id], d.settings, now).tasks };
+  if (d.settings.mode === "rr" && tradeId) data = { ...data, tasks: rrAssign(data.tasks, [id], d.settings, d.people, now).tasks };
   return { data };
 }
 
@@ -190,7 +200,7 @@ export function assignTask(d: WorkloadData, id: string, pid: number | null, now:
     return {
       data: patch(d, id, (x) => ({ ...x, assignee: null, status: "new", history: hist(x, now, "Returned to queue") })),
     };
-  const p = person(pid);
+  const p = personOf(d, pid);
   if (!p) return { data: d };
   return {
     data: patch(d, id, (x) => ({

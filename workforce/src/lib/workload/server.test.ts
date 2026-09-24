@@ -44,20 +44,42 @@ function apply(ch: { team?: typeof db.team; tasks: (Task & { version: number })[
   return { data: null, error: null };
 }
 
+// The sample calendar supplies the team's people (Ana = 0, Leo = 15) and admin (23).
+// Its schedule is built for the demo day, so pin the clock there.
+vi.useFakeTimers({ toFake: ["Date"] });
+vi.setSystemTime(Date.parse("2026-09-24T10:30:00+08:00"));
+const { initialCalendar } = await import("../calendar/seed");
+const calendar = initialCalendar("2026-09-24");
+
 vi.mock("server-only", () => ({}));
 vi.mock("@supabase/supabase-js", () => ({
   createClient: () => ({
-    rpc: async (fn: string, args: { p_changes?: unknown }) =>
-      fn === "workforce_snapshot" ? { data: structuredClone(snapshot()), error: null } : apply(structuredClone(args.p_changes) as never),
+    rpc: async (fn: string, args: { p_changes?: unknown; p_token?: string }) => {
+      if (args.p_token !== TOKEN) return { data: null, error: { message: "workforce_unauthorized" } };
+      if (fn === "workforce_cal_snapshot") return { data: { data: structuredClone(calendar), version: 1 }, error: null };
+      if (fn === "workforce_snapshot") return { data: structuredClone(snapshot()), error: null };
+      return apply(structuredClone(args.p_changes) as never);
+    },
   }),
 }));
 
 process.env.SUPABASE_URL = "https://example.supabase.co";
 process.env.SUPABASE_SECRET_KEY = "test";
-const { getData, runAction } = await import("./server");
+const { getData: getData0, runAction: runAction0 } = await import("./server");
+const { seedTasks } = await import("./seed");
 
+const TOKEN = "t";
 const ANA = 0;
 const LEO = 15;
+const ADMIN = 23;
+
+/** The team with the sample tasks already saved (a new team starts empty). */
+const getData = async () => {
+  await getData0(TOKEN);
+  if (!db.tasks.size) seedTasks(Date.now()).forEach((t) => db.tasks.set(t.id, { t, v: 1 }));
+  return getData0(TOKEN);
+};
+const runAction = (a: Parameters<typeof runAction0>[2], me = ADMIN) => runAction0(TOKEN, me, a);
 
 beforeEach(() => {
   db.team = null;
@@ -67,17 +89,33 @@ beforeEach(() => {
 });
 
 describe("server persistence", () => {
-  it("seeds the team once, then reads it back", async () => {
-    const d = await getData();
-    expect(d.tasks).toHaveLength(45);
+  it("creates the team once, empty, with people from the calendar", async () => {
+    const d = await getData0(TOKEN);
+    expect(d.tasks).toHaveLength(0);
+    expect(d.people.map((p) => p.id)).toEqual(expect.arrayContaining([ANA, LEO]));
+    expect(d.admins).toContain(ADMIN);
     expect(db.team?.version).toBe(1);
-    await getData();
+    await getData0(TOKEN);
     expect(db.applies).toBe(1);
+  });
+
+  it("refuses a bad session", async () => {
+    await expect(getData0("nope")).rejects.toThrow(/workforce_unauthorized/);
+  });
+
+  it("keeps members to their own work", async () => {
+    const before = await getData();
+    const leo = (d: typeof before) => d.tasks.filter((t) => t.assignee === LEO && t.status === "in_progress").map((t) => t.id);
+    await expect(runAction({ type: "setSettings", patch: { mode: "rr" } }, ANA)).rejects.toThrow();
+    // Ana can't start work as Leo: the action is re-targeted to her.
+    const r = await runAction({ type: "startWork", pid: LEO }, ANA);
+    expect(r.data.tasks.some((t) => t.assignee === ANA && t.status === "in_progress")).toBe(true);
+    expect(leo(r.data)).toEqual(leo(before));
   });
 
   it("saves only what an action changed", async () => {
     await getData();
-    const r = await runAction({ type: "startWork", pid: ANA });
+    const r = await runAction({ type: "startWork", pid: ANA }, ANA);
     const mine = r.data.tasks.find((t) => t.assignee === ANA && t.status === "in_progress")!;
     expect(r.message).toBe(`Started ${mine.id}.`);
     expect(db.tasks.get(mine.id)).toMatchObject({ t: { status: "in_progress", assignee: ANA }, v: 2 });
@@ -97,12 +135,12 @@ describe("server persistence", () => {
       const row = db.tasks.get(target)!;
       db.tasks.set(target, { t: { ...row.t, status: "assigned", assignee: LEO }, v: row.v + 1 });
     };
-    const r = await runAction({ type: "startWork", pid: ANA });
+    const r = await runAction({ type: "startWork", pid: ANA }, ANA);
     const mine = r.data.tasks.find((t) => t.assignee === ANA && t.status === "in_progress")!;
     expect(mine.id).not.toBe(target);
     expect(db.tasks.get(target)!.t.assignee).toBe(LEO);
     expect(db.tasks.get(mine.id)!.t).toMatchObject({ status: "in_progress", assignee: ANA });
-    expect(db.applies).toBe(3); // seed, conflicted attempt, successful retry
+    expect(db.applies).toBe(3); // team created, conflicted attempt, successful retry
   });
 
   it("re-validates uploaded rows on the server", async () => {

@@ -40,6 +40,10 @@ export interface CalPerson {
   carry: number;
   entitle: number;
   elEnt: number;
+  /** Weekdays (1 = Mon … 5 = Fri) worked from home by default; overrides `pattern`. */
+  wfhDays?: number[];
+  /** Full admin rights everywhere (set for the first administrator). */
+  sysAdmin?: boolean;
 }
 
 export interface LeaveRequest {

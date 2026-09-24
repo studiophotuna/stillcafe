@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { Blueprint, Icon } from "@/components/ui";
 import { LEVELS } from "@/lib/calendar/constants";
 import { fmtY } from "@/lib/calendar/dates";
@@ -13,6 +13,39 @@ export default function MembersPage() {
   const c = s.cal;
   const { O } = c;
   const [q, setQ] = useState("");
+  // Sign-in status per person (database only).
+  const [logins, setLogins] = useState<Record<number, { mustChange: boolean }> | null>(null);
+  const [busy, setBusy] = useState<number | null>(null);
+  const loadLogins = useCallback(async () => {
+    if (s.mode !== "db") return;
+    try {
+      const r = await fetch("/api/auth/logins", { cache: "no-store" });
+      if (!r.ok) return;
+      const j = (await r.json()) as { logins: { personId: number; mustChange: boolean }[] };
+      setLogins(Object.fromEntries(j.logins.map((l) => [l.personId, { mustChange: l.mustChange }])));
+    } catch {}
+  }, [s.mode]);
+  // Reload when people change (a new member gets a sign-in).
+  useEffect(() => {
+    loadLogins();
+  }, [loadLogins, s.data.people]);
+  const resetPw = async (pid: number, remove = false) => {
+    setBusy(pid);
+    try {
+      const r = await fetch("/api/auth/reset", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ personId: pid, remove }),
+      });
+      const j = await r.json().catch(() => ({}));
+      if (!r.ok) s.toast(j.error || "That didn’t work. Try again.");
+      else if (remove) s.toast("Sign-in removed.");
+      else s.showIssued(j.issued);
+      await loadLogins();
+    } finally {
+      setBusy(null);
+    }
+  };
   const mq = q.trim().toLowerCase();
   const shById = Object.fromEntries(s.data.shifts.map((x) => [x.id, x]));
   const members = s.data.people
@@ -38,7 +71,7 @@ export default function MembersPage() {
         </div>
       </div>
       <Blueprint className="scroll-x">
-        <table className="table" style={{ minWidth: 980 }}>
+        <table className="table" style={{ minWidth: logins ? 1180 : 980 }}>
           <thead>
             <tr>
               <th>Name</th>
@@ -46,6 +79,7 @@ export default function MembersPage() {
               <th>Allocations</th>
               <th>Annual leave</th>
               <th>Status</th>
+              {logins && <th>Sign-in</th>}
               <th style={{ textAlign: "right" }}>Actions</th>
             </tr>
           </thead>
@@ -96,6 +130,19 @@ export default function MembersPage() {
                       {gone ? "Resigned " + fmtY(p.resign!) : p.resign ? "Leaving " + fmtY(p.resign) : "Active"}
                     </span>
                   </td>
+                  {logins && (
+                    <td className="nowrap">
+                      {!logins[p.id] ? (
+                        <span className="tag tag-neutral">None</span>
+                      ) : logins[p.id].mustChange ? (
+                        <span className="tag tag-outline" title="Hasn’t signed in and set their own password yet">
+                          Temporary password
+                        </span>
+                      ) : (
+                        <span className="tag tag-accent">Active</span>
+                      )}
+                    </td>
+                  )}
                   <td>
                     <div style={{ display: "flex", gap: 2, justifyContent: "flex-end" }}>
                       <button className="btn btn-ghost" onClick={() => s.setDialog({ kind: "member", pid: p.id })}>
@@ -104,6 +151,16 @@ export default function MembersPage() {
                       <button className="btn btn-ghost" onClick={() => s.setDialog({ kind: "resign", pid: p.id })}>
                         {p.resign ? "Edit resignation" : "Resignation"}
                       </button>
+                      {logins && !gone && p.id !== s.me && (
+                        <button className="btn btn-ghost" disabled={busy === p.id} onClick={() => resetPw(p.id)}>
+                          {logins[p.id] ? "Reset password" : "Create sign-in"}
+                        </button>
+                      )}
+                      {logins && gone && logins[p.id] && (
+                        <button className="btn btn-ghost" disabled={busy === p.id} onClick={() => resetPw(p.id, true)}>
+                          Remove sign-in
+                        </button>
+                      )}
                       <button className="btn btn-ghost" style={{ color: "var(--color-neutral-700)" }} onClick={() => s.run({ type: "removeFromTeam", pid: p.id, bid: v.bid })}>
                         Remove
                       </button>

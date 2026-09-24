@@ -7,7 +7,7 @@ import { Blueprint, Icon } from "@/components/ui";
 import { LEVELS } from "@/lib/calendar/constants";
 import { useCalendar } from "@/lib/calendar/store";
 import { useCalView } from "@/lib/calendar/useCalView";
-import { CalDialogs } from "./CalDialogs";
+import { CalDialogs, IssuedPasswords } from "./CalDialogs";
 
 type Access = "all" | "leader" | "teamAdmin" | "anyAdmin";
 const ROUTES: { href: string; access: Access }[] = [
@@ -80,7 +80,7 @@ export function CalShell({ children }: { children: React.ReactNode }) {
   const vBcp = path === "/calendar/bcp";
   const showUnit = UNIT_BAR.includes(path);
   const showSub = SUB_SEL.includes(path);
-  const sameDept = v.myBranches.some((b) => O.up(b.id, "dept")!.id === v.dept.id);
+  const sameDept = v.viewBranches.some((b) => O.up(b.id, "dept")!.id === v.dept.id);
   const unitNote = vBcp
     ? "BCP covers the whole department"
     : vMgmt
@@ -105,12 +105,12 @@ export function CalShell({ children }: { children: React.ReactNode }) {
   const filterBar = showUnit ? (
     <>
       {sel("f-dept", "Department", v.dept.id, v.deptList, (val) => {
-        const b = v.myBranches.find((x) => O.up(x.id, "dept")!.id === val);
+        const b = v.viewBranches.find((x) => O.up(x.id, "dept")!.id === val);
         s.setSel({ dept: val, branch: b ? b.id : "", system: "all", trade: "all" });
       }, 200)}
       {!vMgmt && !vBcp && sameDept &&
         sel("f-tower", "Tower", v.tower.id, v.towerOpts, (val) => {
-          const b = v.myBranches.find((x) => O.up(x.id, "tower")!.id === val);
+          const b = v.viewBranches.find((x) => O.up(x.id, "tower")!.id === val);
           if (b) s.setSel({ branch: b.id, system: "all", trade: "all" });
         }, 220)}
       {!vMgmt && !vBcp && v.branchOpts.length > 0 &&
@@ -137,7 +137,7 @@ export function CalShell({ children }: { children: React.ReactNode }) {
       adminNav={adminNav}
       user={{
         name: v.meP.name,
-        role: LEVELS[v.meP.level] + (v.isAdmin ? " · Admin" : "") + " · " + v.myBranches.map((b) => b.name).join(", "),
+        role: LEVELS[v.meP.level] + (v.meP.sysAdmin ? " · System admin" : v.isAdmin ? " · Admin" : "") + (v.myBranches.length ? " · " + v.myBranches.map((b) => b.name).join(", ") : ""),
       }}
       viewAs={s.viewAs}
       setViewAs={s.setViewAs}
@@ -165,6 +165,7 @@ export function CalShell({ children }: { children: React.ReactNode }) {
       overlay={
         <>
           <CalDialogs />
+          <IssuedPasswords />
           <div className="toasts" role="status" aria-live="polite">
             {s.toasts.map((t) => (
               <Blueprint key={t.id} className="toast">
