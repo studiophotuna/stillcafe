@@ -26,6 +26,8 @@ export interface Issued {
 }
 
 export interface Sel {
+  /** Management view: a tower id, or "all". */
+  mTower: string;
   dept: string;
   branch: string;
   system: string;
@@ -84,7 +86,7 @@ export function CalendarProvider({ children }: { children: React.ReactNode }) {
   const queue = useRef<Promise<void>>(Promise.resolve());
   const [toasts, setToasts] = useState<Toast[]>([]);
   const [viewAs, setViewAsState] = useState<ViewAs>("admin");
-  const [sel, setSelState] = useState<Sel>({ dept: "bss", branch: "rm", system: "all", trade: "all" });
+  const [sel, setSelState] = useState<Sel>({ dept: "bss", branch: "rm", system: "all", trade: "all", mTower: "all" });
   const [now, setNow] = useState(nowMs);
   const [ym, setYm] = useState(() => {
     const [y, m] = dayKey(nowMs()).split("-").map(Number);
@@ -210,7 +212,7 @@ export function CalendarProvider({ children }: { children: React.ReactNode }) {
 
   const setViewAs = useCallback((v: ViewAs) => {
     setViewAsState(v);
-    setSelState({ dept: "bss", branch: "rm", system: "all", trade: "all" });
+    setSelState({ dept: "bss", branch: "rm", system: "all", trade: "all", mTower: "all" });
     try {
       localStorage.setItem("wfm.viewAs", v);
     } catch {}

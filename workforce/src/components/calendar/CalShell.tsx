@@ -84,7 +84,9 @@ export function CalShell({ children }: { children: React.ReactNode }) {
   const unitNote = vBcp
     ? "BCP covers the whole department"
     : vMgmt
-      ? "Showing leadership across all teams"
+      ? v.mTower === "all"
+        ? "Showing leaders across all towers"
+        : `Showing leaders in ${O.by[v.mTower].name}`
       : path === "/calendar/admin/approvals" || path === "/calendar/admin/settings"
         ? "Approvals and settings apply to the whole team"
         : "";
@@ -106,8 +108,10 @@ export function CalShell({ children }: { children: React.ReactNode }) {
     <>
       {sel("f-dept", "Department", v.dept.id, v.deptList, (val) => {
         const b = v.viewBranches.find((x) => O.up(x.id, "dept")!.id === val);
-        s.setSel({ dept: val, branch: b ? b.id : "", system: "all", trade: "all" });
+        s.setSel({ dept: val, branch: b ? b.id : "", system: "all", trade: "all", mTower: "all" });
       }, 200)}
+      {vMgmt && v.mTowers.length > 0 &&
+        sel("f-mtower", "Tower", v.mTower, v.mTowers, (val) => s.setSel({ mTower: val }), 220, "All towers")}
       {!vMgmt && !vBcp && sameDept &&
         sel("f-tower", "Tower", v.tower.id, v.towerOpts, (val) => {
           const b = v.viewBranches.find((x) => O.up(x.id, "tower")!.id === val);

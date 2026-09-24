@@ -52,9 +52,12 @@ export function useCalView() {
       const t = O.up(b.id, "tower")!;
       if (O.up(b.id, "dept")!.id === dept.id && !towerOpts.includes(t)) towerOpts.push(t);
     });
+    // Management view tower filter ("all" when the saved one isn't in this department).
+    const mTowers = O.kids(dept.id, "tower");
+    const mTower = mTowers.some((t) => t.id === sel.mTower) ? sel.mTower : "all";
     const pendingCount = data.requests.filter((q) => q.approvals[bid] === "pending").length;
     return {
-      meP, myBranches, viewBranches, branch, dept, tower, bid, isAdmin, anyAdmin, isLeader, systems, system, trades, trade,
+      meP, myBranches, viewBranches, mTowers, mTower, branch, dept, tower, bid, isAdmin, anyAdmin, isLeader, systems, system, trades, trade,
       unitId, unitLabel, deptList, towerOpts, deptShort: dept.name.split(" (")[0], pendingCount,
       branchOpts: viewBranches.filter((b) => O.up(b.id, "tower")!.id === tower.id),
     };
