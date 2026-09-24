@@ -7,17 +7,12 @@ Next.js (App Router) + TypeScript implementation of the **Workload** module from
 handoff (`Workload.dc.html`, handoff notes in `design_handoff_wfm/README.md`; the design bundle is
 kept outside this repo).
 
-Every screen and rule from the design works. Data is saved in Supabase when the server has
-database credentials; without them the app runs on in-memory sample data (marked
-“Sample data · not saved” in the top bar) that resets on reload.
+Every screen and rule from the design works, and data is saved in Supabase.
 
 ## Data and saving
 
 - **Database:** schema `workforce` in the stillcafe Supabase project (`qepcyhgtyhjnxxlrjebk`),
-  kept apart from the site's tables. Migration: `supabase/migrations/0001_workforce_schema.sql`.
-- **Access:** the schema is closed to Supabase's public API roles (`anon`, `authenticated`). Only
-  the server, holding the project's **secret key**, can call `workforce_snapshot` and
-  `workforce_apply`.
+  kept apart from the site's tables. Migrations in `supabase/migrations/`.
 - **Rules run on the server.** The browser applies an action on screen straight away and posts it
   to `/api/wl/action`. The server re-runs the same rule (`src/lib/workload/actions.ts` →
   `engine.ts`) on the stored data and saves only the rows that changed, with version checks. If
@@ -27,14 +22,25 @@ database credentials; without them the app runs on in-memory sample data (marked
 - **Live-ish:** each browser refreshes from `/api/wl/snapshot` every 20 s and on focus.
 - **First load** seeds the team with the sample tasks.
 
-Environment (server only, e.g. in Vercel › workforce › Settings › Environment Variables):
+### Keys — read before storing real data
 
-| Variable | Value |
-| --- | --- |
-| `SUPABASE_URL` | `https://qepcyhgtyhjnxxlrjebk.supabase.co` |
-| `SUPABASE_SECRET_KEY` | Supabase › Project Settings › API Keys › a **secret** key (`sb_secret_…`), or the legacy `service_role` key |
+The server calls two database functions, `workforce_snapshot` and `workforce_apply`; the
+`workforce` tables themselves are closed to Supabase's API roles.
 
-Never prefix these with `NEXT_PUBLIC_`; the secret key must not reach the browser.
+| Server env | Key used | Who else can call the functions |
+| --- | --- | --- |
+| `SUPABASE_SECRET_KEY` set | secret key | nobody (after applying `supabase/pending/0003_…`) |
+| not set (current) | the project's **publishable** key, built in | anyone who has the publishable key + URL (both public) |
+
+The publishable-key setup (migration `0002`) is for the fictional sample data only. Before real
+data goes in:
+1. Vercel › workforce › Settings › Environment Variables: add `SUPABASE_SECRET_KEY` (Supabase ›
+   Project Settings › API Keys › a secret key). Never prefix it with `NEXT_PUBLIC_`. Redeploy.
+2. Apply `supabase/pending/0003_workforce_secret_key_only.sql` to close the functions to the
+   public key.
+
+Optional env: `SUPABASE_URL` (defaults to the stillcafe project), `WORKFORCE_DB=off` (in-memory
+sample data, marked “Sample data · not saved” in the top bar).
 
 > There is no sign-in yet: anyone who can open the app can act as anyone via “view as”. Keep the
 > Vercel deployment protected until Entra ID sign-in is added.
@@ -92,6 +98,8 @@ src/components/ Shell (sidebar + filter bar), TaskTable, Dialogs (task details, 
 src/app/api/wl/ snapshot (GET) and action (POST) route handlers
 src/app/        routes; industry.css = design-system stylesheet (copied from the design bundle's `_ds/industry-…/styles.css`)
 supabase/migrations/0001_workforce_schema.sql  workforce schema + snapshot/apply functions
+supabase/migrations/0002_…public_key_access.sql  temporary: publishable key may call them
+supabase/pending/0003_…secret_key_only.sql      apply once the secret key is configured
 ```
 
 ## Where this differs from the prototype
