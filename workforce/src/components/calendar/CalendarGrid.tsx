@@ -89,6 +89,17 @@ export function CalendarGrid({ mgmt }: { mgmt?: boolean }) {
     shown.forEach((p) => rows.push({ p, cells: rawMap.get(p.id)! }));
   }
 
+  /** Today's shift (or leave / rest day) for the name column. */
+  const todayOf = (p: CalPerson) => {
+    const cell = c.raw(p, s.today, mgmt ? null : bid);
+    if (cell.gone) return "";
+    if (cell.code && WORKING.includes(cell.code as Code)) {
+      const sh = shById[c.shiftFor(p, s.today)];
+      return `Today: ${sh ? `${sh.name} ${sh.start}–${sh.end}` : "working"} · ${cell.code}`;
+    }
+    return cell.code ? `Today: ${CODES[cell.code as Code]?.label ?? cell.code}${cell.pending ? " (pending)" : ""}` : "Today: rest day";
+  };
+
   const subOf = (p: CalPerson) => {
     if (p.resign) return `Last day ${fmtY(p.resign)}`;
     if (mgmt)
@@ -228,6 +239,7 @@ export function CalendarGrid({ mgmt }: { mgmt?: boolean }) {
                       {r.p.id === s.me && <span className="tag tag-accent">You</span>}
                     </div>
                     {subOf(r.p) && <span style={{ color: r.p.resign ? "var(--color-accent-700)" : "var(--color-neutral-700)" }}>{subOf(r.p)}</span>}
+                    {todayOf(r.p) && <span className="grid-today">{todayOf(r.p)}</span>}
                   </div>
                   {r.cells.map((cell, j) => {
                     const d = dates[j];

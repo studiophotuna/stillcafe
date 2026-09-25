@@ -9,7 +9,8 @@ export const NODES0: OrgNode[] = [
   { id: "bss", type: "dept", name: "BSS (Business Support Services)", parent: null },
   { id: "t_ops", type: "tower", name: "A&S Support - Operational", parent: "bss" },
   { id: "t_ie", type: "tower", name: "A&S Support - Import & Export", parent: "bss" },
-  { id: "t_rm", type: "tower", name: "A&S Support - Rate Management", parent: "bss" },
+  // Sample: Sam (manager) is admin of the tower, so of every team in it.
+  { id: "t_rm", type: "tower", name: "A&S Support - Rate Management", parent: "bss", admins: [23] },
   { id: "t_com", type: "tower", name: "A&S Support - Commercial", parent: "bss" },
   { id: "t_cus", type: "tower", name: "Customs", parent: "bss" },
   { id: "rm", type: "branch", name: "Rate Management", parent: "t_rm", ...teamDefaults({ admins: [23] }) },
@@ -176,7 +177,7 @@ export function initialCalendar(today: string): CalendarData {
 export function emptyCalendar(): CalendarData {
   return {
     people: [],
-    nodes: JSON.parse(JSON.stringify(NODES0.filter((n) => n.id !== "cs").map((n) => (n.id === "rm" ? { ...n, admins: [] } : n)))),
+    nodes: JSON.parse(JSON.stringify(NODES0.filter((n) => n.id !== "cs").map((n) => (n.id === "rm" || n.admins ? { ...n, admins: [] } : n)))),
     requests: [],
     overrides: {},
     roster: {},

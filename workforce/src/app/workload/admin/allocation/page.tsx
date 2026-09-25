@@ -77,6 +77,20 @@ export default function AllocationPage() {
           </div>
           <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
             <span style={{ fontSize: 12, color: "var(--color-neutral-700)" }}>Timeliness SLA by priority, in hours from received</span>
+            <label style={{ display: "flex", gap: 10, alignItems: "center", cursor: "pointer", fontSize: 14 }}>
+              <input
+                type="checkbox"
+                className="check"
+                checked={s.slaWeekends !== false}
+                onChange={() => set({ slaWeekends: s.slaWeekends === false })}
+              />
+              Count weekends in the due time
+            </label>
+            <span style={{ fontSize: 12, color: "var(--color-neutral-700)" }}>
+              {s.slaWeekends === false
+                ? "Saturdays and Sundays are skipped: a task received Friday afternoon with a 24-hour SLA is due Monday afternoon, and overdue time doesn’t grow over the weekend."
+                : "Due time runs through weekends. Untick to skip Saturdays and Sundays."}
+            </span>
             <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 10 }}>
               {(["high", "normal", "low"] as Priority[]).map((k) => (
                 <div className="field" key={k}>

@@ -2,7 +2,7 @@
 import { H, dur, fmtS, fmtT } from "./clock";
 import { AV, PR, ST, trPathOf } from "./constants";
 import type { Action } from "./actions";
-import { canTake, due, isBusy, personOf, taskWorkMs, ticketOf, type WorkloadData } from "./engine";
+import { canTake, due, holdPeriods, isBusy, overdueMs, personOf, taskWorkMs, ticketOf, type WorkloadData } from "./engine";
 import type { Task } from "./types";
 
 export interface RowAction {
@@ -38,6 +38,8 @@ export interface TaskRowVM {
   worked: string;
   /** Done within the SLA. */
   onTime: boolean;
+  /** Total time on hold, "" if never. */
+  held: string;
 }
 
 export function taskRow(d: WorkloadData, t: Task, me: number, isAdmin: boolean, now: number): TaskRowVM {
@@ -65,7 +67,7 @@ export function taskRow(d: WorkloadData, t: Task, me: number, isAdmin: boolean, 
     sourceLabel: t.source === "outlook" ? "Outlook" : "Upload",
     receivedShort: fmtS(t.received, now),
     age: t.status === "done" ? "—" : dur(now - t.received),
-    dueShort: t.status === "done" ? "Done " + fmtS(t.doneAt!, now) : od ? "Overdue " + dur(now - dueAt) : fmtS(dueAt, now),
+    dueShort: t.status === "done" ? "Done " + fmtS(t.doneAt!, now) : od ? "Overdue " + dur(overdueMs(t, s, now)) : fmtS(dueAt, now),
     dueColor: od ? "var(--color-accent-800)" : soon ? "var(--color-accent-700)" : "var(--color-neutral-800)",
     dueBold: od,
     assignee: p ? p.name : "—",
@@ -76,6 +78,10 @@ export function taskRow(d: WorkloadData, t: Task, me: number, isAdmin: boolean, 
     finished: t.doneAt ? fmtS(t.doneAt, now) : "—",
     worked: t.startedAt ? dur(taskWorkMs(d, t, now)) : "—",
     onTime: !!t.doneAt && t.doneAt <= dueAt,
+    held: (() => {
+      const ps = holdPeriods(t, now);
+      return ps.length ? dur(ps.reduce((a, p) => a + ((p.to ?? now) - p.from), 0)) : "";
+    })(),
   };
 }
 
@@ -99,7 +105,13 @@ export function taskDetail(d: WorkloadData, t: Task, now: number) {
   const fieldRows = [{ label: "System › Trade", value: trPathOf(d.org, t.trade) }]
     .concat(timeRows)
     .concat(d.fields.map((f) => ({ label: f.label, value: (t.fields[f.key] ?? "") === "" ? "—" : String(t.fields[f.key]) })))
-    .concat(t.hold ? [{ label: "On hold because", value: t.hold }] : []);
+    // Every pending (on hold) period with its date and reason.
+    .concat(
+      holdPeriods(t, now).map((p, i, all) => ({
+        label: all.length > 1 ? `On hold (${i + 1})` : "On hold",
+        value: `${fmtT(p.from)} → ${p.to ? fmtT(p.to) : "still on hold"} · ${dur((p.to ?? now) - p.from)} · ${p.reason || "no reason given"}`,
+      })),
+    );
   return {
     path: trPathOf(d.org, t.trade),
     priority: PR[t.pr][0],
@@ -111,7 +123,7 @@ export function taskDetail(d: WorkloadData, t: Task, now: number) {
       t.status === "done"
         ? "Done " + fmtT(t.doneAt!) + (t.startedAt ? " · took " + dur(t.doneAt! - t.startedAt) : "")
         : od
-          ? "Overdue by " + dur(now - dueAt)
+          ? "Overdue by " + dur(overdueMs(t, s, now))
           : "Due " + fmtT(dueAt),
     dueColor: od ? "var(--color-accent-800)" : "var(--color-neutral-800)",
     receivedText: fmtT(t.received),

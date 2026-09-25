@@ -6,6 +6,7 @@ import { LEVELS } from "@/lib/calendar/constants";
 import { fmtY } from "@/lib/calendar/dates";
 import { useCalendar } from "@/lib/calendar/store";
 import { useCalView } from "@/lib/calendar/useCalView";
+import { isNodeAdmin } from "@/lib/calendar/org";
 import type { CalPerson } from "@/lib/calendar/types";
 
 export default function MembersPage() {
@@ -55,7 +56,8 @@ export default function MembersPage() {
     .filter((p) => (O.inN(p, v.unitId) || above(p)) && (!mq || p.name.toLowerCase().includes(mq)))
     .sort((a, b) => Number(above(b)) - Number(above(a)) || a.name.localeCompare(b.name));
   // Team admins manage the people in their teams; system admins manage everyone.
-  const canManage = (p: CalPerson) => !!v.meP.sysAdmin || O.branchesOf(p).some((b) => (b.admins ?? []).includes(s.me));
+  const canManage = (p: CalPerson) =>
+    !!v.meP.sysAdmin || O.branchesOf(p).some((b) => isNodeAdmin(O, b.id, s.me)) || p.assign.some((a) => isNodeAdmin(O, a, s.me));
   return (
     <>
       <div className="page-head-row">

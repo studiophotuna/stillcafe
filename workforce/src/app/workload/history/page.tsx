@@ -6,7 +6,7 @@ import { Blueprint, PageHead } from "@/components/ui";
 import { PeriodNav } from "@/components/WorkloadBits";
 import { dur } from "@/lib/workload/clock";
 import { lc, trPathOf } from "@/lib/workload/constants";
-import { due, personOf, taskWorkMs, ticketField, ticketOf } from "@/lib/workload/engine";
+import { due, holdPeriods, personOf, taskWorkMs, ticketField, ticketOf } from "@/lib/workload/engine";
 import { periodLabel, periodRange, type PeriodKind } from "@/lib/workload/period";
 import { useWorkload } from "@/lib/workload/store";
 import { taskRow } from "@/lib/workload/view";
@@ -51,7 +51,7 @@ export default function HistoryPage() {
   const csv = () => {
     const iso = (ms: number | null) => (ms ? new Date(ms).toISOString() : "");
     const q2 = (x: unknown) => `"${String(x ?? "").replace(/"/g, '""')}"`;
-    const head = ["Task ID", ...(tf ? [tf.label] : []), "Title", "System › Trade", "Done by", "Received", "Started", "Finished", "Worked (min)", "On time"].concat(
+    const head = ["Task ID", ...(tf ? [tf.label] : []), "Title", "System › Trade", "Done by", "Received", "Started", "Finished", "Worked (min)", "On time", "On hold (min)", "On hold dates", "On hold reasons"].concat(
       data.fields.filter((f) => f !== tf).map((f) => f.label),
     );
     const rows = list.map((t) =>
@@ -66,6 +66,9 @@ export default function HistoryPage() {
         iso(t.doneAt),
         Math.round(taskWorkMs(data, t, now) / 60000),
         t.doneAt! <= due(t, s) ? "Yes" : "No",
+        Math.round(holdPeriods(t, now).reduce((a, p) => a + ((p.to ?? now) - p.from), 0) / 60000),
+        holdPeriods(t, now).map((p) => `${iso(p.from)} to ${iso(p.to)}`).join("; "),
+        holdPeriods(t, now).map((p) => p.reason).join("; "),
       ].concat(data.fields.filter((f) => f !== tf).map((f) => String(t.fields[f.key] ?? ""))),
     );
     const body = [head, ...rows].map((r) => r.map(q2).join(",")).join("\n");
@@ -80,7 +83,7 @@ export default function HistoryPage() {
     <>
       <PageHead
         title={`Task history · ${scope === "team" && lead ? data.org.team.name : "My tasks"}`}
-        sub="Completed tasks with when they were started and finished, and the time worked (breaks and other time away excluded)."
+        sub="Completed tasks with when they were started and finished, the time worked (time on hold, breaks and other time away excluded) and time on hold. Open a task for its hold dates and reasons."
       />
       <div className="row" style={{ justifyContent: "space-between", alignItems: "flex-end" }}>
         <PeriodNav kind={p.kind} anchor={p.anchor} onChange={(kind, anchor) => setP({ kind, anchor })} kinds={["day", "week", "month"]} />

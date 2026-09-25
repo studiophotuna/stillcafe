@@ -3,6 +3,7 @@
 import { Blueprint, Icon } from "@/components/ui";
 import { TYPE_L } from "@/lib/calendar/constants";
 import { useCalendar } from "@/lib/calendar/store";
+import { isNodeAdmin } from "@/lib/calendar/org";
 import { useCalView } from "@/lib/calendar/useCalView";
 import type { NodeType, OrgNode } from "@/lib/calendar/types";
 
@@ -30,7 +31,10 @@ export default function OrganizationPage() {
       <div className="page-head-row">
         <div className="page-head">
           <h1>Organization</h1>
-          <span>Department › Tower › Team › System › Trade. Department, tower and team are required; system and trade are optional.</span>
+          <span>
+            Department › Tower › Team › System › Trade. Admins of a department or tower (e.g. its director or manager) are admins of every team under
+            it — set them with Admins.
+          </span>
         </div>
         <div className="row">
           <button className="btn btn-secondary btn-36" onClick={() => s.setDialog({ kind: "orgImport" })}>
@@ -49,6 +53,8 @@ export default function OrganizationPage() {
           let meta = countIn(n.id) + " people";
           if (n.type === "dept") meta = `${O.kids(n.id, "tower").length} towers · ${meta}`;
           if (n.type === "tower") meta = `${O.kids(n.id, "branch").length} teams · ${meta}`;
+          if (n.type === "dept" || n.type === "tower")
+            meta += ` · admin: ${(n.admins ?? []).map((i) => s.cal.people.get(i)?.name).filter(Boolean).join(", ") || "none"}`;
           if (n.type === "branch")
             meta += ` · ${n.mode === "auto" ? "automatic approval" : "admin approval"} · admin: ${(n.admins ?? []).map((i) => s.cal.people.get(i)?.name).join(", ") || "none"}`;
           return (
@@ -65,6 +71,11 @@ export default function OrganizationPage() {
                     {l}
                   </button>
                 ))}
+                {(n.type === "dept" || n.type === "tower") && (v.meP.sysAdmin || isNodeAdmin(O, n.id, s.me)) && (
+                  <button className="btn btn-ghost" onClick={() => s.setDialog({ kind: "nodeAdmins", id: n.id })}>
+                    Admins
+                  </button>
+                )}
                 <button className="btn btn-ghost" onClick={() => s.setDialog({ kind: "node", mode: "rename", id: n.id, ntype: n.type })}>
                   Rename
                 </button>

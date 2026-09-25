@@ -33,7 +33,7 @@ export async function downloadTaskTemplate(fields: TaskField[], org: WlOrg) {
     ...(single ? [] : org.systems.length ? ([["System", false]] as [string, boolean][]) : []),
     ...(single ? [] : ([["Trade", true]] as [string, boolean][])),
     ["Priority", false],
-    ["Due date", false],
+    ["Received", false],
     ...fields.map((f): [string, boolean, TaskField] => [f.label, f.required, f]),
   ];
   const header = ws.getRow(1);
@@ -72,7 +72,8 @@ export async function downloadTaskTemplate(fields: TaskField[], org: WlOrg) {
           error: "Pick a value from the drop-down.",
         };
       }
-      if (l === "Due date" || f?.type === "date") cell.numFmt = "yyyy-mm-dd";
+      if (l === "Received") cell.numFmt = "yyyy-mm-dd hh:mm";
+      if (f?.type === "date") cell.numFmt = "yyyy-mm-dd";
       if (f?.type === "number")
         cell.dataValidation = {
           type: "decimal",

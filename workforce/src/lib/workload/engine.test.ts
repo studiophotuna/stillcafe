@@ -412,3 +412,54 @@ describe("periods, ticket field and stale reminders", async () => {
     expect(staleTasks({ ...d, settings: { ...d.settings, staleDays: 0 } }, 23, true, NOW)).toHaveLength(0);
   });
 });
+
+describe("on-hold time and weekend SLA", async () => {
+  const { holdPeriods, taskWorkMs, due, overdueMs, holdTask, resumeTask } = await import("./engine");
+  const { addHours, spanMs } = await import("./clock");
+  it("pauses the task timer while on hold and keeps each hold's date and reason", () => {
+    const t0 = task({ status: "in_progress", assignee: ANA, startedAt: NOW - 2 * H });
+    let d = data([t0]);
+    d = holdTask(d, t0.id, "Waiting for carrier", NOW - H).data;
+    d = resumeTask(d, t0.id, ANA, NOW - 30 * M).data;
+    const t = d.tasks[0];
+    expect(holdPeriods(t, NOW)).toEqual([{ from: NOW - H, to: NOW - 30 * M, reason: "Waiting for carrier" }]);
+    expect(taskWorkMs(d, t, NOW)).toBe(90 * M); // 2 h open − 30 min on hold
+    // Still on hold: the timer stays put.
+    const held = holdTask(d, t0.id, "Customer reply", NOW - 10 * M).data;
+    expect(taskWorkMs(held, held.tasks[0], NOW)).toBe(taskWorkMs(held, held.tasks[0], NOW + 5 * H));
+    // A break during the hold isn't subtracted twice.
+    const withBreak = { ...held, activities: [{ id: "b", pid: ANA, kind: "break" as const, start: NOW - 8 * M, end: NOW - 2 * M, otMin: 0, otStatus: null, decidedBy: null, decidedAt: null }] };
+    expect(taskWorkMs(withBreak, withBreak.tasks[0], NOW)).toBe(taskWorkMs(held, held.tasks[0], NOW));
+  });
+  it("can skip weekends in the due time", () => {
+    const fri = Date.parse("2026-09-25T15:00:00+08:00"); // Friday 15:00
+    expect(new Date(addHours(fri, 24, false)).toISOString()).toBe("2026-09-26T07:00:00.000Z"); // Sat 15:00
+    expect(new Date(addHours(fri, 24, true)).toISOString()).toBe("2026-09-28T07:00:00.000Z"); // Mon 15:00
+    const mon = Date.parse("2026-09-28T09:00:00+08:00");
+    expect(spanMs(fri, mon, true)).toBe(9 * H + 9 * H); // Fri 15→24, Mon 0→9
+    const t = task({ received: fri, pr: "normal" });
+    expect(due(t, settings({ slaWeekends: false }))).toBe(addHours(fri, 24, true));
+    expect(overdueMs(t, settings({ slaWeekends: false }), Date.parse("2026-09-28T17:00:00+08:00"))).toBe(2 * H);
+  });
+});
+
+describe("uploads keep the actual received time", async () => {
+  const { parseReceived, importRows } = await import("./engine");
+  it("reads Received as team time and counts the due time from it", () => {
+    expect(parseReceived("2026-09-23 08:30")).toBe(Date.parse("2026-09-23T08:30:00+08:00"));
+    expect(parseReceived(new Date(Date.UTC(2026, 8, 23, 8, 30)))).toBe(Date.parse("2026-09-23T08:30:00+08:00")); // Excel cell
+    expect(parseReceived("")).toBeNull();
+    expect(parseReceived("yesterday")).toBe("bad");
+    const rows = [
+      { Title: "Old request", System: "RCM", Trade: "LCL", Received: "2026-09-23 08:30" },
+      { Title: "No date", System: "RCM", Trade: "LCL" },
+      { Title: "Future", System: "RCM", Trade: "LCL", Received: "2026-09-30 08:00" },
+      { Title: "Bad", System: "RCM", Trade: "LCL", Received: "soon" },
+    ];
+    const chk = checkRows(rows, [], DEMO_ORG, NOW);
+    expect(chk.map((r) => r.msg)).toEqual(["Ready", "Ready", "Received is in the future", "Received must be a date and time like 2026-09-24 08:30"]);
+    const d = importRows(data([]), chk, NOW).data;
+    expect(d.tasks.map((t) => t.received)).toEqual([Date.parse("2026-09-23T08:30:00+08:00"), NOW]);
+    expect(d.tasks[0].history[0].text).toMatch(/received/);
+  });
+});

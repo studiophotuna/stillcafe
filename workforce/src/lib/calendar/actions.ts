@@ -214,7 +214,8 @@ export function applyCalAction(d: CalendarData, a: CalAction, today: string, now
     }
     case "removeAdmin": {
       const b = c.O.by[a.id];
-      if (!b || (b.admins ?? []).length < 2) return { data: d };
+      // A team keeps at least one admin; a department or tower may have none.
+      if (!b || !(b.admins ?? []).includes(a.pid) || (b.type === "branch" && (b.admins ?? []).length < 2)) return { data: d };
       return { data: setNode(d, a.id, { admins: b.admins!.filter((x) => x !== a.pid) }), message: `${c.person(a.pid).name} is no longer an admin.` };
     }
     case "addNode": {

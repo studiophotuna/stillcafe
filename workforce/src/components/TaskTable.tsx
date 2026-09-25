@@ -28,6 +28,7 @@ export function TaskTable({ rows, variant }: { rows: TaskRowVM[]; variant: "mine
           {h && <th>Started</th>}
           {h && <th>Finished</th>}
           {h && <th>Worked</th>}
+          {h && <th>On hold</th>}
           {h && <th>On time</th>}
           {!h && <th>Status</th>}
           {(q || h) && <th>{h ? "Done by" : "Assignee"}</th>}
@@ -68,6 +69,7 @@ export function TaskTable({ rows, variant }: { rows: TaskRowVM[]; variant: "mine
             {h && <td className="nowrap">{r.started}</td>}
             {h && <td className="nowrap">{r.finished}</td>}
             {h && <td className="nowrap">{r.worked}</td>}
+            {h && <td className="nowrap">{r.held || "—"}</td>}
             {h && <td>{r.onTime ? "Yes" : <span style={{ color: "var(--color-accent-800)", fontWeight: 600 }}>Late</span>}</td>}
             {!h && (
               <td>

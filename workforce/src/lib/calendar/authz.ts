@@ -5,6 +5,7 @@
  */
 import type { CalAction } from "./actions";
 import type { Cal } from "./engine";
+import { isNodeAdmin } from "./org";
 import type { OrgNode } from "./types";
 
 export interface Rights {
@@ -17,11 +18,14 @@ export interface Rights {
 export function rightsOf(c: Cal, me: number): Rights {
   const p = c.people.get(me);
   const sys = !!p?.sysAdmin;
-  const teamAdmin = (bid: string) => sys || (c.O.by[bid]?.admins ?? []).includes(me);
+  // Admin of a node or anything above it (department / tower admins cover their teams).
+  const teamAdmin = (bid: string) => sys || isNodeAdmin(c.O, bid, me);
   const anyAdmin = sys || c.d.nodes.some((n) => (n.admins ?? []).includes(me));
   const adminOf = (pid: number) => {
     const x = c.people.get(pid);
-    return sys || (!!x && c.O.branchesOf(x).some((b) => (b.admins ?? []).includes(me)));
+    if (sys) return true;
+    if (!x) return false;
+    return c.O.branchesOf(x).some((b) => isNodeAdmin(c.O, b.id, me)) || x.assign.some((a) => isNodeAdmin(c.O, a, me));
   };
   return { sys, teamAdmin, anyAdmin, adminOf };
 }
@@ -36,7 +40,7 @@ export function visibleTeams(c: Cal, me: number): OrgNode[] {
   if (!p) return [];
   if (p.sysAdmin) return all;
   const ids = new Set(c.O.branchesOf(p).map((b) => b.id));
-  all.forEach((b) => (b.admins ?? []).includes(me) && ids.add(b.id));
+  all.forEach((b) => isNodeAdmin(c.O, b.id, me) && ids.add(b.id));
   p.assign.forEach((a) => {
     const n = c.O.by[a];
     if (n && (n.type === "dept" || n.type === "tower")) c.O.desc(a, "branch").forEach((b) => ids.add(b.id));

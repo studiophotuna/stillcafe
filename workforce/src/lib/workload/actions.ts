@@ -48,7 +48,7 @@ export type Action =
   | { type: "setFields"; fields: TaskField[] };
 
 const SETTING_KEYS: (keyof Settings)[] = [
-  "mode", "order", "skipUnavail", "autoFeed", "sla", "mailbox", "mailTrade", "work", "targets", "memberTargets", "prodBasis", "uploaders", "staleDays", "ticketField",
+  "mode", "order", "skipUnavail", "autoFeed", "sla", "mailbox", "mailTrade", "work", "targets", "memberTargets", "prodBasis", "uploaders", "staleDays", "ticketField", "slaWeekends",
 ];
 
 export function applyAction(d: WorkloadData, a: Action, now: number): Outcome {
@@ -69,7 +69,7 @@ export function applyAction(d: WorkloadData, a: Action, now: number): Outcome {
     case "assign": return assignTask(d, a.id, a.pid, now);
     case "checkMail": return checkMail(d, now);
     // Rows are re-validated against the stored task fields, not trusted from the client.
-    case "importRows": return importRows(d, checkRows(a.rows, d.fields, d.org), now);
+    case "importRows": return importRows(d, checkRows(a.rows, d.fields, d.org, now), now);
     case "setSettings": {
       const patch = Object.fromEntries(Object.entries(a.patch).filter(([k]) => SETTING_KEYS.includes(k as keyof Settings)));
       return { data: { ...d, settings: { ...d.settings, ...patch } } };
