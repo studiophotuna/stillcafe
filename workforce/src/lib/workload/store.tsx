@@ -50,7 +50,7 @@ interface Store {
   sys: string;
   tr: string;
   /** Today is a holiday for me: I'm working it (office or home), or not after all. Saved to the Calendar. */
-  setHolidayWork: (code: "RTO" | "WFH" | null) => void;
+  setHolidayWork: (code: "RTO" | "WFH" | "HOL") => void;
   /** Switch to another team this person can open (reloads its data). */
   setTeam: (id: string) => void;
   setSys: (v: string) => void;
@@ -160,10 +160,12 @@ export function WorkloadProvider({ children }: { children: React.ReactNode }) {
     const poll = setInterval(refresh, REFRESH_MS);
     const onFocus = () => refresh();
     window.addEventListener("focus", onFocus);
+    window.addEventListener("wfm:reload", onFocus);
     return () => {
       clearInterval(tick);
       clearInterval(poll);
       window.removeEventListener("focus", onFocus);
+      window.removeEventListener("wfm:reload", onFocus);
     };
   }, [refresh]);
 
@@ -232,7 +234,7 @@ export function WorkloadProvider({ children }: { children: React.ReactNode }) {
   );
 
   const setHolidayWork = useCallback(
-    async (code: "RTO" | "WFH" | null) => {
+    async (code: "RTO" | "WFH" | "HOL") => {
       const me = session && dataRef.current && personOf(dataRef.current, session.id);
       if (modeRef.current !== "db" || !me?.holiday) return;
       try {

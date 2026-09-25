@@ -9,7 +9,7 @@ import type { OrgNode } from "../calendar/types";
 import { dayKey, localHour } from "./clock";
 import type { Availability, Person, Trade, WlOrg } from "./types";
 
-const workingOn = (o: string | undefined) => (o === "WFH" ? "WFH" : o ? "RTO" : null);
+const workingOn = (o: string | undefined) => (o === "WFH" ? "WFH" : o && o !== "HOL" ? "RTO" : null);
 
 const OUT = ["VL", "SL", "EL", "BT", "HOL", "RD"];
 
@@ -70,7 +70,7 @@ export function peopleFromCalendar(c: Cal, now: number, teamId: string): Person[
         shift: sh ? `${sh.name} ${sh.start}–${sh.end}` : "—",
         shiftStart: Math.floor(start),
         ...(cell.code === "HOL" || cell.code === "HDY"
-          ? { holiday: { name: cell.note ?? "Holiday", date: today, working: workingOn(c.d.overrides[p.id + "|" + today]) } }
+          ? { holiday: { name: cell.note ?? "Holiday", date: today, working: workingOn(c.d.overrides[p.id + "|" + today]), answered: !!c.d.overrides[p.id + "|" + today] } }
           : {}),
       };
     });

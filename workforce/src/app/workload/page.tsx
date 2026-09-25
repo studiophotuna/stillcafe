@@ -100,7 +100,7 @@ export default function MyWorkPage() {
                 <button className="btn btn-secondary btn-36" onClick={() => setHolidayWork(hol.working === "WFH" ? "RTO" : "WFH")}>
                   {hol.working === "WFH" ? "I’m in the office" : "I’m working from home"}
                 </button>
-                <button className="btn btn-ghost" onClick={() => setHolidayWork(null)}>
+                <button className="btn btn-ghost" onClick={() => setHolidayWork("HOL")}>
                   Not working today
                 </button>
               </div>

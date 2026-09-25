@@ -157,18 +157,18 @@ function HolidayWorkDialog({ date }: { date: string }) {
   const close = () => s.setDialog(null);
   if (!h) return null;
   const o = s.data.overrides[p.id + "|" + date];
-  const cur = o === "WFH" ? "WFH" : o ? "RTO" : null;
-  const opts: [("RTO" | "WFH" | null), string, string][] = [
-    ["RTO", "Working in office", "Holiday duty, at the office"],
-    ["WFH", "Working from home", "Holiday duty, from home"],
-    [null, "Not working", "Enjoy the holiday"],
+  const cur = o === "WFH" ? "WFH" : o === "HOL" ? "HOL" : o ? "RTO" : null;
+  const opts: ["RTO" | "WFH" | "HOL", string, string][] = [
+    ["RTO", "Holiday duty · RTO", "Working, in the office"],
+    ["WFH", "Holiday duty · WFH", "Working from home"],
+    ["HOL", "Holiday", "Not working"],
   ];
   return (
     <Modal onClose={close} width={440} pad>
       <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
         <Title>{h.name}</Title>
         <span className="muted">
-          {fmtY(date)} · {cur ? "you’re on holiday duty" : "holiday"}
+          {fmtY(date)} · {cur === "RTO" || cur === "WFH" ? "you’re on holiday duty" : cur === "HOL" ? "holiday" : "tell us if you’re working"}
         </span>
       </div>
       <span className="small">Working on this holiday? Update your status so your team and Workload know. Your team admins are told.</span>
@@ -184,7 +184,7 @@ function HolidayWorkDialog({ date }: { date: string }) {
               close();
             }}
           >
-            <Chip s={CODES[k ? "HDY" : "HOL"]}>{k ? "HDY" : "HOL"}</Chip>
+            <Chip s={CODES[k === "HOL" ? "HOL" : "HDY"]}>{k === "HOL" ? "HOL" : "HDY"}</Chip>
             <span style={{ display: "flex", flexDirection: "column", alignItems: "flex-start" }}>
               <span>{l}</span>
               <span className="small" style={{ fontWeight: 400 }}>{sub}</span>

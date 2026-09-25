@@ -154,10 +154,12 @@ export function CalendarProvider({ children }: { children: React.ReactNode }) {
     const poll = setInterval(refresh, REFRESH_MS);
     const onFocus = () => refresh();
     window.addEventListener("focus", onFocus);
+    window.addEventListener("wfm:reload", onFocus);
     return () => {
       clearInterval(tick);
       clearInterval(poll);
       window.removeEventListener("focus", onFocus);
+      window.removeEventListener("wfm:reload", onFocus);
     };
   }, [refresh]);
 

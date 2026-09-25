@@ -319,3 +319,11 @@ main.page { padding: 24px 32px 56px; display: flex; flex-direction: column; gap:
 /* — report preview: scrolls both ways, header stays visible — */
 .report-scroll { overflow: auto; max-height: calc(100vh - 220px); }
 .report-scroll thead th { position: sticky; top: 0; z-index: 1; background: var(--color-bg); }
+
+.org-tog {
+  width: 24px; height: 24px; display: inline-grid; place-items: center; flex: none; padding: 0;
+  border: 0; background: none; color: var(--color-neutral-700); font-size: 18px; line-height: 1; cursor: pointer;
+  transform: rotate(0deg); transition: transform 0.15s;
+}
+button.org-tog[aria-expanded="true"] { transform: rotate(90deg); }
+button.org-tog:hover { color: var(--color-text); }

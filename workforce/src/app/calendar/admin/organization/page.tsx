@@ -1,21 +1,57 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Blueprint, Icon } from "@/components/ui";
 import { TYPE_L } from "@/lib/calendar/constants";
 import { useCalendar } from "@/lib/calendar/store";
 import { isNodeAdmin } from "@/lib/calendar/org";
 import { useCalView } from "@/lib/calendar/useCalView";
+import { Seg } from "@/components/calendar/bits";
 import type { NodeType, OrgNode } from "@/lib/calendar/types";
+
+const LS_SHUT = "wfm.orgMinimized";
+type Level = NodeType | "all" | "custom";
+const hiddenWord = (ks: OrgNode[]) => (new Set(ks.map((k) => k.type)).size === 1 ? TYPE_L[ks[0].type].toLowerCase() : "item");
 
 export default function OrganizationPage() {
   const s = useCalendar();
   const v = useCalView();
   const { O } = s.cal;
   const countIn = (id: string) => s.data.people.filter((p) => O.inN(p, id) && !(p.resign && p.resign < s.today)).length;
+  // Minimized rows (their children hidden), remembered in this browser.
+  const [shut, setShut] = useState<Set<string>>(new Set());
+  useEffect(() => {
+    try {
+      setShut(new Set(JSON.parse(localStorage.getItem(LS_SHUT) || "[]")));
+    } catch {}
+  }, []);
+  const save = (x: Set<string>) => {
+    setShut(x);
+    try {
+      localStorage.setItem(LS_SHUT, JSON.stringify([...x]));
+    } catch {}
+  };
+  const kidsOf = (n: OrgNode) =>
+    n.type === "dept" ? O.kids(n.id, "tower") : n.type === "tower" ? O.kids(n.id, "branch") : n.type === "branch" ? O.kids(n.id, "system").concat(O.kids(n.id, "trade")) : n.type === "system" ? O.kids(n.id, "trade") : [];
+  const toggle = (id: string) => {
+    const x = new Set(shut);
+    if (x.has(id)) x.delete(id);
+    else x.add(id);
+    save(x);
+  };
+  // "Show down to": minimize every row of that level (levels above stay open).
+  const showTo = (t: Level) => save(new Set(t === "all" ? [] : s.data.nodes.filter((n) => n.type === t).map((n) => n.id)));
+  const ORDER: NodeType[] = ["dept", "tower", "branch", "system"];
+  const level: Level =
+    ORDER.find((t) => {
+      const ns = s.data.nodes.filter((n) => n.type === t && kidsOf(n).length);
+      const above = s.data.nodes.filter((n) => ORDER.indexOf(n.type) < ORDER.indexOf(t) && kidsOf(n).length);
+      return ns.length > 0 && ns.every((n) => shut.has(n.id)) && above.every((n) => !shut.has(n.id));
+    }) ?? (shut.size ? "custom" : "all");
   const rows: { n: OrgNode; depth: number }[] = [];
   const push = (n: OrgNode, depth: number) => {
     rows.push({ n, depth });
+    if (shut.has(n.id)) return;
     if (n.type === "dept") O.kids(n.id, "tower").forEach((b) => push(b, depth + 1));
     if (n.type === "tower") O.kids(n.id, "branch").forEach((b) => push(b, depth + 1));
     if (n.type === "branch") {
@@ -48,8 +84,18 @@ export default function OrganizationPage() {
           </button>
         </div>
       </div>
+      <div className="row" style={{ alignItems: "center", gap: 10, marginBottom: 10 }}>
+        <span className="small">Show down to</span>
+        <Seg<Level>
+          name="org-level"
+          value={level}
+          options={[["dept", "Departments"], ["tower", "Towers"], ["branch", "Teams"], ["system", "Systems"], ["all", "Everything"]]}
+          onChange={showTo}
+        />
+      </div>
       <Blueprint>
         {rows.map(({ n, depth }) => {
+          const kids = kidsOf(n).length;
           const hasMe = (n.type === "dept" || n.type === "tower" || n.type === "branch") && v.myBranches.every((b) => O.anc(b.id).includes(n.id));
           let meta = countIn(n.id) + " people";
           if (n.type === "dept") meta = `${O.kids(n.id, "tower").length} towers · ${meta}`;
@@ -60,11 +106,27 @@ export default function OrganizationPage() {
             meta += ` · ${n.mode === "auto" ? "automatic approval" : "admin approval"} · admin: ${(n.admins ?? []).map((i) => s.cal.people.get(i)?.name).join(", ") || "none"}`;
           return (
             <div key={n.id} className="org-row" style={{ paddingLeft: 14 + depth * 32 }}>
+              {kids ? (
+                <button
+                  className="org-tog"
+                  aria-expanded={!shut.has(n.id)}
+                  aria-label={(shut.has(n.id) ? "Expand " : "Minimize ") + n.name}
+                  title={shut.has(n.id) ? `Show ${kids} under ${n.name}` : "Minimize"}
+                  onClick={() => toggle(n.id)}
+                >
+                  ›
+                </button>
+              ) : (
+                <span className="org-tog" aria-hidden="true" />
+              )}
               <span className={"tag " + (n.type === "dept" || n.type === "tower" ? "tag-accent" : n.type === "branch" ? "tag-outline" : "tag-neutral")} style={{ minWidth: 64, justifyContent: "center" }}>
                 {TYPE_L[n.type]}
               </span>
               <span style={{ fontWeight: depth < 2 ? 600 : 500, fontSize: depth === 0 ? 16 : 14 }}>{n.name}</span>
-              <span className="small" style={{ marginRight: "auto" }}>{meta}</span>
+              <span className="small" style={{ marginRight: "auto" }}>
+                {meta}
+                {shut.has(n.id) && ` · ${kids} ${hiddenWord(kidsOf(n))}${kids === 1 ? "" : "s"} hidden`}
+              </span>
               <div style={{ display: "flex", flexWrap: "wrap", gap: 2 }}>
                 {addsFor(n.type).map(([l, t]) => (
                   <button key={t} className="btn btn-ghost" onClick={() => s.setDialog({ kind: "node", mode: "add", ntype: t, parent: n.id })}>

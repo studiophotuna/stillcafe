@@ -104,7 +104,8 @@ export class Cal {
         };
     }
     const o = this.d.overrides[p.id + "|" + d];
-    if (o) return { code: o, wk, shift: WORKING.includes(o) ? this.shiftFor(p, d) : null };
+    // "HOL" is a member's reply that they're off on a holiday; it means nothing on other days.
+    if (o && o !== "HOL") return { code: o, wk, shift: WORKING.includes(o) ? this.shiftFor(p, d) : null };
     if (wk) return { code: "", wk };
     const w = dowOf(d);
     const wfh = p.wfhDays ? p.wfhDays.includes(w) : p.pattern === "A" ? w === 1 || w === 2 : w === 4 || w === 5;

@@ -163,6 +163,7 @@ export function QuickLinks() {
 }
 
 interface Notices {
+  holiday?: { pid: number; date: string; name: string; answer: string | null } | null;
   leave: { id: string; label: string; start: string; end: string }[];
   ot: { id: string; otMin: number; day: string }[];
   links: { leave: string; ot: string };
@@ -285,6 +286,77 @@ export function BipoNotice() {
             I’ve filed {leave.length + ot.length > 1 ? "them" : "it"}
           </Blueprint>
         </div>
+      </Blueprint>
+    </div>
+  );
+}
+
+/**
+ * Today is a holiday for me and I haven't said whether I'm working: ask once —
+ * Holiday duty (RTO or WFH) or Holiday. The reply goes on my Calendar schedule.
+ */
+export function HolidayPrompt() {
+  const [h, setH] = useState<Notices["holiday"]>(null);
+  const [later, setLater] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState("");
+  const load = useCallback(() => {
+    fetch("/api/me/notices", { cache: "no-store" })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((j) => j && !j.demo && setH(j.holiday ?? null))
+      .catch(() => {});
+  }, []);
+  useEffect(() => {
+    load();
+    window.addEventListener("wfm:reload", load);
+    return () => window.removeEventListener("wfm:reload", load);
+  }, [load]);
+  if (!h || h.answer || later) return null;
+  const answer = async (code: "RTO" | "WFH" | "HOL") => {
+    setBusy(true);
+    setErr("");
+    try {
+      const r = await fetch("/api/cal/action", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ type: "holidayWork", pid: h.pid, date: h.date, code, actor: h.pid }),
+      });
+      const j = await r.json().catch(() => ({}));
+      if (!r.ok) throw new Error(j.error || "That couldn’t be saved.");
+      setH({ ...h, answer: code });
+      window.dispatchEvent(new Event("wfm:reload"));
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : "That couldn’t be saved.");
+    }
+    setBusy(false);
+  };
+  const opts: ["RTO" | "WFH" | "HOL", string, string][] = [
+    ["RTO", "Holiday duty · RTO", "I’m working today, in the office"],
+    ["WFH", "Holiday duty · WFH", "I’m working today, from home"],
+    ["HOL", "Holiday", "I’m not working today"],
+  ];
+  return (
+    <div className="away-pop" role="dialog" aria-modal="true" aria-label="Holiday today">
+      <Blueprint className="away-card" style={{ alignItems: "stretch", textAlign: "left", width: "min(460px, calc(100% - 32px))" }}>
+        <span className="small" style={{ textTransform: "uppercase", letterSpacing: "0.1em", color: "var(--color-accent-700)" }}>
+          Holiday today
+        </span>
+        <div className="dialog-title" style={{ fontSize: 24 }}>
+          {h.name}
+        </div>
+        <span className="small">Are you working today? Your answer goes on your schedule, and Workload gives you tasks only if you’re on holiday duty.</span>
+        <div style={{ display: "grid", gap: 8 }}>
+          {opts.map(([k, l, sub]) => (
+            <button key={k} className="btn btn-secondary" disabled={busy} style={{ justifyContent: "flex-start", minHeight: 52, flexDirection: "column", alignItems: "flex-start", gap: 0 }} onClick={() => answer(k)}>
+              <span>{l}</span>
+              <span className="small" style={{ fontWeight: 400 }}>{sub}</span>
+            </button>
+          ))}
+        </div>
+        {err && <span style={{ color: "var(--color-accent-800)", fontSize: 13 }}>{err}</span>}
+        <button className="btn btn-ghost" style={{ alignSelf: "center" }} onClick={() => setLater(true)}>
+          Ask me later
+        </button>
       </Blueprint>
     </div>
   );

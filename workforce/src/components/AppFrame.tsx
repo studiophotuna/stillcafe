@@ -4,7 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import type { ReactNode } from "react";
 import { signOut } from "@/lib/session";
-import { BipoNotice, QuickLinks } from "./AppExtras";
+import { BipoNotice, HolidayPrompt, QuickLinks } from "./AppExtras";
 import type { ViewAs } from "@/lib/workload/types";
 import { Blueprint, Icon, type IconName } from "./ui";
 
@@ -121,6 +121,7 @@ export function AppFrame({
       </div>
       {overlay}
       <BipoNotice />
+      <HolidayPrompt />
     </div>
   );
 }

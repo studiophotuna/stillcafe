@@ -332,7 +332,8 @@ function HolidayToday() {
   const p = s.cal.people.get(s.me);
   const h = p && s.cal.holFor(p, s.today);
   if (!p || !h || isWk(s.today) || (p.resign && s.today > p.resign)) return null;
-  const o = s.data.overrides[p.id + "|" + s.today];
+  const o0 = s.data.overrides[p.id + "|" + s.today];
+  const o = o0 === "HOL" ? undefined : o0;
   return (
     <div className="banner" style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10, flexWrap: "wrap", marginBottom: 12 }}>
       <span>
