@@ -315,3 +315,7 @@ main.page { padding: 24px 32px 56px; display: flex; flex-direction: column; gap:
 .ql-chip a { color: var(--color-accent-700); text-decoration: none; font-weight: 500; }
 .ql-chip a:hover { text-decoration: underline; }
 .ql-chip button { background: none; border: 0; cursor: pointer; font-size: 15px; line-height: 1; color: var(--color-neutral-700); }
+
+/* — report preview: scrolls both ways, header stays visible — */
+.report-scroll { overflow: auto; max-height: calc(100vh - 220px); }
+.report-scroll thead th { position: sticky; top: 0; z-index: 1; background: var(--color-bg); }
