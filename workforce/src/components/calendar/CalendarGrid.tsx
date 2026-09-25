@@ -89,15 +89,16 @@ export function CalendarGrid({ mgmt }: { mgmt?: boolean }) {
     shown.forEach((p) => rows.push({ p, cells: rawMap.get(p.id)! }));
   }
 
-  /** Today's shift (or leave / rest day) for the name column. */
-  const todayOf = (p: CalPerson) => {
+  /** Today's shift as a short badge (e.g. "D"), with the full wording as a tooltip; null on rest days. */
+  const todayOf = (p: CalPerson): { tag: string; title: string } | null => {
     const cell = c.raw(p, s.today, mgmt ? null : bid);
-    if (cell.gone) return "";
-    if (cell.code && WORKING.includes(cell.code as Code)) {
-      const sh = shById[c.shiftFor(p, s.today)];
-      return `Today: ${sh ? `${sh.name} ${sh.start}–${sh.end}` : "working"} · ${cell.code}`;
+    if (cell.gone || !cell.code) return null;
+    if (WORKING.includes(cell.code as Code)) {
+      const id = c.shiftFor(p, s.today);
+      const sh = shById[id];
+      return { tag: id, title: `Today: ${sh ? `${sh.name} ${sh.start}–${sh.end}` : "working"} · ${CODES[cell.code as Code]?.label ?? cell.code}` };
     }
-    return cell.code ? `Today: ${CODES[cell.code as Code]?.label ?? cell.code}${cell.pending ? " (pending)" : ""}` : "Today: rest day";
+    return { tag: cell.code, title: `Today: ${CODES[cell.code as Code]?.label ?? cell.code}${cell.pending ? " (pending)" : ""}` };
   };
 
   const subOf = (p: CalPerson) => {
@@ -235,11 +236,18 @@ export function CalendarGrid({ mgmt }: { mgmt?: boolean }) {
                   <div className="grid-name" role="rowheader">
                     <div>
                       <span>{r.p.name}</span>
+                      {(() => {
+                        const t = todayOf(r.p);
+                        return t ? (
+                          <span className="grid-today" title={t.title} aria-label={t.title}>
+                            {t.tag}
+                          </span>
+                        ) : null;
+                      })()}
                       {r.p.level !== "member" && <span className="tag tag-neutral">{LEVELS[r.p.level]}</span>}
                       {r.p.id === s.me && <span className="tag tag-accent">You</span>}
                     </div>
                     {subOf(r.p) && <span style={{ color: r.p.resign ? "var(--color-accent-700)" : "var(--color-neutral-700)" }}>{subOf(r.p)}</span>}
-                    {todayOf(r.p) && <span className="grid-today">{todayOf(r.p)}</span>}
                   </div>
                   {r.cells.map((cell, j) => {
                     const d = dates[j];
