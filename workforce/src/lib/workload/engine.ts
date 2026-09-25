@@ -3,7 +3,7 @@
  * these; a server implementation (Supabase RPC / route handlers) must apply
  * the same rules. See ../../../README.md › Workload rules.
  */
-import { H, M, addHours, dayKey, localHour, spanMs } from "./clock";
+import { H, M, TZ_OFFSET_H, addHours, dayKey, fmtT, localHour, spanMs } from "./clock";
 import { CARRIERS, PR, fieldOptions, lc, sysName, trPathOf } from "./constants";
 import { SAMPLE_MAIL } from "./seed";
 import type { Activity, ActivityKind, Person, Priority, Settings, Task, TaskField, WlOrg } from "./types";
@@ -336,11 +336,27 @@ export interface CheckedRow {
   summary: string;
   ok: boolean;
   msg: string;
-  task: { title: string; trade: string; pr: Priority; fields: Task["fields"] } | null;
+  /** received: when the request came in (team time), or null to use the upload time. */
+  task: { title: string; trade: string; pr: Priority; fields: Task["fields"]; received: number | null } | null;
 }
 
 /** Validate uploaded rows against the team's task fields. Row numbers match the spreadsheet (header = row 1). */
-export function checkRows(rows: UploadRow[], fields: TaskField[], org: WlOrg): CheckedRow[] {
+/**
+ * The Received date and time of an uploaded row, in team time. Excel date cells (shown as
+ * team-local time) or text like "2026-09-24 08:30"; blank = null (use the upload time).
+ */
+export function parseReceived(v: unknown): number | null | "bad" {
+  if (v === null || v === undefined || v === "") return null;
+  if (v instanceof Date) return isNaN(v.getTime()) ? "bad" : v.getTime() - TZ_OFFSET_H * H;
+  const s = String(v).trim();
+  const m = s.match(/^(\d{4})-(\d{1,2})-(\d{1,2})(?:[ T](\d{1,2}):(\d{2})(?::(\d{2}))?)?$/);
+  if (!m) return "bad";
+  const [, y, mo, d, hh = "0", mm = "0", ss = "0"] = m;
+  const ms = Date.UTC(+y, +mo - 1, +d, +hh, +mm, +ss) - TZ_OFFSET_H * H;
+  return isNaN(ms) ? "bad" : ms;
+}
+
+export function checkRows(rows: UploadRow[], fields: TaskField[], org: WlOrg, now = Date.now()): CheckedRow[] {
   const g = (r: UploadRow, l: string) => {
     const k = Object.keys(r).find((x) => lc(x) === lc(l));
     return k ? r[k] : "";
@@ -355,6 +371,8 @@ export function checkRows(rows: UploadRow[], fields: TaskField[], org: WlOrg): C
     const only = org.trades.length === 1 && !trV && !sysV ? org.trades[0] : undefined;
     const tr = only ?? (sys ? named.find((t) => t.sys === sys.id) ?? (trV ? undefined : org.trades.find((t) => t.id === sys.id)) : named.length === 1 ? named[0] : undefined);
     const prV = lc(g(r, "Priority")) || "normal";
+    // When the request actually came in: the due time counts from here, not from the upload.
+    const rec = parseReceived(g(r, "Received"));
     const out: Task["fields"] = {};
     let err = !title
       ? "Title is missing"
@@ -368,7 +386,11 @@ export function checkRows(rows: UploadRow[], fields: TaskField[], org: WlOrg): C
               : "Trade not found"
           : !(prV in PR)
             ? "Priority must be High, Normal or Low"
-            : "";
+            : rec === "bad"
+              ? "Received must be a date and time like 2026-09-24 08:30"
+              : rec !== null && rec > now + 5 * M
+                ? "Received is in the future"
+                : "";
     if (!err)
       for (const f of fields) {
         let raw = g(r, f.label);
@@ -384,7 +406,7 @@ export function checkRows(rows: UploadRow[], fields: TaskField[], org: WlOrg): C
       summary: title + (tr ? ` · ${tr.sys ? sysName(org, tr.sys) + " › " : ""}${tr.name}` : ""),
       ok: !err,
       msg: err || "Ready",
-      task: err ? null : { title, trade: tr!.id, pr: prV as Priority, fields: out },
+      task: err ? null : { title, trade: tr!.id, pr: prV as Priority, fields: out, received: typeof rec === "number" ? rec : null },
     };
   });
 }
@@ -393,13 +415,17 @@ export function importRows(d: WorkloadData, checked: CheckedRow[], now: number):
   let seq = d.seq;
   const nt: Task[] = checked
     .filter((c) => c.ok && c.task)
-    .map((c) => ({
-      ...blankTask("T-" + seq++, now),
-      ...c.task!,
-      source: "upload",
-      email: null,
-      history: [{ at: now, text: "Imported from upload" }],
-    }));
+    .map((c) => {
+      const { received, ...task } = c.task!;
+      return {
+        ...blankTask("T-" + seq++, now),
+        ...task,
+        received: received ?? now,
+        source: "upload" as const,
+        email: null,
+        history: [{ at: now, text: "Imported from upload" + (received ? ` (received ${fmtT(received)})` : "") }],
+      };
+    });
   return addTasks({ ...d, seq }, nt, " from upload", now);
 }
 

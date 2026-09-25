@@ -151,7 +151,10 @@ export default function DashboardPage() {
           <tbody>
             {rows.map((r) => (
               <tr key={r.p.id}>
-                <td style={{ fontWeight: 500 }}>{r.p.name}</td>
+                <td>
+                  <span style={{ fontWeight: 500 }}>{r.p.name}</span>
+                  <div className="small">Today: {r.p.shift}</div>
+                </td>
                 <td style={{ color: "var(--color-neutral-800)" }}>{r.trades}</td>
                 <td>
                   <span className={"tag " + AV[r.p.avail][1]}>{AV[r.p.avail][0]}</span>

@@ -12,10 +12,10 @@ import { useWorkload } from "@/lib/workload/store";
  * task is marked done.
  */
 export function UploadTasks() {
-  const { data, run, toast } = useWorkload();
+  const { data, run, toast, now } = useWorkload();
   const { org } = data;
   const [upload, setUpload] = useState<{ file: string; rows: UploadRow[] } | null>(null);
-  const chk = upload ? checkRows(upload.rows, data.fields, org) : [];
+  const chk = upload ? checkRows(upload.rows, data.fields, org, now) : [];
   const okN = chk.filter((c) => c.ok).length;
 
   const onFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -33,7 +33,7 @@ export function UploadTasks() {
     <Blueprint as="section" className="panel">
       <h2 className="h2">Upload tasks</h2>
       <span className="note">
-        The template follows this team’s task fields (Admin › Task fields). Columns marked * can be left blank here but must be filled in before a task is marked done. System, Trade, Priority and list fields have drop-downs.
+        The template follows this team’s task fields (Admin › Task fields). Columns marked * can be left blank here but must be filled in before a task is marked done. Received is when the request actually came in (date and time); the due time counts from it, or from the upload if left blank. System, Trade, Priority and list fields have drop-downs.
       </span>
       <div className="row">
         <button

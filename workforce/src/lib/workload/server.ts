@@ -168,3 +168,17 @@ export async function runAction(token: string, me: number, action: Action, want?
   }
   throw new ConflictError("Too many people changed this at once. Try again.");
 }
+
+/**
+ * Overtime entries (End work with overtime) for the Overtime report, any date range.
+ * Approvers of the team only.
+ */
+export async function getOvertime(token: string, me: number, want: string | null, from: number, to: number): Promise<Activity[]> {
+  const { team, ctx } = await teamContext(token, me, want);
+  if (!ctx.approvers.includes(me)) throw new ForbiddenError("Only Workload admins and leads can see overtime reports.");
+  const { data, error } = await db().rpc("workforce_activities", { p_token: token, p_team: team, p_since: from });
+  if (error) throw new Error(error.message);
+  return ((data ?? []) as RawActivity[])
+    .filter((a) => a.kind === "end" && a.otMin > 0 && a.start >= from && a.start < to)
+    .map(({ version: _v, ...a }) => a);
+}
