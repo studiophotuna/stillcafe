@@ -37,6 +37,7 @@ export interface Sel {
 export type CalDialog =
   | { kind: "request"; date?: string }
   | { kind: "cell"; pid: number; date: string }
+  | { kind: "holWork"; date: string }
   | { kind: "resign"; pid: number }
   | { kind: "member"; pid: number | null }
   | { kind: "node"; mode: "add" | "rename"; id?: string; ntype: import("./types").NodeType; parent?: string | null }

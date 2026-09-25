@@ -148,7 +148,7 @@ export function CalendarGrid({ mgmt }: { mgmt?: boolean }) {
   const onCell = (p: CalPerson, d: string, cell: Cell) => {
     if (cell.gone) return;
     if (!mgmt && v.isAdmin) s.setDialog({ kind: "cell", pid: p.id, date: d });
-    else if (p.id === s.me) s.setDialog({ kind: "request", date: d });
+    else if (p.id === s.me) s.setDialog(cell.code === "HOL" || cell.code === "HDY" ? { kind: "holWork", date: d } : { kind: "request", date: d });
   };
 
   return (
@@ -162,6 +162,7 @@ export function CalendarGrid({ mgmt }: { mgmt?: boolean }) {
           </span>
         </div>
       )}
+      {!mgmt && <HolidayToday />}
       <div className="page-head-row" style={{ alignItems: "center" }}>
         <div className="month-nav">
           <MonthNav />
@@ -319,8 +320,28 @@ export function CalendarGrid({ mgmt }: { mgmt?: boolean }) {
           ? "Click a day in your own row to request leave. Admins change schedules from the Calendar."
           : v.isAdmin
             ? "Click any day to change someone’s schedule or record leave. Use “Request leave” for your own time off."
-            : "Click a day in your own row to request leave or a schedule change for that date."}
+            : "Click a day in your own row to request leave or a schedule change for that date. On a holiday (HOL), click it to say you’re working."}
       </p>
     </>
+  );
+}
+
+/** Today is a holiday for me: say so, and let me update my status if I'm working. */
+function HolidayToday() {
+  const s = useCalendar();
+  const p = s.cal.people.get(s.me);
+  const h = p && s.cal.holFor(p, s.today);
+  if (!p || !h || isWk(s.today) || (p.resign && s.today > p.resign)) return null;
+  const o = s.data.overrides[p.id + "|" + s.today];
+  return (
+    <div className="banner" style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10, flexWrap: "wrap", marginBottom: 12 }}>
+      <span>
+        <strong>Today is {h.name}.</strong>{" "}
+        {o ? `You’re on holiday duty (${o === "WFH" ? "from home" : "in office"}).` : "Working anyway? Update your status."}
+      </span>
+      <button className="btn btn-secondary btn-36" onClick={() => s.setDialog({ kind: "holWork", date: s.today })}>
+        {o ? "Change" : "I’m working today"}
+      </button>
+    </div>
   );
 }

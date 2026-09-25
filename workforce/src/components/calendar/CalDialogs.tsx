@@ -148,6 +148,59 @@ function RequestDialog({ date }: { date?: string }) {
   );
 }
 
+// ── Member: working on a holiday (holiday duty) or not ──
+function HolidayWorkDialog({ date }: { date: string }) {
+  const s = useCalendar();
+  const c = s.cal;
+  const p = c.person(s.me);
+  const h = c.holFor(p, date);
+  const close = () => s.setDialog(null);
+  if (!h) return null;
+  const o = s.data.overrides[p.id + "|" + date];
+  const cur = o === "WFH" ? "WFH" : o ? "RTO" : null;
+  const opts: [("RTO" | "WFH" | null), string, string][] = [
+    ["RTO", "Working in office", "Holiday duty, at the office"],
+    ["WFH", "Working from home", "Holiday duty, from home"],
+    [null, "Not working", "Enjoy the holiday"],
+  ];
+  return (
+    <Modal onClose={close} width={440} pad>
+      <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
+        <Title>{h.name}</Title>
+        <span className="muted">
+          {fmtY(date)} · {cur ? "you’re on holiday duty" : "holiday"}
+        </span>
+      </div>
+      <span className="small">Working on this holiday? Update your status so your team and Workload know. Your team admins are told.</span>
+      <div style={{ display: "grid", gap: 8 }}>
+        {opts.map(([k, l, sub]) => (
+          <button
+            key={l}
+            className="btn btn-secondary"
+            aria-pressed={cur === k}
+            style={{ justifyContent: "flex-start", minHeight: 48, gap: 10, ...(cur === k ? { borderColor: "var(--color-accent-700)", fontWeight: 600 } : {}) }}
+            onClick={() => {
+              if (cur !== k) s.run({ type: "holidayWork", pid: p.id, date, code: k, actor: s.me });
+              close();
+            }}
+          >
+            <Chip s={CODES[k ? "HDY" : "HOL"]}>{k ? "HDY" : "HOL"}</Chip>
+            <span style={{ display: "flex", flexDirection: "column", alignItems: "flex-start" }}>
+              <span>{l}</span>
+              <span className="small" style={{ fontWeight: 400 }}>{sub}</span>
+            </span>
+          </button>
+        ))}
+      </div>
+      <div className="dialog-actions">
+        <button className="btn btn-secondary btn-40" onClick={close}>
+          Close
+        </button>
+      </div>
+    </Modal>
+  );
+}
+
 // ── Admin: change one person's day ──
 function CellDialog({ pid, date }: { pid: number; date: string }) {
   const s = useCalendar();
@@ -1334,6 +1387,8 @@ export function CalDialogs() {
   switch (d.kind) {
     case "request":
       return <RequestDialog date={d.date} />;
+    case "holWork":
+      return <HolidayWorkDialog date={d.date} />;
     case "cell":
       return <CellDialog key={d.pid + d.date} pid={d.pid} date={d.date} />;
     case "resign":

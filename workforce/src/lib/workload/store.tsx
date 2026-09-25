@@ -49,6 +49,8 @@ interface Store {
   isApprover: boolean;
   sys: string;
   tr: string;
+  /** Today is a holiday for me: I'm working it (office or home), or not after all. Saved to the Calendar. */
+  setHolidayWork: (code: "RTO" | "WFH" | null) => void;
   /** Switch to another team this person can open (reloads its data). */
   setTeam: (id: string) => void;
   setSys: (v: string) => void;
@@ -229,6 +231,27 @@ export function WorkloadProvider({ children }: { children: React.ReactNode }) {
     [commit, toast],
   );
 
+  const setHolidayWork = useCallback(
+    async (code: "RTO" | "WFH" | null) => {
+      const me = session && dataRef.current && personOf(dataRef.current, session.id);
+      if (modeRef.current !== "db" || !me?.holiday) return;
+      try {
+        const r = await fetch("/api/cal/action", {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ type: "holidayWork", pid: me.id, date: me.holiday.date, code, actor: me.id }),
+        });
+        const j = await r.json().catch(() => ({}));
+        if (r.status === 401) return toLogin();
+        toast(r.ok ? j.message || "Saved." : j.error || "That change couldn’t be saved.");
+      } catch {
+        toast("That change couldn’t be saved. Check your connection.");
+      }
+      await refresh();
+    },
+    [session, toast, refresh],
+  );
+
   const setViewAs = useCallback((v: ViewAs) => {
     setViewAsState(v);
     try {
@@ -264,6 +287,7 @@ export function WorkloadProvider({ children }: { children: React.ReactNode }) {
       sys,
       tr,
       setTeam,
+      setHolidayWork,
       setSys: (v: string) => {
         setSysState(v);
         setTr("all");
@@ -272,7 +296,7 @@ export function WorkloadProvider({ children }: { children: React.ReactNode }) {
       dialog,
       setDialog,
     }),
-    [data, mode, now, run, toast, toasts, viewAs, setViewAs, sys, tr, dialog, session, setTeam],
+    [data, mode, now, run, toast, toasts, viewAs, setViewAs, sys, tr, dialog, session, setTeam, setHolidayWork],
   );
 
   if (blocked)

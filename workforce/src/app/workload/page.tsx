@@ -12,7 +12,8 @@ import { useWorkload } from "@/lib/workload/store";
 import { taskDetail, taskRow } from "@/lib/workload/view";
 
 export default function MyWorkPage() {
-  const { data, now, run, me, setDialog } = useWorkload();
+  const { data, now, run, me, setDialog, setHolidayWork } = useWorkload();
+  const hol = me.holiday;
   const s = data.settings;
   const trades = me.trades.map((x) => trPathOf(data.org, x)).join(", ");
   const cur = data.tasks.find((t) => t.assignee === me.id && t.status === "in_progress");
@@ -55,6 +56,9 @@ export default function MyWorkPage() {
   if (!me.trades.length) {
     idleTitle = "No trades allocated";
     idleText = "You aren’t allocated to a system and trade, so no tasks come to you. Ask an admin to allocate you in the Calendar › Admin › Members.";
+  } else if (hol && !hol.working) {
+    idleTitle = `Today is ${hol.name}`;
+    idleText = "It’s a holiday, so tasks aren’t given to you. Working today? Tell us above and you can take tasks as usual.";
   } else if (unavailable) {
     idleTitle = "You’re marked unavailable";
     idleText = `The Calendar shows you as ${AV[me.avail][0].toLowerCase()} now, so tasks aren’t given to you.`;
@@ -84,6 +88,40 @@ export default function MyWorkPage() {
           <Kpi key={k.k} {...k} />
         ))}
       </div>
+
+      {onTeam && hol && (
+        <Blueprint as="section" className="panel status-bar holiday-bar">
+          {hol.working ? (
+            <>
+              <span>
+                <strong>Holiday duty · {hol.name}.</strong> You’re working today {hol.working === "WFH" ? "from home" : "in the office"}.
+              </span>
+              <div className="row" style={{ gap: 6 }}>
+                <button className="btn btn-secondary btn-36" onClick={() => setHolidayWork(hol.working === "WFH" ? "RTO" : "WFH")}>
+                  {hol.working === "WFH" ? "I’m in the office" : "I’m working from home"}
+                </button>
+                <button className="btn btn-ghost" onClick={() => setHolidayWork(null)}>
+                  Not working today
+                </button>
+              </div>
+            </>
+          ) : (
+            <>
+              <span>
+                <strong>Today is {hol.name}.</strong> Working anyway? Update your status so tasks can come to you.
+              </span>
+              <div className="row" style={{ gap: 6 }}>
+                <Blueprint as="button" className="btn btn-primary btn-36" style={{ padding: "0 16px" }} onClick={() => setHolidayWork("RTO")}>
+                  Working in office
+                </Blueprint>
+                <button className="btn btn-secondary btn-36" onClick={() => setHolidayWork("WFH")}>
+                  Working from home
+                </button>
+              </div>
+            </>
+          )}
+        </Blueprint>
+      )}
 
       {onTeam && (
         <Blueprint as="section" className="panel status-bar">

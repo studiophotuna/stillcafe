@@ -434,3 +434,38 @@ describe("primary team for headcount", async () => {
     expect(bad.data.people.find((p) => p.id === ANA)!.primaryTeam).toBe("rm");
   });
 });
+
+describe("working on a holiday", async () => {
+  const { authorizeCal } = await import("./authz");
+  const HOL = "2026-10-21"; // a Wednesday holiday for everyone
+  const withHol = () => {
+    const d = fresh();
+    d.holidays = d.holidays.concat({ id: "HT", date: HOL, name: "Test Day", type: "regular", scope: "all" });
+    return d;
+  };
+  const act = (code: "RTO" | "WFH" | null, pid = ANA) => ({ type: "holidayWork" as const, pid, date: HOL, code, actor: ANA });
+
+  it("lets members mark themselves on holiday duty and back", () => {
+    const d = withHol();
+    const c = new Cal(d, TODAY);
+    expect(c.raw(c.person(ANA), HOL, "rm").code).toBe("HOL");
+    const auth = authorizeCal(act("WFH"), c, ANA);
+    expect("action" in auth).toBe(true);
+    const r = run(d, act("WFH"));
+    const c2 = new Cal(r.data, TODAY);
+    expect(c2.raw(c2.person(ANA), HOL, "rm")).toMatchObject({ code: "HDY", note: "Test Day" });
+    expect(r.data.overrides[ANA + "|" + HOL]).toBe("WFH");
+    expect(r.data.logs[0].subject).toContain("working on Test Day (from home)");
+    const back = run(r.data, act(null));
+    expect(back.data.overrides[ANA + "|" + HOL]).toBeUndefined();
+  });
+
+  it("only for the person themselves (or their admin), and only on holidays", () => {
+    const c = new Cal(withHol(), TODAY);
+    expect("error" in authorizeCal(act("RTO", SAM), c, ANA)).toBe(true);
+    expect("action" in authorizeCal(act("RTO", ANA), c, SAM)).toBe(true);
+    const d = withHol();
+    expect(run(d, { ...act("RTO"), date: "2026-10-22" }).data).toBe(d); // not a holiday
+    expect(run(d, { ...act("RTO"), code: "VL" as never }).data).toBe(d);
+  });
+});

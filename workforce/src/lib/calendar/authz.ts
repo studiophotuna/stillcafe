@@ -67,6 +67,8 @@ export function authorizeCal(a: CalAction, c: Cal, me: number): { action: CalAct
       if (!q) return NO;
       return a.via === "self" ? ok(q.pid === me) : ok(r.adminOf(q.pid));
     }
+    case "holidayWork":
+      return ok(a.pid === me || r.adminOf(a.pid), { ...a, actor: me });
     case "setOverride":
     case "setShiftDay":
     case "setResign":

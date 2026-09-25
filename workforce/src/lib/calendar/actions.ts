@@ -4,7 +4,7 @@
  */
 import { fmtT } from "../workload/clock";
 import { ANNUAL, CODES, LEVELS, TYPE_L, first } from "./constants";
-import { fmtY, MONL } from "./dates";
+import { fmtY, isWk, MONL } from "./dates";
 import { Cal, logsDecision, logsSubmit } from "./engine";
 import { allocProblem, teamDefaults } from "./org";
 import { planOrgImport, type OrgRow } from "./orgImport";
@@ -28,6 +28,7 @@ export type CalAction =
   | { type: "cancelRequest"; rid: string; via: "self" | "admin" }
   | { type: "setOverride"; pid: number; date: string; code: Code | null }
   | { type: "setShiftDay"; pid: number; date: string; shift: string }
+  | { type: "holidayWork"; pid: number; date: string; code: "RTO" | "WFH" | null; actor: number }
   | { type: "teamSettings"; id: string; patch: Partial<Pick<OrgNode, "mode" | "notifyAdmin" | "notifyUser" | "invite" | "defaultScope" | "costCentre">> }
   | { type: "setBilled"; pid: number; bid: string; months: string[]; value: number | null }
   | { type: "setLinks"; links: AppLinks }
@@ -212,6 +213,38 @@ export function applyCalAction(d: CalendarData, a: CalAction, today: string, now
       if (a.code) overrides[k] = a.code;
       else delete overrides[k];
       return { data: { ...d, overrides } };
+    }
+    case "holidayWork": {
+      // A member working on a holiday (or back to not working): shows as holiday duty.
+      const p = c.people.get(a.pid);
+      const h = p && c.holFor(p, a.date);
+      if (!p || !h || isWk(a.date) || (p.resign && a.date > p.resign) || (a.code !== null && a.code !== "RTO" && a.code !== "WFH")) return { data: d };
+      const k = a.pid + "|" + a.date;
+      const overrides = { ...d.overrides };
+      if (a.code) overrides[k] = a.code;
+      else delete overrides[k];
+      const self = a.actor === a.pid;
+      const what = a.code ? `working on ${h.name} (${a.code === "WFH" ? "from home" : "in the office"})` : `not working on ${h.name}`;
+      const logs = c.O.branchesOf(p).flatMap((b) => {
+        const admins = (b.admins ?? []).filter((i) => i !== a.actor).map((i) => c.people.get(i)).filter((x): x is CalPerson => !!x);
+        if (!b.notifyAdmin || !admins.length) return [];
+        return [{
+          kind: "email" as const, at, did: b.id, toIds: admins.map((x) => x.id),
+          toLine: admins.map((x) => `${x.name} <${x.email}>`).join("; "), toShort: admins.map((x) => x.name).join(", "),
+          subject: `Holiday update: ${p.name} is ${what}`,
+          lines: [
+            `Hi ${first(admins[0].name)},`,
+            `${p.name} is ${what}, ${fmtY(a.date)}.` + (self ? "" : ` Updated by ${c.person(a.actor).name}.`),
+            "The calendar shows this day as holiday duty" + (a.code ? "." : " no longer."),
+          ],
+        }];
+      });
+      return {
+        data: pushLogs({ ...d, overrides }, logs),
+        message: a.code
+          ? `${self ? "You’re" : first(p.name) + " is"} on holiday duty ${fmtY(a.date)} (${a.code === "WFH" ? "work from home" : "in office"}).`
+          : `${fmtY(a.date)} is back to a holiday${self ? " for you" : " for " + first(p.name)}.`,
+      };
     }
     case "setShiftDay":
       return {
