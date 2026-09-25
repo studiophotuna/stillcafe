@@ -487,18 +487,19 @@ describe("holiday replies and holiday manning", async () => {
     const c2 = new Cal(d2, TODAY);
     expect(c2.raw(c2.person(ANA), HOL, "rm").code).toBe("RTO"); // Wednesday, pattern B
   });
-  it("lists Tower / Team / Name with a status per holiday", () => {
+  it("lists Department / Tower / Team / Name with a status per holiday", () => {
     let d = run(withHol(), { type: "holidayWork", pid: ANA, date: HOL, code: "WFH", actor: ANA }).data;
     d = run(d, { type: "holidayWork", pid: SAM, date: HOL, code: "HOL", actor: SAM }).data;
     const rep = buildReport(new Cal(d, TODAY), "holiday", "rm", "2026-10-01", "2026-10-31");
     const head = rep.rows[0];
-    expect(head.slice(0, 3)).toEqual(["Tower", "Team", "Name"]);
+    expect(head.slice(0, 4)).toEqual(["Department", "Tower", "Team", "Name"]);
     const col = head.findIndex((h) => String(h).startsWith(HOL));
     expect(String(head[col])).toContain("Test Day");
-    const row = (pid: number) => rep.rows.find((r) => r[2] === d.people.find((p) => p.id === pid)!.name)!;
+    const row = (pid: number) => rep.rows.find((r) => r[3] === d.people.find((p) => p.id === pid)!.name)!;
     expect(row(ANA)[col]).toBe("Holiday duty · WFH");
     expect(row(SAM)[col]).toBe("Holiday");
-    expect(rep.rows[rep.rows.length - 1].slice(2, 3)).toEqual(["Total on holiday duty"]);
+    expect(rep.rows[rep.rows.length - 1].slice(3, 4)).toEqual(["Total on holiday duty"]);
+    expect(row(ANA)[0]).toBe(d.nodes.find((n) => n.type === "dept")!.name);
     expect(rep.rows[rep.rows.length - 1][col]).toBe(1);
   });
 });
