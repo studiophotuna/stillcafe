@@ -1,8 +1,8 @@
 "use client";
 
-import { SYS, TEAM, TRADES, fieldOptions } from "./constants";
+import { fieldOptions } from "./constants";
 import type { UploadRow } from "./engine";
-import type { TaskField } from "./types";
+import type { TaskField, WlOrg } from "./types";
 
 const XLSX_MIME = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
 
@@ -13,10 +13,15 @@ const colLetter = (i: number) => {
 };
 
 /**
- * Task upload template built from the team's fields: required columns get " *",
- * list columns get drop-downs from a hidden Lists sheet, 500 input rows.
+ * Task upload template built from the team's fields and its systems and trades
+ * (from the Calendar): required columns get " *", list columns get drop-downs
+ * from a hidden Lists sheet, 500 input rows.
  */
-export async function downloadTaskTemplate(fields: TaskField[]) {
+export async function downloadTaskTemplate(fields: TaskField[], org: WlOrg) {
+  // System is only needed when a trade name appears under two systems; a team that is
+  // its own single unit needs neither column.
+  const single = org.trades.length === 1 && org.trades[0].id === org.team.id;
+  const tradeNames = [...new Set(org.trades.map((t) => t.name))];
   const { default: ExcelJS } = await import("exceljs");
   const wb = new ExcelJS.Workbook();
   wb.creator = "Workforce Management";
@@ -25,8 +30,8 @@ export async function downloadTaskTemplate(fields: TaskField[]) {
 
   const cols: [string, boolean, TaskField?][] = [
     ["Title", true],
-    ["System", true],
-    ["Trade", true],
+    ...(single ? [] : org.systems.length ? ([["System", false]] as [string, boolean][]) : []),
+    ...(single ? [] : ([["Trade", true]] as [string, boolean][])),
     ["Priority", false],
     ["Due date", false],
     ...fields.map((f): [string, boolean, TaskField] => [f.label, f.required, f]),
@@ -41,8 +46,8 @@ export async function downloadTaskTemplate(fields: TaskField[]) {
   });
 
   const lists: [string, string[]][] = [
-    ["System", Object.values(SYS)],
-    ["Trade", TRADES.map((t) => t.name)],
+    ...(org.systems.length && !single ? ([["System", org.systems.map((x) => x.name)]] as [string, string[]][]) : []),
+    ...(single ? [] : ([["Trade", tradeNames]] as [string, string[]][])),
     ["Priority", ["High", "Normal", "Low"]],
     ...fields.filter((f) => f.type === "select").map((f): [string, string[]] => [f.label, fieldOptions(f)]),
   ];
@@ -83,7 +88,7 @@ export async function downloadTaskTemplate(fields: TaskField[]) {
   const buf = await wb.xlsx.writeBuffer();
   const a = document.createElement("a");
   a.href = URL.createObjectURL(new Blob([buf], { type: XLSX_MIME }));
-  a.download = `Workload_tasks_${TEAM.name.replace(/\s+/g, "-")}.xlsx`;
+  a.download = `Workload_tasks_${org.team.name.replace(/[^A-Za-z0-9]+/g, "-")}.xlsx`;
   document.body.appendChild(a);
   a.click();
   a.remove();

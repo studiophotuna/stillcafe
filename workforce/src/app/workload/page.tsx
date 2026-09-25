@@ -4,15 +4,15 @@ import { EmailBox } from "@/components/Dialogs";
 import { TaskTable } from "@/components/TaskTable";
 import { Blueprint, Icon, Kpi, PageHead, pct } from "@/components/ui";
 import { dur } from "@/lib/workload/clock";
-import { AV, trPath } from "@/lib/workload/constants";
-import { canWork, doneToday, personMetrics, sortTasks } from "@/lib/workload/engine";
+import { AV, trPathOf } from "@/lib/workload/constants";
+import { basisUnit, canWork, doneToday, fmtMin, helpQueue, missingRequired, ownQueue, personMetrics, sortTasks } from "@/lib/workload/engine";
 import { useWorkload } from "@/lib/workload/store";
 import { taskDetail, taskRow } from "@/lib/workload/view";
 
 export default function MyWorkPage() {
   const { data, now, run, me, setDialog } = useWorkload();
   const s = data.settings;
-  const trades = me.trades.map(trPath).join(", ");
+  const trades = me.trades.map((x) => trPathOf(data.org, x)).join(", ");
   const cur = data.tasks.find((t) => t.assignee === me.id && t.status === "in_progress");
   const myDone = doneToday(data.tasks.filter((t) => t.assignee === me.id), now);
   const avg = myDone.length ? dur(myDone.reduce((a, t) => a + (t.doneAt! - t.startedAt!), 0) / myDone.length) : "—";
@@ -21,10 +21,11 @@ export default function MyWorkPage() {
 
   const kpis = me.trades.length
     ? [
-        { k: "Productivity", v: pct(mm.prod), m: `${mm.done} done of ${mm.target} target (so far ${mm.tgt.toFixed(1)})` },
+        { k: "Productivity", v: pct(mm.prod), m: `${mm.out} ${basisUnit(data)} of ${mm.target} target (so far ${mm.tgt.toFixed(1)})` },
         { k: "Utilization", v: pct(mm.util), m: `${dur(mm.handle)} on tasks of ${dur(mm.avail)} productive time so far` },
         { k: "Timeliness", v: pct(mm.time), m: `${mm.onTime} of ${mm.done} done within SLA` },
         { k: "Average time", v: avg, m: "per task today" },
+        { k: "Overtime", v: mm.otMin ? fmtMin(mm.otMin) : "—", m: "reported today" },
         ...metricF.map((f) => ({
           k: f.label.replace(/^No\. of /, ""),
           v: myDone.reduce((a, t) => a + (Number(t.fields[f.key]) || 0), 0),
@@ -34,7 +35,10 @@ export default function MyWorkPage() {
     : [{ k: "Waiting in queue", v: data.tasks.filter((t) => t.status === "new").length, m: "all trades" }];
 
   const assignedMine = sortTasks(data.tasks.filter((t) => t.assignee === me.id && (t.status === "assigned" || t.status === "on_hold")), s);
-  const pickable = s.mode === "self" ? sortTasks(data.tasks.filter((t) => t.status === "new" && me.trades.includes(t.trade)), s) : [];
+  // Members pick: own trades; when those are empty, other trades (same system first, then the team) to help with.
+  const own = s.mode === "self" ? ownQueue(data, me) : [];
+  const help = s.mode === "self" && !own.length && me.trades.length ? helpQueue(data, me).map((x) => x.t) : [];
+  const pickable = own.length ? own : help;
   const myList = assignedMine.concat(pickable);
   const unavailable = !canWork(me, s);
   const hasAssigned = assignedMine.some((t) => t.status === "assigned");
@@ -57,6 +61,7 @@ export default function MyWorkPage() {
   const showStart = !!me.trades.length && (s.mode === "fifo" || hasAssigned);
 
   const c = cur ? taskDetail(data, cur, now) : null;
+  const curMissing = cur ? missingRequired(data.fields, cur.fields) : [];
 
   return (
     <>
@@ -85,6 +90,11 @@ export default function MyWorkPage() {
               <span style={{ fontSize: 13.5, color: c.dueColor }}>
                 {c.dueText} · started {c.startedAgo} ago
               </span>
+              {curMissing.length > 0 && (
+                <span style={{ display: "block", fontSize: 13, color: "var(--color-accent-800)", marginTop: 4 }}>
+                  Needed before you can mark it done: {curMissing.join(", ")}
+                </span>
+              )}
             </div>
             <div className="row">
               <button className="btn btn-secondary btn-md" onClick={() => setDialog({ kind: "hold", id: cur.id })}>
@@ -125,7 +135,13 @@ export default function MyWorkPage() {
 
       {myList.length > 0 && (
         <section className="panel" style={{ padding: 0, gap: 8 }}>
-          <h2 className="h2">{s.mode === "self" ? "Assigned to you and available to pick" : "Assigned to you and on hold"}</h2>
+          <h2 className="h2">
+            {s.mode !== "self"
+              ? "Assigned to you and on hold"
+              : help.length
+                ? "Your trades are clear — help with other trades (your system first)"
+                : "Assigned to you and available to pick"}
+          </h2>
           <Blueprint className="scroll-x">
             <TaskTable variant="mine" rows={myList.map((t) => taskRow(data, t, me.id, false, now))} />
           </Blueprint>

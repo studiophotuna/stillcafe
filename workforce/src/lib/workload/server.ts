@@ -1,12 +1,12 @@
 import "server-only";
 import { Cal } from "../calendar/engine";
-import { loadCalendar } from "../calendar/server";
+import { getCalendar } from "../calendar/server";
 import { ConflictError, ForbiddenError, db } from "../db";
 import { authorizeWl } from "./authz";
 import { dayKey } from "./clock";
-import { peopleFromCalendar, workloadAdmins } from "./people";
+import { visibleTeams } from "../calendar/authz";
+import { orgFor, peopleFromCalendar, workloadAdmins } from "./people";
 import { applyAction, type Action } from "./actions";
-import { TEAM } from "./constants";
 import type { WorkloadData } from "./engine";
 import { initialData } from "./seed";
 import type { Task } from "./types";
@@ -30,16 +30,27 @@ interface RawSnapshot {
   tasks: RawTask[];
 }
 
-/** Team people and admins, from the Calendar. */
-async function peopleAndAdmins(token: string): Promise<Pick<WorkloadData, "people" | "admins">> {
-  const cal = await loadCalendar(token);
-  if (!cal) return { people: [], admins: [] };
-  const c = new Cal(cal.data, dayKey(Date.now()));
-  return { people: peopleFromCalendar(c, Date.now()), admins: workloadAdmins(c) };
+type FromCal = Pick<WorkloadData, "people" | "admins" | "org">;
+
+/**
+ * Which team this request is for, and that team's org, people and admins from the
+ * Calendar. `want` must be a team the person can open; without it, their first team.
+ */
+async function teamContext(token: string, me: number, want?: string | null): Promise<{ team: string; ctx: FromCal }> {
+  const c = new Cal(await getCalendar(token), dayKey(Date.now()));
+  const teams = visibleTeams(c, me);
+  if (want && !teams.some((t) => t.id === want)) throw new ForbiddenError("You can’t open that team.");
+  const mine = c.people.get(me) ? c.O.branchesOf(c.person(me)) : [];
+  const team = want || teams.find((t) => mine.includes(t))?.id || teams[0]?.id;
+  if (!team) throw new ForbiddenError("You aren’t in a team yet. Ask your admin to allocate you in Calendar › Members.");
+  return {
+    team,
+    ctx: { people: peopleFromCalendar(c, Date.now(), team), admins: workloadAdmins(c, team), org: orgFor(c, team, teams) },
+  };
 }
 
-async function load(token: string, team: string): Promise<Snapshot | null> {
-  const [{ data, error }, pa] = await Promise.all([db().rpc("workforce_snapshot", { p_token: token, p_team: team }), peopleAndAdmins(token)]);
+async function load(token: string, team: string, ctx: FromCal): Promise<Snapshot | null> {
+  const { data, error } = await db().rpc("workforce_snapshot", { p_token: token, p_team: team });
   if (error) throw new Error(error.message);
   if (!data) return null;
   const raw = data as RawSnapshot;
@@ -54,7 +65,7 @@ async function load(token: string, team: string): Promise<Snapshot | null> {
         tasks.set(t.id, version);
         return t;
       }),
-      ...pa,
+      ...ctx,
     },
     versions: { team: raw.team.version, tasks },
   };
@@ -84,16 +95,21 @@ async function save(token: string, team: string, before: Snapshot | null, after:
   }
 }
 
-/** Current data for the team; creates the team (no tasks) the first time. */
-export async function getData(token: string, team = TEAM.id): Promise<WorkloadData> {
-  const s = await load(token, team);
-  if (s) return s.data;
+async function loadOrCreate(token: string, team: string, ctx: FromCal): Promise<Snapshot> {
+  const s = await load(token, team, ctx);
+  if (s) return s;
   try {
-    await save(token, team, null, initialData(Date.now(), true));
+    await save(token, team, null, { ...initialData(Date.now(), true), ...ctx });
   } catch (e) {
     if (!(e instanceof ConflictError)) throw e; // someone else created it first
   }
-  return (await load(token, team))!.data;
+  return (await load(token, team, ctx))!;
+}
+
+/** Current data for a team person `me` can open; creates the team's Workload (no tasks) the first time. */
+export async function getData(token: string, me: number, want?: string | null): Promise<WorkloadData> {
+  const { team, ctx } = await teamContext(token, me, want);
+  return (await loadOrCreate(token, team, ctx)).data;
 }
 
 /**
@@ -101,13 +117,11 @@ export async function getData(token: string, team = TEAM.id): Promise<WorkloadDa
  * changed the same rows in between, reload and re-apply (up to 3 tries), so
  * e.g. two members pressing Start work never get the same task.
  */
-export async function runAction(token: string, me: number, action: Action, team = TEAM.id): Promise<{ data: WorkloadData; message?: string }> {
+export async function runAction(token: string, me: number, action: Action, want?: string | null): Promise<{ data: WorkloadData; message?: string }> {
+  if (action.type === "checkMail") throw new ForbiddenError("The Outlook mailbox isn’t connected yet.");
+  const { team, ctx } = await teamContext(token, me, want);
   for (let attempt = 0; attempt < 3; attempt++) {
-    let s = await load(token, team);
-    if (!s) {
-      await getData(token, team);
-      s = (await load(token, team))!;
-    }
+    const s = await loadOrCreate(token, team, ctx);
     const auth = authorizeWl(action, s.data, me);
     if ("error" in auth) throw new ForbiddenError(auth.error);
     const out = applyAction(s.data, auth.action, Date.now());

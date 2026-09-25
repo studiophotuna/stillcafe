@@ -1,11 +1,11 @@
-import type { AllocationMode, Availability, Person, Priority, TaskField, TaskStatus, Trade } from "./types";
+import type { AllocationMode, Availability, Person, Priority, TaskField, TaskStatus, Trade, WlOrg } from "./types";
 
-/** Org seed: BSS › A&S Support - Rate Management › Rate Management › GPM / RCM › trades. */
-export const TEAM = { id: "rm", name: "Rate Management" };
+/** Sample-data org (demo mode): Rate Management › GPM / RCM › trades. With a database the org comes from the Calendar. */
+const TEAM = { id: "rm", name: "Rate Management" };
 
-export const SYS: Record<string, string> = { gpm: "GPM", rcm: "RCM" };
+const SYS: Record<string, string> = { gpm: "GPM", rcm: "RCM" };
 
-export const TRADES: Trade[] = [
+const TRADES: Trade[] = [
   { id: "fewb", name: "FEWB", sys: "gpm" },
   { id: "inas", name: "INAS", sys: "gpm" },
   { id: "eu", name: "EU", sys: "gpm" },
@@ -14,10 +14,20 @@ export const TRADES: Trade[] = [
   { id: "lcl", name: "LCL", sys: "rcm" },
 ];
 
-export const trade = (id: string) => TRADES.find((t) => t.id === id);
-export const trPath = (id: string) => {
-  const t = trade(id);
-  return t ? `${SYS[t.sys]} › ${t.name}` : "Needs trade";
+export const DEMO_ORG: WlOrg = {
+  team: TEAM,
+  systems: Object.entries(SYS).map(([id, name]) => ({ id, name })),
+  trades: TRADES,
+  teams: [{ ...TEAM, tower: "A&S Support - Rate Management" }],
+};
+
+export const tradeOf = (o: WlOrg, id: string) => o.trades.find((t) => t.id === id);
+export const sysName = (o: WlOrg, id: string) => o.systems.find((s) => s.id === id)?.name ?? "";
+/** "GPM › FEWB", "FEWB" when there is no system, or "Needs trade". */
+export const trPathOf = (o: WlOrg, id: string) => {
+  const t = tradeOf(o, id);
+  if (!t) return "Needs trade";
+  return t.sys ? `${sysName(o, t.sys)} › ${t.name}` : t.name;
 };
 
 /** Sample people. Availability and shifts come from the Calendar in the full app. */

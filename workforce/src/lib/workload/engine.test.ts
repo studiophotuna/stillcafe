@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { H, M } from "./clock";
-import { FIELDS0, PEOPLE } from "./constants";
+import { DEMO_ORG, FIELDS0, PEOPLE } from "./constants";
 import {
   addTasks,
   assignTask,
@@ -66,6 +66,7 @@ const data = (tasks: Task[], p: Partial<Settings> = {}): WorkloadData => ({
   mailCount: 0,
   people: PEOPLE,
   admins: [23],
+  org: DEMO_ORG,
 });
 
 const get = (d: WorkloadData, id: string) => d.tasks.find((t) => t.id === id)!;
@@ -147,17 +148,19 @@ describe("hold, resume, done", () => {
   it("done requires required fields", () => {
     const t = task({ status: "in_progress", assignee: ANA, startedAt: NOW - M });
     const d = { ...data([t]), fields: FIELDS0 };
-    expect(get(completeTask(d, t.id, {}, false, ANA, NOW).data, t.id).status).toBe("in_progress");
-    const ok = completeTask(d, t.id, { ticket: "RM-1", carrier: "MSCU", contracts: 2 }, true, ANA, NOW);
-    expect(get(ok.data, t.id)).toMatchObject({ status: "done", doneAt: NOW, ot: true });
+    const blocked = completeTask(d, t.id, {}, 0, ANA, NOW);
+    expect(get(blocked.data, t.id).status).toBe("in_progress");
+    expect(blocked.message).toMatch(/^Fill in /);
+    const ok = completeTask(d, t.id, { ticket: "RM-1", carrier: "MSCU", contracts: 2 }, 0, ANA, NOW);
+    expect(get(ok.data, t.id)).toMatchObject({ status: "done", doneAt: NOW, ot: false, otMin: 0 });
   });
 
   it("auto-feeds the next task when enabled", () => {
     const t = task({ status: "in_progress", assignee: ANA, startedAt: NOW - M });
     const next = task();
-    const fed = completeTask(data([t, next]), t.id, {}, false, ANA, NOW);
+    const fed = completeTask(data([t, next]), t.id, {}, 0, ANA, NOW);
     expect(get(fed.data, next.id).status).toBe("in_progress");
-    const manual = completeTask(data([t, next], { autoFeed: false }), t.id, {}, false, ANA, NOW);
+    const manual = completeTask(data([t, next], { autoFeed: false }), t.id, {}, 0, ANA, NOW);
     expect(get(manual.data, next.id).status).toBe("new");
     expect(manual.message).toMatch(/Click Start work/);
   });
@@ -197,7 +200,7 @@ describe("admin assign", () => {
 });
 
 describe("upload validation", () => {
-  it("checks system/trade, priority, required, number and list fields", () => {
+  it("checks system/trade, priority, number and list fields; required ones may be blank", () => {
     const base = { Title: "A", System: "RCM", Trade: "LCL", "Ticket no.": "1", Carrier: "MSCU", "No. of contracts": "3" };
     const res = checkRows(
       [
@@ -211,13 +214,14 @@ describe("upload validation", () => {
         { ...base, trade: "lcl", system: "rcm", Priority: "HIGH" },
       ],
       FIELDS0,
+      DEMO_ORG,
     );
     expect(res.map((r) => r.msg)).toEqual([
       "Ready",
       "Title is missing",
       "LCL isn’t under GPM",
       "Priority must be High, Normal or Low",
-      "Ticket no. is required",
+      "Ready", // required fields are asked for when the task is marked done
       "No. of contracts must be a number",
       "Carrier “ACME” isn’t in the list",
       "Ready",
@@ -252,5 +256,85 @@ describe("seed", () => {
     expect(t[0].id).toBe("T-1040");
     expect(t.filter((x) => x.status === "in_progress")).toHaveLength(6);
     expect(t.filter((x) => x.status === "new" && !x.trade)).toHaveLength(1);
+  });
+});
+
+describe("upload rows follow the team's org", () => {
+  const f: typeof FIELDS0 = [];
+  it("needs no System or Trade when the team is its one unit", () => {
+    const org = { team: { id: "cs", name: "Customer Service" }, systems: [], trades: [{ id: "cs", name: "Customer Service", sys: "" }], teams: [] };
+    const [r] = checkRows([{ Title: "Call back" }], f, org);
+    expect(r).toMatchObject({ ok: true, task: { trade: "cs" } });
+  });
+  it("asks for the System only when a trade name is in two systems", () => {
+    const org = {
+      team: { id: "t", name: "T" },
+      systems: [{ id: "a", name: "A" }, { id: "b", name: "B" }],
+      trades: [{ id: "a1", name: "EU", sys: "a" }, { id: "b1", name: "EU", sys: "b" }, { id: "b2", name: "US", sys: "b" }],
+      teams: [],
+    };
+    const res = checkRows([{ Title: "x", Trade: "EU" }, { Title: "x", System: "B", Trade: "EU" }, { Title: "x", Trade: "US" }, { Title: "x", System: "A", Trade: "US" }], f, org);
+    expect(res.map((r) => r.ok ? r.task!.trade : r.msg)).toEqual(["Add the System — that trade is in more than one", "b1", "b2", "US isn’t under A"]);
+  });
+});
+
+describe("overtime, helping out, productivity basis and uploads", async () => {
+  const { outsideShiftMin, suggestedOt, helpQueue, personMetrics, canTake } = await import("./engine");
+  const { authorizeWl } = await import("./authz");
+  const ana = PEOPLE.find((p) => p.id === ANA)!; // LCL (RCM), day shift 08:00, 9 h
+  const EVE = Date.parse("2026-09-24T18:30:00+08:00"); // 1 h 30 past her 17:00 end
+
+  it("asks for overtime only outside the shift, capped by time on the task", () => {
+    const s = settings();
+    expect(outsideShiftMin(ana, s, NOW)).toBe(0);
+    expect(outsideShiftMin(ana, s, EVE)).toBe(90);
+    expect(outsideShiftMin(ana, s, Date.parse("2026-09-24T07:00:00+08:00"))).toBe(60); // before the shift
+    expect(suggestedOt(task({ startedAt: EVE - 30 * M }), ana, s, EVE)).toBe(30);
+    expect(suggestedOt(task({ startedAt: EVE - 3 * H }), ana, s, EVE)).toBe(90);
+  });
+
+  it("records overtime minutes, no more than the time on the task, and only by the assignee", () => {
+    const t = task({ status: "in_progress", assignee: ANA, startedAt: EVE - 40 * M });
+    const d = data([t]);
+    expect(get(completeTask(d, t.id, {}, 25, ANA, EVE).data, t.id)).toMatchObject({ ot: true, otMin: 25 });
+    expect(get(completeTask(d, t.id, {}, 500, ANA, EVE).data, t.id).otMin).toBe(40);
+    expect(get(completeTask(d, t.id, {}, 10, 15, EVE).data, t.id).status).toBe("in_progress"); // Leo can't close Ana's task
+    expect(personMetrics(completeTask(d, t.id, {}, 25, ANA, EVE).data, ana, EVE).otMin).toBe(25);
+  });
+
+  it("asks before giving work from other trades: same system first, then the team", () => {
+    const us = task({ trade: "us", received: NOW - H }); // RCM, same system as LCL
+    const eu = task({ trade: "eu", received: NOW - 5 * H }); // GPM, older
+    const d = data([eu, us]);
+    const r = startWork(d, ANA, NOW);
+    expect(r.ask).toEqual({ system: 1, systemNames: ["RCM"], team: 1 });
+    expect(r.data).toBe(d);
+    expect(helpQueue(d, ana).map((x) => x.t.id)).toEqual([us.id, eu.id]);
+    const yes = startWork(d, ANA, NOW, true);
+    expect(get(yes.data, us.id)).toMatchObject({ status: "in_progress", assignee: ANA });
+    expect(yes.message).toMatch(/helping US/);
+    // Own trade has work: no offer, and other trades can't be taken.
+    const own = task({ trade: "lcl" });
+    expect(startWork(data([own, us]), ANA, NOW).ask).toBeUndefined();
+    expect(canTake(data([own, us]), ana, us)).toBe(false);
+    expect(canTake(data([us]), ana, us)).toBe(true);
+  });
+
+  it("measures productivity by tasks, a number field, or distinct values", () => {
+    const done = (f: Record<string, string | number>) => task({ status: "done", assignee: ANA, startedAt: NOW - H, doneAt: NOW - M, fields: f });
+    const tasks = [done({ ticket: "A", contracts: 3 }), done({ ticket: "A", contracts: 2 }), done({ ticket: "B", contracts: 1 })];
+    const base = { ...data(tasks), fields: FIELDS0 };
+    expect(personMetrics(base, ana, NOW).out).toBe(3);
+    expect(personMetrics({ ...base, settings: { ...base.settings, prodBasis: "contracts" } }, ana, NOW).out).toBe(6);
+    expect(personMetrics({ ...base, settings: { ...base.settings, prodBasis: "ticket" } }, ana, NOW).out).toBe(2);
+  });
+
+  it("lets admins and approved members upload, with required fields left blank", () => {
+    const d = { ...data([]), fields: FIELDS0 };
+    const rows = [{ Title: "Blank ticket", System: "RCM", Trade: "LCL" }];
+    expect("error" in authorizeWl({ type: "importRows", rows }, d, ANA)).toBe(true);
+    expect("action" in authorizeWl({ type: "importRows", rows }, { ...d, settings: { ...d.settings, uploaders: [ANA] } }, ANA)).toBe(true);
+    expect("action" in authorizeWl({ type: "importRows", rows }, d, 23)).toBe(true);
+    expect(checkRows(rows, FIELDS0, DEMO_ORG)[0]).toMatchObject({ ok: true });
   });
 });

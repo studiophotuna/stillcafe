@@ -7,10 +7,25 @@ export type Availability = "available" | "leave" | "offshift";
 export type FieldType = "text" | "number" | "date" | "select";
 export type ViewAs = "admin" | "employee";
 
+/**
+ * A unit tasks are routed to: a trade, or a system / team that has no trades
+ * below it. `sys` is the system id above it ("" when there is none).
+ */
 export interface Trade {
   id: string;
   name: string;
   sys: string;
+}
+
+/** The team's structure, from the Calendar organization. */
+export interface WlOrg {
+  team: { id: string; name: string };
+  /** Systems in the team (filter bar). */
+  systems: { id: string; name: string }[];
+  /** Where tasks can go (see Trade). */
+  trades: Trade[];
+  /** Teams this person can open in Workload. */
+  teams: { id: string; name: string; tower: string }[];
 }
 
 export interface Person {
@@ -62,6 +77,8 @@ export interface Task {
   startedAt: number | null;
   doneAt: number | null;
   ot: boolean;
+  /** Overtime minutes worked on this task (asked when it's finished after the shift ended). */
+  otMin?: number;
   hold: string;
   fields: Record<string, string | number>;
   email: TaskEmail | null;
@@ -90,6 +107,13 @@ export interface Settings {
   work: WorkingTime;
   targets: Record<string, number>;
   memberTargets: Record<number, string>;
+  /**
+   * What productivity counts: "tasks" (completed tasks) or a task field key —
+   * a number field is summed, any other field counts distinct values (e.g. tickets).
+   */
+  prodBasis?: string;
+  /** Members (not only admins) allowed to upload tasks. */
+  uploaders?: number[];
 }
 
 export interface Toast {

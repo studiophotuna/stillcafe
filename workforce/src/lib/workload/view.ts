@@ -1,8 +1,8 @@
 /** View models shared by task tables and the task detail screens. */
 import { H, dur, fmtS, fmtT } from "./clock";
-import { AV, PR, ST, trPath } from "./constants";
+import { AV, PR, ST, trPathOf } from "./constants";
 import type { Action } from "./actions";
-import { canWork, due, isBusy, personOf, type WorkloadData } from "./engine";
+import { canTake, due, isBusy, personOf, type WorkloadData } from "./engine";
 import type { Task } from "./types";
 
 export interface RowAction {
@@ -38,8 +38,8 @@ export function taskRow(d: WorkloadData, t: Task, me: number, isAdmin: boolean, 
   const meP = personOf(d, me) ?? { id: me, name: "", trades: [], avail: "available" as const, shift: "", shiftStart: 8 };
   const busy = isBusy(d.tasks, me);
   let action: RowAction | null = null;
-  if (t.status === "new" && s.mode === "self" && meP.trades.includes(t.trade))
-    action = { kind: "take", id: t.id, label: "Take", disabled: busy || !canWork(meP, s) };
+  if (t.status === "new" && s.mode === "self" && canTake(d, meP, t))
+    action = { kind: "take", id: t.id, label: meP.trades.includes(t.trade) ? "Take" : "Help", disabled: busy };
   else if (t.assignee === me && t.status === "assigned") action = { kind: "start", id: t.id, label: "Start", disabled: busy };
   else if (t.assignee === me && t.status === "on_hold") action = { kind: "resume", id: t.id, label: "Resume", disabled: busy };
   else if (isAdmin && t.status !== "done") action = { kind: "details", id: t.id, label: "Details", disabled: false };
@@ -47,7 +47,7 @@ export function taskRow(d: WorkloadData, t: Task, me: number, isAdmin: boolean, 
   return {
     id: t.id,
     title: t.title,
-    path: trPath(t.trade),
+    path: trPathOf(d.org, t.trade),
     priority: PR[t.pr][0],
     prCls: PR[t.pr][1],
     status: ST[t.status][0] + (t.status === "new" && !t.trade ? " · needs trade" : ""),
@@ -72,11 +72,11 @@ export function taskDetail(d: WorkloadData, t: Task, now: number) {
   const s = d.settings;
   const dueAt = due(t, s);
   const od = t.status !== "done" && now > dueAt;
-  const fieldRows = [{ label: "System › Trade", value: trPath(t.trade) }]
+  const fieldRows = [{ label: "System › Trade", value: trPathOf(d.org, t.trade) }]
     .concat(d.fields.map((f) => ({ label: f.label, value: (t.fields[f.key] ?? "") === "" ? "—" : String(t.fields[f.key]) })))
     .concat(t.hold ? [{ label: "On hold because", value: t.hold }] : []);
   return {
-    path: trPath(t.trade),
+    path: trPathOf(d.org, t.trade),
     priority: PR[t.pr][0],
     prCls: PR[t.pr][1],
     status: ST[t.status][0],

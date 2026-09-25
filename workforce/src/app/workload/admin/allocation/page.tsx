@@ -1,7 +1,7 @@
 "use client";
 
 import { Blueprint, PageHead } from "@/components/ui";
-import { MODES, PR, TEAM } from "@/lib/workload/constants";
+import { MODES, PR } from "@/lib/workload/constants";
 import { useWorkload } from "@/lib/workload/store";
 import type { OrderRule, Priority, Settings } from "@/lib/workload/types";
 
@@ -12,7 +12,7 @@ export default function AllocationPage() {
 
   return (
     <>
-      <PageHead title={`Allocation · ${TEAM.name}`} sub="How tasks reach people in this team. Changes save immediately." />
+      <PageHead title={`Allocation · ${data.org.team.name}`} sub="How tasks reach people in this team. Changes save immediately." />
       <div className="grid-2">
         <Blueprint as="section" className="panel" style={{ gap: 10 }}>
           <h2 className="h2">Allocation method</h2>

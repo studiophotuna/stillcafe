@@ -2,8 +2,8 @@
 
 import { Blueprint, Kpi, PageHead, pct } from "@/components/ui";
 import { dur, fmtT } from "@/lib/workload/clock";
-import { AV, trPath, trade } from "@/lib/workload/constants";
-import { doneToday, isOverdue, personMetrics } from "@/lib/workload/engine";
+import { AV, tradeOf, trPathOf } from "@/lib/workload/constants";
+import { basisUnit, doneToday, fmtMin, isOverdue, personMetrics } from "@/lib/workload/engine";
 import { useWorkload } from "@/lib/workload/store";
 import type { Task } from "@/lib/workload/types";
 import { useUnit } from "@/lib/workload/useUnit";
@@ -37,7 +37,7 @@ export default function DashboardPage() {
     { k: "Done today", v: doneT.length, m: "tasks" },
     { k: "Average time", v: avg(doneT), m: "per task today" },
     ...metricF.map((f) => ({ k: f.label.replace(/^No\. of /, ""), v: sumF(doneT, f.key), m: "completed today" })),
-    { k: "Overtime", v: doneT.filter((t) => t.ot).length, m: "tasks done on overtime" },
+    { k: "Overtime", v: fmtMin(doneT.reduce((a, t) => a + (t.otMin ?? 0), 0)), m: `on ${doneT.filter((t) => t.ot).length} tasks today` },
   ];
 
   const byTrade = unitTrades.map((tr) => {
@@ -46,7 +46,7 @@ export default function DashboardPage() {
     const god = g.filter((t) => isOverdue(t, s, now)).length;
     return {
       id: tr.id,
-      path: trPath(tr.id),
+      path: trPathOf(data.org, tr.id),
       queue: gq.length,
       assigned: g.filter((t) => t.status === "assigned").length,
       prog: g.filter((t) => t.status === "in_progress").length,
@@ -66,13 +66,13 @@ export default function DashboardPage() {
       const m = personMetrics(data, p, now);
       return {
         p,
-        trades: p.trades.map((x) => trade(x)!.name).join(", "),
+        trades: p.trades.map((x) => tradeOf(data.org, x)?.name ?? x).join(", "),
         working: w ? `${w.id} · ${dur(now - w.startedAt!)}` : "—",
-        done: `${d.length} / ${m.target}`,
+        done: `${m.out} / ${m.target}`,
         m,
         avg: avg(d),
         metrics: metricF.map((f) => sumF(d, f.key)),
-        ot: d.filter((t) => t.ot).length,
+        ot: m.otMin ? fmtMin(m.otMin) : "—",
       };
     });
 
@@ -128,7 +128,7 @@ export default function DashboardPage() {
               <th>Trades</th>
               <th>Availability</th>
               <th>Working on</th>
-              <th>Done / target</th>
+              <th>{basisUnit(data) === "tasks" ? "Done / target" : `${basisUnit(data)} / target`}</th>
               <th>Productivity</th>
               <th>Utilization</th>
               <th>Timeliness</th>
@@ -136,7 +136,7 @@ export default function DashboardPage() {
               {metricF.map((f) => (
                 <th key={f.key}>{f.label.replace(/^No\. of /, "")}</th>
               ))}
-              <th>On overtime</th>
+              <th>Overtime</th>
             </tr>
           </thead>
           <tbody>

@@ -2,7 +2,8 @@
 
 import { Blueprint, PageHead } from "@/components/ui";
 import { M, dur } from "@/lib/workload/clock";
-import { TEAM, TRADES, trPath } from "@/lib/workload/constants";
+import { trPathOf } from "@/lib/workload/constants";
+import { basisField, basisUnit } from "@/lib/workload/engine";
 import { useWorkload } from "@/lib/workload/store";
 import type { Settings, WorkingTime } from "@/lib/workload/types";
 
@@ -44,7 +45,7 @@ export default function TargetsPage() {
   return (
     <>
       <PageHead
-        title={`Targets · ${TEAM.name}`}
+        title={`Targets · ${data.org.team.name}`}
         style={{ maxWidth: "85ch" }}
         sub="Working time sets the productive hours used for utilization. Targets set how many tasks a member should finish in a full day; productivity compares tasks done with the target, pro-rated for the part of the shift that has passed."
       />
@@ -75,6 +76,30 @@ export default function TargetsPage() {
           </div>
         </div>
       </Blueprint>
+      <Blueprint as="section" className="panel">
+        <h2 className="h2">Productivity is measured by</h2>
+        <div style={{ display: "flex", gap: 12, alignItems: "end", flexWrap: "wrap" }}>
+          <div className="field" style={{ minWidth: 280 }}>
+            <label htmlFor="p-basis">Count</label>
+            <select id="p-basis" className="input" value={s.prodBasis && data.fields.some((f) => f.key === s.prodBasis) ? s.prodBasis : "tasks"} onChange={(e) => set({ prodBasis: e.target.value })}>
+              <option value="tasks">Completed tasks (requests / tickets)</option>
+              {data.fields.map((f) => (
+                <option key={f.key} value={f.key}>
+                  {f.type === "number" ? `${f.label} (total)` : `${f.label} (distinct values)`}
+                </option>
+              ))}
+            </select>
+          </div>
+          <span style={{ fontSize: 13, color: "var(--color-neutral-700)", maxWidth: "70ch", paddingBottom: 8 }}>
+            {!basisField(data)
+              ? "Each completed task counts as 1."
+              : basisField(data)!.type === "number"
+                ? `The ${basisField(data)!.label} entered on completed tasks is added up.`
+                : `Completed tasks are counted once per distinct ${basisField(data)!.label} (e.g. several tasks on one ticket count once).`}{" "}
+            Targets below are in {basisUnit(data)} per day. Fields come from Task fields.
+          </span>
+        </div>
+      </Blueprint>
       <div className="grid-2">
         <Blueprint as="section" className="panel tight">
           <h2 className="h2">Target per trade</h2>
@@ -83,13 +108,13 @@ export default function TargetsPage() {
               <tr>
                 <th>System › Trade</th>
                 <th>Members</th>
-                <th>Tasks per day</th>
+                <th>{basisUnit(data) === "tasks" ? "Tasks" : basisUnit(data)} per day</th>
               </tr>
             </thead>
             <tbody>
-              {TRADES.map((t) => (
+              {data.org.trades.map((t) => (
                 <tr key={t.id}>
-                  <td style={{ fontWeight: 500 }}>{trPath(t.id)}</td>
+                  <td style={{ fontWeight: 500 }}>{trPathOf(data.org, t.id)}</td>
                   <td>{data.people.filter((p) => p.trades[0] === t.id).length}</td>
                   <td>
                     <NumInput
@@ -123,7 +148,7 @@ export default function TargetsPage() {
                     <tr key={p.id}>
                       <td style={{ fontWeight: 500 }}>{p.name}</td>
                       <td style={{ color: "var(--color-neutral-800)" }}>
-                        {trPath(p.trades[0])} ({s.targets[p.trades[0]] ?? 0})
+                        {trPathOf(data.org, p.trades[0])} ({s.targets[p.trades[0]] ?? 0})
                       </td>
                       <td>
                         <NumInput

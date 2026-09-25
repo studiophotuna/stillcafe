@@ -3,8 +3,9 @@
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect } from "react";
 import { fmtT } from "@/lib/workload/clock";
-import { SYS, TEAM, TRADES, modeLabel, trPath } from "@/lib/workload/constants";
+import { modeLabel, trPathOf } from "@/lib/workload/constants";
 import { useWorkload } from "@/lib/workload/store";
+import { useUnit } from "@/lib/workload/useUnit";
 import { AppFrame, type NavItem } from "./AppFrame";
 import { Dialogs, Toasts } from "./Dialogs";
 
@@ -13,21 +14,25 @@ const isAdminRoute = (path: string) => path.startsWith("/workload/admin") || pat
 
 /** Workload module shell. */
 export function Shell({ children }: { children: React.ReactNode }) {
-  const { data, now, mode, me, isAdmin, viewAs, setViewAs, sys, tr, setSys, setTr } = useWorkload();
+  const { data, now, mode, me, isAdmin, canUpload, viewAs, setViewAs, sys, tr, setSys, setTr, setTeam } = useWorkload();
+  const { trOpts } = useUnit();
+  const { org } = data;
+  // Teams grouped by tower for the picker.
+  const towers = [...new Set(org.teams.map((t) => t.tower))];
   const path = usePathname();
   const router = useRouter();
-  const blocked = !isAdmin && isAdminRoute(path);
+  const blocked = (!isAdmin && isAdminRoute(path)) || (!canUpload && path === "/workload/upload");
 
   useEffect(() => {
     if (blocked) router.replace("/workload");
   }, [blocked, router]);
 
   const openQ = data.tasks.filter((t) => t.status === "new").length;
-  const trOpts = TRADES.filter((t) => sys === "all" || t.sys === sys);
   const nav: NavItem[] = [
     { href: "/workload", icon: "my", label: "My work" },
     { href: "/workload/queue", icon: "queue", label: "Queue", badge: openQ },
     ...(isAdmin ? [{ href: "/workload/dashboard", icon: "dash" as const, label: "Dashboard" }] : []),
+    ...(!isAdmin && canUpload ? [{ href: "/workload/upload", icon: "intake" as const, label: "Upload tasks" }] : []),
   ];
   const adminNav: NavItem[] = isAdmin
     ? [
@@ -43,7 +48,11 @@ export function Shell({ children }: { children: React.ReactNode }) {
       module="workload"
       nav={nav}
       adminNav={adminNav}
-      user={{ name: me.name, role: isAdmin ? `Manager · Admin · ${TEAM.name}` : "Member · " + me.trades.map(trPath).join(", ") }}
+      user={{
+        name: me.name,
+        role: (isAdmin ? `Admin · ${org.team.name}` : org.team.name) + // (a team that is its own single unit isn't repeated)
+          (me.trades.some((x) => x !== org.team.id) ? " · " + me.trades.map((x) => trPathOf(org, x)).join(", ") : ""),
+      }}
       viewAs={viewAs}
       setViewAs={setViewAs}
       overlay={
@@ -56,22 +65,34 @@ export function Shell({ children }: { children: React.ReactNode }) {
         <>
           <div className="field">
             <label htmlFor="f-team">Team</label>
-            <select id="f-team" className="input" style={{ minWidth: 200, fontWeight: 500 }} value={TEAM.id} onChange={() => {}}>
-              <option value={TEAM.id}>{TEAM.name}</option>
-            </select>
-          </div>
-          <div className="field">
-            <label htmlFor="f-sys">System</label>
-            <select id="f-sys" className="input" style={{ minWidth: 150 }} value={sys} onChange={(e) => setSys(e.target.value)}>
-              <option value="all">All systems</option>
-              {Object.entries(SYS).map(([id, name]) => (
-                <option key={id} value={id}>
-                  {name}
-                </option>
+            <select id="f-team" className="input" style={{ minWidth: 220, fontWeight: 500 }} value={org.team.id} onChange={(e) => setTeam(e.target.value)} disabled={org.teams.length < 2}>
+              {towers.map((tw) => (
+                <optgroup key={tw} label={tw || "Teams"}>
+                  {org.teams
+                    .filter((t) => t.tower === tw)
+                    .map((t) => (
+                      <option key={t.id} value={t.id}>
+                        {t.name}
+                      </option>
+                    ))}
+                </optgroup>
               ))}
             </select>
           </div>
-          {trOpts.length > 0 && (
+          {org.systems.length > 0 && (
+            <div className="field">
+              <label htmlFor="f-sys">System</label>
+              <select id="f-sys" className="input" style={{ minWidth: 150 }} value={sys} onChange={(e) => setSys(e.target.value)}>
+                <option value="all">All systems</option>
+                {org.systems.map((x) => (
+                  <option key={x.id} value={x.id}>
+                    {x.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
+          {trOpts.length > 1 && (
             <div className="field">
               <label htmlFor="f-tr">Trade</label>
               <select id="f-tr" className="input" style={{ minWidth: 150 }} value={tr} onChange={(e) => setTr(e.target.value)}>

@@ -5,7 +5,8 @@ import { applyAction, type Action } from "./actions";
 import { nowMs, setRealClock } from "./clock";
 import { loadMe, toLogin } from "../session";
 import { ADMIN_ID, EMPLOYEE_ID, person } from "./constants";
-import { personOf, type WorkloadData } from "./engine";
+import { canUpload } from "./authz";
+import { personOf, type AssistOffer, type WorkloadData } from "./engine";
 import { initialData } from "./seed";
 import type { Person, Toast, ViewAs } from "./types";
 
@@ -25,6 +26,7 @@ export type Dialog =
   | { kind: "task"; id: string }
   | { kind: "hold"; id: string }
   | { kind: "done"; id: string }
+  | { kind: "assist"; offer: AssistOffer }
   | null;
 
 interface Store {
@@ -40,8 +42,12 @@ interface Store {
   setViewAs?: (v: ViewAs) => void;
   me: Person;
   isAdmin: boolean;
+  /** Admins, and members an admin allowed to upload tasks. */
+  canUpload: boolean;
   sys: string;
   tr: string;
+  /** Switch to another team this person can open (reloads its data). */
+  setTeam: (id: string) => void;
   setSys: (v: string) => void;
   setTr: (v: string) => void;
   dialog: Dialog;
@@ -51,6 +57,14 @@ interface Store {
 const Ctx = createContext<Store | null>(null);
 
 const REFRESH_MS = 20_000;
+const TEAM_KEY = "wfm.wlTeam";
+const savedTeam = () => {
+  try {
+    return localStorage.getItem(TEAM_KEY) || "";
+  } catch {
+    return "";
+  }
+};
 
 export function WorkloadProvider({ children }: { children: React.ReactNode }) {
   const [data, setData] = useState<WorkloadData | null>(null);
@@ -58,6 +72,9 @@ export function WorkloadProvider({ children }: { children: React.ReactNode }) {
   const [mode, setMode] = useState<DataMode | null>(null);
   const modeRef = useRef<DataMode | null>(null);
   const pending = useRef(0);
+  // The team being shown; the server checks the person may open it.
+  const teamRef = useRef("");
+  const q = () => (teamRef.current ? "?team=" + encodeURIComponent(teamRef.current) : "");
   const queue = useRef<Promise<void>>(Promise.resolve());
   const [toasts, setToasts] = useState<Toast[]>([]);
   const [viewAs, setViewAsState] = useState<ViewAs>("admin");
@@ -65,9 +82,11 @@ export function WorkloadProvider({ children }: { children: React.ReactNode }) {
   const [tr, setTr] = useState("all");
   const [now, setNow] = useState(nowMs);
   const [dialog, setDialog] = useState<Dialog>(null);
+  const [blocked, setBlocked] = useState("");
   const [session, setSession] = useState<{ id: number; email: string } | null>(null);
 
   const commit = useCallback((d: WorkloadData) => {
+    teamRef.current = d.org.team.id;
     dataRef.current = d;
     setData(d);
     setNow(nowMs());
@@ -83,9 +102,10 @@ export function WorkloadProvider({ children }: { children: React.ReactNode }) {
   const refresh = useCallback(async () => {
     if (modeRef.current !== "db" || pending.current) return;
     try {
-      const r = await fetch("/api/wl/snapshot", { cache: "no-store" });
-      if (r.status === 401 || r.status === 403) return toLogin(r.status === 403 ? "/change-password" : "/login");
+      const r = await fetch("/api/wl/snapshot" + q(), { cache: "no-store" });
+      if (r.status === 401) return toLogin();
       const j = await r.json();
+      if (r.status === 403 && j.code !== "team") return toLogin("/change-password");
       if (j.mode === "db" && !pending.current) commit(j.data);
     } catch {}
   }, [commit]);
@@ -100,9 +120,21 @@ export function WorkloadProvider({ children }: { children: React.ReactNode }) {
       if (!who || !live) return;
       if (!who.demo) setSession({ id: who.personId, email: who.email });
       try {
-        const r = await fetch("/api/wl/snapshot", { cache: "no-store" });
-        if (r.status === 401 || r.status === 403) return toLogin(r.status === 403 ? "/change-password" : "/login");
-        const j = await r.json();
+        teamRef.current = savedTeam();
+        let r = await fetch("/api/wl/snapshot" + q(), { cache: "no-store" });
+        if (r.status === 401) return toLogin();
+        let j = await r.json();
+        // The remembered team may no longer be open to this person: fall back to their own team.
+        if (r.status === 403 && j.code === "team" && teamRef.current) {
+          teamRef.current = "";
+          r = await fetch("/api/wl/snapshot", { cache: "no-store" });
+          j = await r.json();
+        }
+        if (r.status === 403 && j.code === "team") {
+          if (live) setBlocked(j.error);
+          return;
+        }
+        if (r.status === 403) return toLogin("/change-password");
         if (j.mode === "db") [next, saved] = ["db", j.data];
         else if (j.mode === "error") toast("The database couldn’t be reached, so this is sample data. Changes won’t be saved.");
       } catch {}
@@ -142,6 +174,8 @@ export function WorkloadProvider({ children }: { children: React.ReactNode }) {
       if (!dataRef.current) return;
       const local = applyAction(dataRef.current, action, nowMs());
       commit(local.data);
+      // Nothing left in the member's trades: ask whether they'll help elsewhere.
+      if (local.ask) setDialog({ kind: "assist", offer: local.ask });
       if (modeRef.current !== "db") {
         if (local.message) toast(local.message);
         return;
@@ -150,7 +184,7 @@ export function WorkloadProvider({ children }: { children: React.ReactNode }) {
       // Send actions one at a time, in order.
       queue.current = queue.current.then(async () => {
         try {
-          const r = await fetch("/api/wl/action", {
+          const r = await fetch("/api/wl/action" + q(), {
             method: "POST",
             headers: { "content-type": "application/json" },
             body: JSON.stringify(action),
@@ -174,6 +208,22 @@ export function WorkloadProvider({ children }: { children: React.ReactNode }) {
       });
     },
     [commit, toast, refresh],
+  );
+
+  const setTeam = useCallback(
+    async (id: string) => {
+      if (modeRef.current !== "db" || id === teamRef.current) return;
+      try {
+        localStorage.setItem(TEAM_KEY, id);
+      } catch {}
+      const r = await fetch("/api/wl/snapshot?team=" + encodeURIComponent(id), { cache: "no-store" });
+      const j = await r.json().catch(() => ({}));
+      if (!r.ok) return toast(j.error || "That team couldn’t be opened.");
+      setSysState("all");
+      setTr("all");
+      commit(j.data);
+    },
+    [commit, toast],
   );
 
   const setViewAs = useCallback((v: ViewAs) => {
@@ -206,8 +256,10 @@ export function WorkloadProvider({ children }: { children: React.ReactNode }) {
             })
           : person(viewAs === "employee" ? EMPLOYEE_ID : ADMIN_ID)!,
       isAdmin: mode === "db" ? !!session && data.admins.includes(session.id) : viewAs !== "employee",
+      canUpload: mode === "db" ? !!session && canUpload(data, session.id) : viewAs !== "employee",
       sys,
       tr,
+      setTeam,
       setSys: (v: string) => {
         setSysState(v);
         setTr("all");
@@ -216,9 +268,23 @@ export function WorkloadProvider({ children }: { children: React.ReactNode }) {
       dialog,
       setDialog,
     }),
-    [data, mode, now, run, toast, toasts, viewAs, setViewAs, sys, tr, dialog, session],
+    [data, mode, now, run, toast, toasts, viewAs, setViewAs, sys, tr, dialog, session, setTeam],
   );
 
+  if (blocked)
+    return (
+      <div className="auth">
+        <div className="auth-card">
+          <h1 className="dialog-title" style={{ fontSize: 26, margin: 0 }}>
+            No team to show
+          </h1>
+          <p className="auth-sub">{blocked}</p>
+          <a className="btn btn-secondary btn-40" href="/calendar">
+            Go to Calendar
+          </a>
+        </div>
+      </div>
+    );
   // Nothing to show until we know whether this is saved or sample data.
   if (!value) return null;
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
