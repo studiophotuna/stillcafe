@@ -24,10 +24,21 @@ export default function ReportsPage() {
   const evs = s.data.bcpEvents.filter((e) => O.by[e.scope] && O.anc(e.scope).includes(v.dept.id));
   const evSel = evs.find((e) => e.id === ev)?.id ?? evs[0]?.id ?? "";
   const { rows, desc } = buildReport(s.cal, type, scope, from, to, evSel, v.dept.id);
-  const body = rows.slice(1);
+  // Search across every column, then page through the matches.
+  const [q, setQ] = useState("");
+  const [size, setSize] = useState(25);
+  const [page, setPage] = useState(0);
+  const ql = q.trim().toLowerCase();
+  const all = rows.slice(1);
+  const body = ql ? all.filter((r) => r.some((cv) => String(cv).toLowerCase().includes(ql))) : all;
+  const pages = size ? Math.max(1, Math.ceil(body.length / size)) : 1;
+  const pg = Math.min(page, pages - 1);
+  const shown = size ? body.slice(pg * size, pg * size + size) : body;
+  const first = body.length ? (size ? pg * size + 1 : 1) : 0;
+  const last = size ? Math.min(body.length, pg * size + size) : body.length;
   const download = () => {
     const a = document.createElement("a");
-    a.href = URL.createObjectURL(new Blob([toCsv(rows)], { type: "text/csv" }));
+    a.href = URL.createObjectURL(new Blob([toCsv([rows[0], ...body])], { type: "text/csv" }));
     a.download = `Workforce_${type}_${O.by[scope].name.split(" (")[0].replace(/[^A-Za-z0-9]+/g, "-")}_${from}_to_${to}.csv`;
     document.body.appendChild(a);
     a.click();
@@ -81,23 +92,69 @@ export default function ReportsPage() {
           <p style={{ margin: 0, fontSize: 13.5, color: "var(--color-neutral-800)", maxWidth: "75ch" }}>{desc}</p>
           <Blueprint as="button" className="btn btn-primary btn-40" style={{ padding: "0 18px" }} disabled={!body.length} onClick={download}>
             <Icon name="download" size={16} />
-            Download CSV ({body.length} rows)
+            Download CSV ({body.length}{ql ? " matching" : ""} rows)
           </Blueprint>
         </div>
       </Blueprint>
-      <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-        <span className="small" style={{ fontSize: 12 }}>Preview · {Math.min(12, body.length)} of {body.length} rows</span>
-        <Blueprint className="scroll-x">
+      <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+        <div className="row" style={{ justifyContent: "space-between", alignItems: "center" }}>
+          <input
+            className="input"
+            type="search"
+            aria-label="Search the report"
+            placeholder="Search any column, e.g. a name or date"
+            value={q}
+            onChange={(e) => {
+              setQ(e.target.value);
+              setPage(0);
+            }}
+            style={{ width: 300 }}
+          />
+          <div className="row" style={{ alignItems: "center", gap: 8 }}>
+            <span className="small" style={{ fontSize: 12.5 }}>
+              {body.length ? `Rows ${first}–${last} of ${body.length}` : "No rows"}
+              {ql && all.length !== body.length ? ` (filtered from ${all.length})` : ""}
+            </span>
+            <select
+              aria-label="Rows per page"
+              className="input"
+              value={size}
+              onChange={(e) => {
+                setSize(Number(e.target.value));
+                setPage(0);
+              }}
+              style={{ width: "auto" }}
+            >
+              {[25, 50, 100].map((n) => (
+                <option key={n} value={n}>
+                  {n} per page
+                </option>
+              ))}
+              <option value={0}>All rows</option>
+            </select>
+            <button className="btn btn-secondary btn-36" disabled={pg === 0} onClick={() => setPage(pg - 1)}>
+              ‹ Previous
+            </button>
+            <span className="small" style={{ fontSize: 12.5 }}>
+              Page {pg + 1} of {pages}
+            </span>
+            <button className="btn btn-secondary btn-36" disabled={pg >= pages - 1} onClick={() => setPage(pg + 1)}>
+              Next ›
+            </button>
+          </div>
+        </div>
+        <Blueprint className="report-scroll">
           <table className="table" style={{ fontSize: 13 }}>
             <thead>
               <tr>{rows[0].map((h, i) => <th key={i} className="nowrap">{h}</th>)}</tr>
             </thead>
             <tbody>
-              {body.slice(0, 12).map((r, i) => (
+              {shown.map((r, i) => (
                 <tr key={i}>{r.map((cv, j) => <td key={j} className="nowrap">{String(cv)}</td>)}</tr>
               ))}
             </tbody>
           </table>
+          {!body.length && <div style={{ padding: "20px 14px", color: "var(--color-neutral-700)" }}>{ql ? "No rows match your search." : "No rows for this report and period."}</div>}
         </Blueprint>
       </div>
     </>

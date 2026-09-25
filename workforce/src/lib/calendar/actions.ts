@@ -4,12 +4,12 @@
  */
 import { fmtT } from "../workload/clock";
 import { ANNUAL, CODES, LEVELS, TYPE_L, first } from "./constants";
-import { fmtY, MONL } from "./dates";
+import { fmtY, isWk, MONL } from "./dates";
 import { Cal, logsDecision, logsSubmit } from "./engine";
 import { allocProblem, teamDefaults } from "./org";
 import { planOrgImport, type OrgRow } from "./orgImport";
 import { applyUpload, checkUpload, type UploadMode, type UploadRow } from "./uploads";
-import type {
+import type { CalPerson, AppLinks,
   BcpEvent, BcpStatus, CalendarData, Code, Holiday, LeaveRequest, Level, NodeType, NotifLog, OrgNode, Shift,
 } from "./types";
 import type { ReadyKey } from "./constants";
@@ -28,7 +28,10 @@ export type CalAction =
   | { type: "cancelRequest"; rid: string; via: "self" | "admin" }
   | { type: "setOverride"; pid: number; date: string; code: Code | null }
   | { type: "setShiftDay"; pid: number; date: string; shift: string }
-  | { type: "teamSettings"; id: string; patch: Pick<OrgNode, "mode" | "notifyAdmin" | "notifyUser" | "invite" | "defaultScope"> }
+  | { type: "holidayWork"; pid: number; date: string; code: "RTO" | "WFH" | "HOL" | null; actor: number }
+  | { type: "teamSettings"; id: string; patch: Partial<Pick<OrgNode, "mode" | "notifyAdmin" | "notifyUser" | "invite" | "defaultScope" | "costCentre">> }
+  | { type: "setBilled"; pid: number; bid: string; months: string[]; value: number | null }
+  | { type: "setLinks"; links: AppLinks }
   | { type: "addAdmin"; id: string; pid: number }
   | { type: "removeAdmin"; id: string; pid: number }
   | { type: "addNode"; ntype: NodeType; parent: string | null; name: string; actor: number }
@@ -61,9 +64,19 @@ export interface MemberDetails {
   ytdEl?: number;
   /** Weekdays worked from home by default, 1 = Mon … 5 = Fri. */
   wfhDays?: number[];
+  /** Headcount team when allocated to several teams ("" = the first allocation's team). */
+  primaryTeam?: string;
 }
 
 export const EMAIL_RE = /^[^@\s]+@[^@\s]+\.[^@\s]+$/;
+
+/** Keep primaryTeam only when it's one of several teams the person is allocated to. */
+function fixPrimary<T extends CalPerson>(O: Cal["O"], p: T): T {
+  const bs = O.branchesOf(p);
+  if (bs.length > 1 && bs.some((b) => b.id === p.primaryTeam)) return p;
+  const { primaryTeam: _drop, ...rest } = p;
+  return (bs.length > 1 ? { ...rest, primaryTeam: bs[0].id } : rest) as T;
+}
 
 /** Clean and validate details; returns an error message or the cleaned patch. */
 export function cleanDetails(d: CalendarData, m: MemberDetails, selfId: number | null): { error: string } | { patch: MemberDetails } {
@@ -103,6 +116,7 @@ export function cleanDetails(d: CalendarData, m: MemberDetails, selfId: number |
     return { error: (e as Error).message };
   }
   if (m.wfhDays !== undefined) out.wfhDays = [...new Set(m.wfhDays.filter((x) => x >= 1 && x <= 5))].sort();
+  if (typeof m.primaryTeam === "string") out.primaryTeam = m.primaryTeam;
   return { patch: out };
 }
 
@@ -200,13 +214,83 @@ export function applyCalAction(d: CalendarData, a: CalAction, today: string, now
       else delete overrides[k];
       return { data: { ...d, overrides } };
     }
+    case "holidayWork": {
+      // A member working on a holiday (or back to not working): shows as holiday duty.
+      const p = c.people.get(a.pid);
+      const h = p && c.holFor(p, a.date);
+      if (!p || !h || isWk(a.date) || (p.resign && a.date > p.resign) || (a.code !== null && a.code !== "RTO" && a.code !== "WFH" && a.code !== "HOL")) return { data: d };
+      const k = a.pid + "|" + a.date;
+      const overrides = { ...d.overrides };
+      if (a.code) overrides[k] = a.code;
+      else delete overrides[k];
+      const self = a.actor === a.pid;
+      const work = a.code === "RTO" || a.code === "WFH";
+      // Confirming a holiday nobody was told otherwise about needs no message to admins.
+      const wasWorking = ["RTO", "WFH", "HDY"].includes(d.overrides[k] ?? "");
+      const what = work ? `working on ${h.name} (${a.code === "WFH" ? "from home" : "in the office"})` : `not working on ${h.name}`;
+      const logs = c.O.branchesOf(p).flatMap((b) => {
+        const admins = (b.admins ?? []).filter((i) => i !== a.actor).map((i) => c.people.get(i)).filter((x): x is CalPerson => !!x);
+        if (!b.notifyAdmin || !admins.length || (!work && !wasWorking)) return [];
+        return [{
+          kind: "email" as const, at, did: b.id, toIds: admins.map((x) => x.id),
+          toLine: admins.map((x) => `${x.name} <${x.email}>`).join("; "), toShort: admins.map((x) => x.name).join(", "),
+          subject: `Holiday update: ${p.name} is ${what}`,
+          lines: [
+            `Hi ${first(admins[0].name)},`,
+            `${p.name} is ${what}, ${fmtY(a.date)}.` + (self ? "" : ` Updated by ${c.person(a.actor).name}.`),
+            "The calendar shows this day as holiday duty" + (work ? "." : " no longer."),
+          ],
+        }];
+      });
+      return {
+        data: pushLogs({ ...d, overrides }, logs),
+        message: work
+          ? `${self ? "You’re" : first(p.name) + " is"} on holiday duty ${fmtY(a.date)} (${a.code === "WFH" ? "work from home" : "in office"}).`
+          : `${fmtY(a.date)} is back to a holiday${self ? " for you" : " for " + first(p.name)}.`,
+      };
+    }
     case "setShiftDay":
       return {
         data: { ...d, roster: { ...d.roster, [a.pid + "|" + a.date]: a.shift } },
         message: `Shift updated for ${first(c.person(a.pid).name)}.`,
       };
-    case "teamSettings":
-      return { data: setNode(d, a.id, a.patch), message: "Saved." };
+    case "teamSettings": {
+      // Only these settings; admins, parent etc. change through their own actions.
+      const p = a.patch ?? {};
+      const patch: Partial<OrgNode> = {};
+      if (p.mode === "auto" || p.mode === "approval") patch.mode = p.mode;
+      if (p.defaultScope === "all" || p.defaultScope === "me") patch.defaultScope = p.defaultScope;
+      for (const k of ["notifyAdmin", "notifyUser", "invite"] as const) if (typeof p[k] === "boolean") patch[k] = p[k];
+      if (typeof p.costCentre === "string") patch.costCentre = p.costCentre.trim().slice(0, 40);
+      if (!c.O.by[a.id] || !Object.keys(patch).length) return { data: d };
+      return { data: setNode(d, a.id, patch), message: "Saved." };
+    }
+    case "setBilled": {
+      // Headcount report: billed FTE for a person in a team for some months (null = back to the default).
+      if (!c.people.has(a.pid) || !c.O.by[a.bid] || !Array.isArray(a.months) || a.months.length > 12) return { data: d };
+      if (a.value !== null && !(typeof a.value === "number" && a.value >= 0 && a.value <= 1)) return { data: d, error: "Billed must be between 0 and 1." };
+      const billing = { ...(d.billing ?? {}) };
+      for (const m of a.months) {
+        if (!/^\d{4}-\d{2}$/.test(m)) continue;
+        const k = `${a.pid}|${a.bid}|${m}`;
+        if (a.value === null) delete billing[k];
+        else billing[k] = Math.round(a.value * 100) / 100;
+      }
+      return { data: { ...d, billing }, message: "Billed updated." };
+    }
+    case "setLinks": {
+      const ok = (u: unknown) => typeof u === "string" && /^https:\/\/\S{3,490}$/.test(u.trim());
+      const l = a.links ?? {};
+      const links: AppLinks = {
+        bipoLeave: ok(l.bipoLeave) ? l.bipoLeave!.trim() : undefined,
+        bipoOt: ok(l.bipoOt) ? l.bipoOt!.trim() : undefined,
+        quick: (Array.isArray(l.quick) ? l.quick : [])
+          .filter((q) => q && ok(q.url) && typeof q.label === "string" && q.label.trim())
+          .slice(0, 20)
+          .map((q) => ({ label: q.label.trim().slice(0, 40), url: q.url.trim() })),
+      };
+      return { data: { ...d, links }, message: "Links saved." };
+    }
     case "addAdmin": {
       const b = c.O.by[a.id];
       if (!b || b.admins?.includes(a.pid)) return { data: d };
@@ -276,8 +360,9 @@ export function applyCalAction(d: CalendarData, a: CalAction, today: string, now
         shift: d.shifts.some((x) => x.id === a.shift) ? a.shift : d.shifts[0]?.id ?? "D", hire: cl.patch.hire!, resign: null,
         ytd: cl.patch.ytd ?? 0, ytdEl: cl.patch.ytdEl ?? 0, carry: cl.patch.carry ?? 0, entitle: cl.patch.entitle ?? 25,
         elEnt: cl.patch.elEnt ?? 5, wfhDays: cl.patch.wfhDays ?? [],
+        primaryTeam: cl.patch.primaryTeam,
       };
-      let next: CalendarData = { ...d, people: d.people.concat(person) };
+      let next: CalendarData = { ...d, people: d.people.concat(fixPrimary(c.O, person)) };
       if (a.adminHere && a.assign.some((x) => c.O.anc(x).includes(a.bid))) next = setNode(next, a.bid, { admins: (b.admins ?? []).concat(id) });
       return { data: next, message: `${person.name} added.`, newPersonId: id };
     }
@@ -291,7 +376,7 @@ export function applyCalAction(d: CalendarData, a: CalAction, today: string, now
       if ("error" in cl) return { data: d, error: cl.error };
       let next: CalendarData = {
         ...d,
-        people: d.people.map((x) => (x.id === a.pid ? { ...x, ...cl.patch, assign: [...new Set(a.assign)], level: a.level, shift: a.shift || x.shift } : x)),
+        people: d.people.map((x) => (x.id === a.pid ? fixPrimary(c.O, { ...x, ...cl.patch, assign: [...new Set(a.assign)], level: a.level, shift: a.shift || x.shift }) : x)),
       };
       const inHere = a.assign.some((x) => c.O.anc(x).includes(a.bid));
       let na = (b.admins ?? []).filter((x) => x !== a.pid);
@@ -305,7 +390,7 @@ export function applyCalAction(d: CalendarData, a: CalAction, today: string, now
       const left = p.assign.filter((x) => !c.O.anc(x).includes(a.bid));
       if (!left.length) return { data: d, message: `${first(p.name)} has no other allocation. Use Edit to move them, or record a resignation.` };
       return {
-        data: { ...d, people: d.people.map((x) => (x.id === a.pid ? { ...x, assign: left } : x)) },
+        data: { ...d, people: d.people.map((x) => (x.id === a.pid ? fixPrimary(c.O, { ...x, assign: left }) : x)) },
         message: `${p.name} removed from ${c.O.by[a.bid]?.name}. Their other allocations are unchanged.`,
       };
     }

@@ -53,6 +53,29 @@ the bottom of the side menu switches between the admin (Sam Delgado) and a membe
   BCP events and Workload settings.
 - **First administrator:** created directly in the database (see *Starting fresh* below).
 
+## Headcount report
+
+Calendar › Admin › Headcount (admins, for the teams they administer): per tower and team, one
+row per person with **Actual** and **Billed** FTE for each month of a year, with totals without
+and with team leads, and an Excel download (one sheet per tower) in the monthly headcount
+file's layout.
+- Each person counts once, as 1 FTE, in their **primary team**: chosen in Members › Edit when
+  they're allocated to several teams (default: their first allocation's team).
+- Actual: blank before the hire month; FTE from the hire month through the month of the last
+  day; 0 afterwards.
+- Billed: FTE for members, 0 for team leads and above; click a Billed cell to override it for
+  that month and, optionally, the rest of the year.
+- Cost centre per team: Calendar › Admin › Settings.
+
+## Links
+
+- **BIPO:** when a member's leave or overtime is approved, a pop-up asks them to file it in
+  BIPO with a button to the right page (“I’ve filed it” hides it in that browser). A system
+  admin sets both addresses under Organization › App links.
+- **Quick links:** a small tab at the top centre of every page opens a bar of links — shared
+  ones (Organization › App links) plus each person's own, saved to their account
+  (`workforce.person_pref`, migration 0007).
+
 ## Organization
 
 **Allocations by role:** directors need only a department, managers a department and tower,

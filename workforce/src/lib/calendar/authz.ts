@@ -67,6 +67,8 @@ export function authorizeCal(a: CalAction, c: Cal, me: number): { action: CalAct
       if (!q) return NO;
       return a.via === "self" ? ok(q.pid === me) : ok(r.adminOf(q.pid));
     }
+    case "holidayWork":
+      return ok(a.pid === me || r.adminOf(a.pid), { ...a, actor: me });
     case "setOverride":
     case "setShiftDay":
     case "setResign":
@@ -75,6 +77,10 @@ export function authorizeCal(a: CalAction, c: Cal, me: number): { action: CalAct
     case "addAdmin":
     case "removeAdmin":
       return ok(r.teamAdmin(a.id));
+    case "setBilled":
+      return ok(r.teamAdmin(a.bid));
+    case "setLinks":
+      return ok(r.sys);
     case "saveMember": {
       // Name, email and leave balances: only for people this admin already manages
       // (not someone just being added from another team), and system admins only by one.

@@ -148,6 +148,59 @@ function RequestDialog({ date }: { date?: string }) {
   );
 }
 
+// ── Member: working on a holiday (holiday duty) or not ──
+function HolidayWorkDialog({ date }: { date: string }) {
+  const s = useCalendar();
+  const c = s.cal;
+  const p = c.person(s.me);
+  const h = c.holFor(p, date);
+  const close = () => s.setDialog(null);
+  if (!h) return null;
+  const o = s.data.overrides[p.id + "|" + date];
+  const cur = o === "WFH" ? "WFH" : o === "HOL" ? "HOL" : o ? "RTO" : null;
+  const opts: ["RTO" | "WFH" | "HOL", string, string][] = [
+    ["RTO", "Holiday duty · RTO", "Working, in the office"],
+    ["WFH", "Holiday duty · WFH", "Working from home"],
+    ["HOL", "Holiday", "Not working"],
+  ];
+  return (
+    <Modal onClose={close} width={440} pad>
+      <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
+        <Title>{h.name}</Title>
+        <span className="muted">
+          {fmtY(date)} · {cur === "RTO" || cur === "WFH" ? "you’re on holiday duty" : cur === "HOL" ? "holiday" : "tell us if you’re working"}
+        </span>
+      </div>
+      <span className="small">Working on this holiday? Update your status so your team and Workload know. Your team admins are told.</span>
+      <div style={{ display: "grid", gap: 8 }}>
+        {opts.map(([k, l, sub]) => (
+          <button
+            key={l}
+            className="btn btn-secondary"
+            aria-pressed={cur === k}
+            style={{ justifyContent: "flex-start", minHeight: 48, gap: 10, ...(cur === k ? { borderColor: "var(--color-accent-700)", fontWeight: 600 } : {}) }}
+            onClick={() => {
+              if (cur !== k) s.run({ type: "holidayWork", pid: p.id, date, code: k, actor: s.me });
+              close();
+            }}
+          >
+            <Chip s={CODES[k === "HOL" ? "HOL" : "HDY"]}>{k === "HOL" ? "HOL" : "HDY"}</Chip>
+            <span style={{ display: "flex", flexDirection: "column", alignItems: "flex-start" }}>
+              <span>{l}</span>
+              <span className="small" style={{ fontWeight: 400 }}>{sub}</span>
+            </span>
+          </button>
+        ))}
+      </div>
+      <div className="dialog-actions">
+        <button className="btn btn-secondary btn-40" onClick={close}>
+          Close
+        </button>
+      </div>
+    </Modal>
+  );
+}
+
 // ── Admin: change one person's day ──
 function CellDialog({ pid, date }: { pid: number; date: string }) {
   const s = useCalendar();
@@ -330,6 +383,7 @@ function MemberDialog({ pid: pid0 }: { pid: number | null }) {
   const wfhOf = (p: CalPerson | null) => p?.wfhDays ?? (p ? (p.pattern === "B" ? [4, 5] : [1, 2]) : []);
   const [f, setF] = useState(() => detailsOf(init));
   const [wfh, setWfh] = useState<number[]>(() => wfhOf(init));
+  const [primary, setPrimary] = useState(init?.primaryTeam ?? "");
   const [level, setLevel] = useState<Level>(init?.level ?? "member");
   const [shift, setShift] = useState(init?.shift ?? (s.data.shifts.some((x) => x.id === "D") ? "D" : s.data.shifts[0]?.id ?? "D"));
   const [adminHere, setAdminHere] = useState(init ? (v.branch.admins ?? []).includes(init.id) : false);
@@ -404,6 +458,7 @@ function MemberDialog({ pid: pid0 }: { pid: number | null }) {
       ytd: Number(f.ytd),
       ytdEl: Number(f.ytdEl),
       wfhDays: wfh,
+      primaryTeam: primary,
     };
     if (isNew && !existing) s.run({ type: "addPerson", details, level, shift, adminHere, bid: v.bid, assign });
     else s.run({ type: "saveMember", pid: pid!, level, shift, adminHere, bid: v.bid, assign, isNew, details });
@@ -461,6 +516,7 @@ function MemberDialog({ pid: pid0 }: { pid: number | null }) {
                 setPid(p.id);
                 setF(detailsOf(p));
                 setWfh(wfhOf(p));
+                setPrimary(p.primaryTeam ?? "");
                 setLevel(p.level);
                 setShift(p.shift);
                 setAlloc(p.assign.map(allocOf).concat(hereRow));
@@ -589,6 +645,27 @@ function MemberDialog({ pid: pid0 }: { pid: number | null }) {
               </button>
             </div>
           ))}
+          {(() => {
+            // Several teams: which one counts this person on the headcount report.
+            const teams = [...new Set(alloc.map((r) => r.branch).filter(Boolean))];
+            if (teams.length < 2) return null;
+            const cur = teams.includes(primary) ? primary : teams[0];
+            return (
+              <div className="field" style={{ maxWidth: 420 }}>
+                <label htmlFor="mem-primary">Primary team · counted in headcount</label>
+                <select id="mem-primary" className="input" value={cur} onChange={(e) => setPrimary(e.target.value)}>
+                  {teams.map((t) => (
+                    <option key={t} value={t}>
+                      {O.by[t]?.name ?? t}
+                    </option>
+                  ))}
+                </select>
+                <span className="small" style={{ fontSize: 12 }}>
+                  They appear on every team’s calendar, but are counted as 1 FTE only in this team on the headcount report.
+                </span>
+              </div>
+            );
+          })()}
           <div>
             <button className="btn btn-secondary btn-36" onClick={() => setAlloc(alloc.concat({ dept: v.dept.id, tower: "", branch: "", system: "", trade: "" }))}>
               <Icon name="plus" size={16} />
@@ -1310,6 +1387,8 @@ export function CalDialogs() {
   switch (d.kind) {
     case "request":
       return <RequestDialog date={d.date} />;
+    case "holWork":
+      return <HolidayWorkDialog date={d.date} />;
     case "cell":
       return <CellDialog key={d.pid + d.date} pid={d.pid} date={d.date} />;
     case "resign":

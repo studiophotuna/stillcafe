@@ -89,6 +89,15 @@ export function allocProblem(O: Pick<Org, "by">, level: Level, assign: string[])
 }
 
 /**
+ * The team a person is counted in for headcount: their chosen primary team if they're still
+ * allocated to it, else the team of their first allocation. Undefined if in no team.
+ */
+export const primaryTeamOf = (O: Pick<Org, "branchesOf">, p: CalPerson) => {
+  const bs = O.branchesOf(p);
+  return (bs.find((b) => b.id === p.primaryTeam) ?? bs[0])?.id;
+};
+
+/**
  * Whether `pid` is an admin of a node: listed on it or on any node above it. Admins of a
  * department (e.g. its director) or tower (e.g. its manager) administer every team under it.
  */

@@ -59,6 +59,8 @@ export interface Person {
   shift: string;
   /** Shift start hour in team-local time (0–23). */
   shiftStart: number;
+  /** Today is a holiday for this person: its name, and where they work if they're on holiday duty. */
+  holiday?: { name: string; date: string; working: "RTO" | "WFH" | null; answered: boolean };
 }
 
 export interface TaskField {

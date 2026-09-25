@@ -20,6 +20,7 @@ const ROUTES: { href: string; access: Access }[] = [
   { href: "/calendar/admin/organization", access: "anyAdmin" },
   { href: "/calendar/admin/holidays", access: "anyAdmin" },
   { href: "/calendar/admin/reports", access: "anyAdmin" },
+  { href: "/calendar/admin/headcount", access: "anyAdmin" },
 ];
 
 /** Views that show the Department › Tower › Team › System › Trade bar. */
@@ -67,6 +68,7 @@ export function CalShell({ children }: { children: React.ReactNode }) {
           { href: "/calendar/admin/organization", icon: "org" as const, label: "Organization" },
           { href: "/calendar/admin/holidays", icon: "holidays" as const, label: "Holidays" },
           { href: "/calendar/admin/reports", icon: "reports" as const, label: "Reports" },
+          { href: "/calendar/admin/headcount", icon: "members" as const, label: "Headcount" },
         ]
       : []),
   ];

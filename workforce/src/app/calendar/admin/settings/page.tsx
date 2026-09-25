@@ -43,6 +43,18 @@ export default function SettingsPage() {
         <h1>Settings · {b.name}</h1>
         <span>Settings apply to the whole team, including its systems and trades. Changes save immediately.</span>
       </div>
+      <div className="field" style={{ maxWidth: 320 }}>
+        <label htmlFor="cc">Cost centre (headcount report)</label>
+        <input
+          id="cc"
+          key={b.id + (b.costCentre ?? "")}
+          className="input"
+          defaultValue={b.costCentre ?? ""}
+          placeholder="e.g. E705SSCGPM"
+          maxLength={40}
+          onBlur={(e) => e.target.value.trim() !== (b.costCentre ?? "") && set({ costCentre: e.target.value })}
+        />
+      </div>
       <div className="grid-2">
         <Blueprint as="section" className="panel">
           <h2 className="h2">Leave approval</h2>

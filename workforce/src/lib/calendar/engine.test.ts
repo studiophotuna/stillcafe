@@ -364,3 +364,141 @@ describe("department and tower admins", async () => {
     if (only.length === 1) expect(run(fresh(), { type: "removeAdmin", id: "rm", pid: only[0] }).data.nodes.find((n) => n.id === "rm")!.admins).toEqual(only);
   });
 });
+
+describe("headcount report", async () => {
+  const { teamHeadcount, headcount } = await import("./headcount");
+  const { authorizeCal } = await import("./authz");
+  const base = () => {
+    const d = fresh();
+    d.people = d.people.map((p) =>
+      p.id === 15 ? { ...p, hire: "2025-03-10", resign: "2026-01-20" } // Leo: last day in January
+      : p.id === 16 ? { ...p, hire: "2026-03-02" } // Mia: joined March
+      : p,
+    );
+    return d;
+  };
+  it("counts from the hire month through the last day's month, then 0; leads billed 0; once per person", () => {
+    const d = base();
+    const c = new Cal(d, TODAY);
+    const rm = teamHeadcount(c, c.O.by.rm, 2026);
+    const row = (id: number) => rm.rows.find((r) => r.pid === id)!;
+    expect(row(15).months.slice(0, 3).map((m) => [m.actual, m.billed])).toEqual([[1, 1], [0, 0], [0, 0]]);
+    expect(row(16).months.slice(0, 4).map((m) => m.actual)).toEqual([null, null, 1, 1]);
+    const sam = row(SAM); // manager, team lead of RM
+    expect(sam.lead).toBe(true);
+    expect(sam.months[0]).toMatchObject({ actual: 1, billed: 0 });
+    // Ana is in Rate Management (first allocation) and Customer Service: counted once, in RM.
+    expect(row(ANA).fte).toBe(1);
+    expect(teamHeadcount(c, c.O.by.cs, 2026).rows.some((r) => r.pid === ANA)).toBe(false);
+    expect(rm.rows[0].lead).toBe(true); // leads first
+    const jan = rm.withTl[0].actual - rm.without[0].actual;
+    expect(jan).toBe(rm.rows.filter((r) => r.lead).reduce((a, r) => a + (r.months[0].actual ?? 0), 0));
+  });
+  it("applies billed overrides for chosen months, only by team admins", () => {
+    const d = base();
+    const r = run(d, { type: "setBilled", pid: SAM, bid: "rm", months: ["2026-04", "2026-05"], value: 0.5 });
+    const c = new Cal(r.data, TODAY);
+    const sam = teamHeadcount(c, c.O.by.rm, 2026).rows.find((x) => x.pid === SAM)!;
+    expect(sam.months.slice(2, 6).map((m) => [m.billed, m.override])).toEqual([[0, false], [0.5, true], [0.5, true], [0, false]]);
+    const back = run(r.data, { type: "setBilled", pid: SAM, bid: "rm", months: ["2026-04"], value: null }).data;
+    expect(back.billing).toEqual({ [`${SAM}|rm|2026-05`]: 0.5 });
+    expect("error" in authorizeCal({ type: "setBilled", pid: SAM, bid: "rm", months: [], value: 1 }, new Cal(d, TODAY), ANA)).toBe(true);
+    expect(headcount(new Cal(d, TODAY), 2026, (id) => id === "rm").map((t) => t.teams.map((x) => x.id))).toEqual([["rm"]]);
+  });
+  it("keeps team settings to real settings, and checks links", () => {
+    const r = run(fresh(), { type: "teamSettings", id: "rm", patch: { costCentre: " E705SSCGPM ", admins: [ANA], parent: "bss" } as never });
+    const rm = r.data.nodes.find((n) => n.id === "rm")!;
+    expect(rm.costCentre).toBe("E705SSCGPM");
+    expect(rm.admins).not.toContain(ANA);
+    expect(rm.parent).toBe("t_rm");
+    const l = run(fresh(), { type: "setLinks", links: { bipoLeave: "https://example.com/leave", bipoOt: "javascript:alert(1)", quick: [{ label: "HR", url: "https://hr.example.com" }, { label: "Bad", url: "http://x.y" }] } }).data.links;
+    expect(l).toEqual({ bipoLeave: "https://example.com/leave", bipoOt: undefined, quick: [{ label: "HR", url: "https://hr.example.com" }] });
+  });
+});
+
+describe("primary team for headcount", async () => {
+  const { teamHeadcount } = await import("./headcount");
+  it("counts people in several teams only in the primary team an admin chose", () => {
+    const d = fresh();
+    const ana = d.people.find((p) => p.id === ANA)!;
+    const r = run(d, { type: "saveMember", pid: ANA, level: ana.level, shift: ana.shift, adminHere: false, bid: "cs", assign: ana.assign, isNew: false, details: { primaryTeam: "cs" } });
+    const c = new Cal(r.data, TODAY);
+    expect(c.person(ANA).primaryTeam).toBe("cs");
+    expect(teamHeadcount(c, c.O.by.cs, 2026).rows.map((x) => x.pid)).toContain(ANA);
+    expect(teamHeadcount(c, c.O.by.rm, 2026).rows.map((x) => x.pid)).not.toContain(ANA);
+    // Removed from the primary team: falls back to the remaining team.
+    const out = run(r.data, { type: "removeFromTeam", pid: ANA, bid: "cs" }).data;
+    expect(out.people.find((p) => p.id === ANA)!.primaryTeam).toBeUndefined();
+    // A team that isn't theirs isn't kept.
+    const bad = run(d, { type: "saveMember", pid: ANA, level: ana.level, shift: ana.shift, adminHere: false, bid: "rm", assign: ana.assign, isNew: false, details: { primaryTeam: "nope" } });
+    expect(bad.data.people.find((p) => p.id === ANA)!.primaryTeam).toBe("rm");
+  });
+});
+
+describe("working on a holiday", async () => {
+  const { authorizeCal } = await import("./authz");
+  const HOL = "2026-10-21"; // a Wednesday holiday for everyone
+  const withHol = () => {
+    const d = fresh();
+    d.holidays = d.holidays.concat({ id: "HT", date: HOL, name: "Test Day", type: "regular", scope: "all" });
+    return d;
+  };
+  const act = (code: "RTO" | "WFH" | null, pid = ANA) => ({ type: "holidayWork" as const, pid, date: HOL, code, actor: ANA });
+
+  it("lets members mark themselves on holiday duty and back", () => {
+    const d = withHol();
+    const c = new Cal(d, TODAY);
+    expect(c.raw(c.person(ANA), HOL, "rm").code).toBe("HOL");
+    const auth = authorizeCal(act("WFH"), c, ANA);
+    expect("action" in auth).toBe(true);
+    const r = run(d, act("WFH"));
+    const c2 = new Cal(r.data, TODAY);
+    expect(c2.raw(c2.person(ANA), HOL, "rm")).toMatchObject({ code: "HDY", note: "Test Day" });
+    expect(r.data.overrides[ANA + "|" + HOL]).toBe("WFH");
+    expect(r.data.logs[0].subject).toContain("working on Test Day (from home)");
+    const back = run(r.data, act(null));
+    expect(back.data.overrides[ANA + "|" + HOL]).toBeUndefined();
+  });
+
+  it("only for the person themselves (or their admin), and only on holidays", () => {
+    const c = new Cal(withHol(), TODAY);
+    expect("error" in authorizeCal(act("RTO", SAM), c, ANA)).toBe(true);
+    expect("action" in authorizeCal(act("RTO", ANA), c, SAM)).toBe(true);
+    const d = withHol();
+    expect(run(d, { ...act("RTO"), date: "2026-10-22" }).data).toBe(d); // not a holiday
+    expect(run(d, { ...act("RTO"), code: "VL" as never }).data).toBe(d);
+  });
+});
+
+describe("holiday replies and holiday manning", async () => {
+  const HOL = "2026-10-21";
+  const withHol = () => {
+    const d = fresh();
+    d.holidays = d.holidays.concat({ id: "HT", date: HOL, name: "Test Day", type: "regular", scope: "all" });
+    return d;
+  };
+  it("a 'Holiday' reply keeps the day a holiday, tells no one, and means nothing on other days", () => {
+    const r = run(withHol(), { type: "holidayWork", pid: ANA, date: HOL, code: "HOL", actor: ANA });
+    expect(r.data.overrides[ANA + "|" + HOL]).toBe("HOL");
+    expect(r.data.logs.length).toBe(fresh().logs.length);
+    const c = new Cal(r.data, TODAY);
+    expect(c.raw(c.person(ANA), HOL, "rm").code).toBe("HOL");
+    const d2 = { ...r.data, holidays: r.data.holidays.filter((h) => h.id !== "HT") };
+    const c2 = new Cal(d2, TODAY);
+    expect(c2.raw(c2.person(ANA), HOL, "rm").code).toBe("RTO"); // Wednesday, pattern B
+  });
+  it("lists Tower / Team / Name with a status per holiday", () => {
+    let d = run(withHol(), { type: "holidayWork", pid: ANA, date: HOL, code: "WFH", actor: ANA }).data;
+    d = run(d, { type: "holidayWork", pid: SAM, date: HOL, code: "HOL", actor: SAM }).data;
+    const rep = buildReport(new Cal(d, TODAY), "holiday", "rm", "2026-10-01", "2026-10-31");
+    const head = rep.rows[0];
+    expect(head.slice(0, 3)).toEqual(["Tower", "Team", "Name"]);
+    const col = head.findIndex((h) => String(h).startsWith(HOL));
+    expect(String(head[col])).toContain("Test Day");
+    const row = (pid: number) => rep.rows.find((r) => r[2] === d.people.find((p) => p.id === pid)!.name)!;
+    expect(row(ANA)[col]).toBe("Holiday duty · WFH");
+    expect(row(SAM)[col]).toBe("Holiday");
+    expect(rep.rows[rep.rows.length - 1].slice(2, 3)).toEqual(["Total on holiday duty"]);
+    expect(rep.rows[rep.rows.length - 1][col]).toBe(1);
+  });
+});

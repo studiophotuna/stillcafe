@@ -1,14 +1,15 @@
 /** CSV reports (dept / tower / team + date range). Pure: rows[0] is the header. */
-import { ANNUAL, BCP_ST, READY_F, WORKING } from "./constants";
+import { ANNUAL, BCP_ST, CODES, READY_F, WORKING } from "./constants";
 import { DOW as DOW_NAMES, addDays, dowOf, isWk } from "./dates";
 import { allApproved, anyPending, type Cal } from "./engine";
 import type { CalPerson, Code } from "./types";
 
-export type ReportType = "attendance" | "leave" | "manning" | "bcp" | "headcount";
+export type ReportType = "attendance" | "leave" | "holiday" | "manning" | "bcp" | "headcount";
 export const REPORT_TYPES: [ReportType, string][] = [
   ["attendance", "Attendance (RTO/WFH) per person"],
   ["leave", "Leave taken and balances"],
-  ["manning", "Shift and holiday manning"],
+  ["holiday", "Holiday manning"],
+  ["manning", "Shift manning (per day)"],
   ["bcp", "BCP status"],
   ["headcount", "Resignations and headcount"],
 ];
@@ -72,6 +73,32 @@ export function buildReport(c: Cal, type: ReportType, scope: string, from: strin
       const pth = path(p);
       rows.push([p.name, p.email, pth[0], pth[1], cnt.VL, cnt.SL, cnt.EL, cnt.HD, cnt.VL + cnt.SL + cnt.EL + cnt.HD * 0.5, p.entitle, p.carry || 0, used, pool - used, p.elEnt ?? 5, elU, (p.elEnt ?? 5) - elU, pend, Math.max(0, Math.min(5, pool - used))]);
     }
+  }
+  if (type === "holiday") {
+    // Tower / Team / Name, then one column per holiday in the date range with each person's status.
+    const hdays = [...new Set(s.holidays.filter((h) => h.date >= from && h.date <= to && !isWk(h.date)).map((h) => h.date))].sort();
+    const hname = (d: string) => [...new Set(s.holidays.filter((h) => h.date === d).map((h) => h.name))].join(" / ");
+    desc = hdays.length
+      ? `One row per person, one column per holiday (${hdays.length}) in the range. Holiday duty shows where they work (RTO or WFH); “Holiday” means not working.`
+      : "No holidays fall on a weekday in this date range. Pick a range that includes a holiday.";
+    rows.push(["Tower", "Team", "Name", ...hdays.map((d) => `${d} ${DOW_NAMES[dowOf(d)]} · ${hname(d)}`)]);
+    const st = (p: CalPerson, d: string) => {
+      const x = c.raw(p, d, null);
+      if (x.gone || (p.hire && p.hire > d)) return "—";
+      if (x.code === "HOL") return "Holiday";
+      if (x.code === "HDY") {
+        const o = s.overrides[p.id + "|" + d];
+        return o === "WFH" ? "Holiday duty · WFH" : o === "RTO" ? "Holiday duty · RTO" : "Holiday duty";
+      }
+      // The holiday doesn't apply to this person's team: their usual status.
+      return x.code ? `${CODES[x.code].label}${x.pending ? " (pending)" : ""}` : "";
+    };
+    const byTeam = ppl
+      .map((p) => ({ p, pth: path(p) }))
+      .sort((a, b) => a.pth[0].localeCompare(b.pth[0]) || a.pth[1].localeCompare(b.pth[1]) || a.p.name.localeCompare(b.p.name));
+    for (const { p, pth } of byTeam) rows.push([pth[0], pth[1], p.name, ...hdays.map((d) => st(p, d))]);
+    if (hdays.length && byTeam.length)
+      rows.push(["", "", "Total on holiday duty", ...hdays.map((d) => byTeam.filter(({ p }) => c.raw(p, d, null).code === "HDY").length)]);
   }
   if (type === "manning") {
     desc = "One row per day: headcount by status and shift group (Morning, Midshift, GY), plus who is on holiday duty.";

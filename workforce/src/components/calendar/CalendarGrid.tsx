@@ -89,15 +89,16 @@ export function CalendarGrid({ mgmt }: { mgmt?: boolean }) {
     shown.forEach((p) => rows.push({ p, cells: rawMap.get(p.id)! }));
   }
 
-  /** Today's shift (or leave / rest day) for the name column. */
-  const todayOf = (p: CalPerson) => {
+  /** Today's shift as a short badge (e.g. "D"), with the full wording as a tooltip; null on rest days. */
+  const todayOf = (p: CalPerson): { tag: string; title: string } | null => {
     const cell = c.raw(p, s.today, mgmt ? null : bid);
-    if (cell.gone) return "";
-    if (cell.code && WORKING.includes(cell.code as Code)) {
-      const sh = shById[c.shiftFor(p, s.today)];
-      return `Today: ${sh ? `${sh.name} ${sh.start}–${sh.end}` : "working"} · ${cell.code}`;
+    if (cell.gone || !cell.code) return null;
+    if (WORKING.includes(cell.code as Code)) {
+      const id = c.shiftFor(p, s.today);
+      const sh = shById[id];
+      return { tag: id, title: `Today: ${sh ? `${sh.name} ${sh.start}–${sh.end}` : "working"} · ${CODES[cell.code as Code]?.label ?? cell.code}` };
     }
-    return cell.code ? `Today: ${CODES[cell.code as Code]?.label ?? cell.code}${cell.pending ? " (pending)" : ""}` : "Today: rest day";
+    return { tag: cell.code, title: `Today: ${CODES[cell.code as Code]?.label ?? cell.code}${cell.pending ? " (pending)" : ""}` };
   };
 
   const subOf = (p: CalPerson) => {
@@ -147,7 +148,7 @@ export function CalendarGrid({ mgmt }: { mgmt?: boolean }) {
   const onCell = (p: CalPerson, d: string, cell: Cell) => {
     if (cell.gone) return;
     if (!mgmt && v.isAdmin) s.setDialog({ kind: "cell", pid: p.id, date: d });
-    else if (p.id === s.me) s.setDialog({ kind: "request", date: d });
+    else if (p.id === s.me) s.setDialog(cell.code === "HOL" || cell.code === "HDY" ? { kind: "holWork", date: d } : { kind: "request", date: d });
   };
 
   return (
@@ -161,6 +162,7 @@ export function CalendarGrid({ mgmt }: { mgmt?: boolean }) {
           </span>
         </div>
       )}
+      {!mgmt && <HolidayToday />}
       <div className="page-head-row" style={{ alignItems: "center" }}>
         <div className="month-nav">
           <MonthNav />
@@ -235,11 +237,18 @@ export function CalendarGrid({ mgmt }: { mgmt?: boolean }) {
                   <div className="grid-name" role="rowheader">
                     <div>
                       <span>{r.p.name}</span>
+                      {(() => {
+                        const t = todayOf(r.p);
+                        return t ? (
+                          <span className="grid-today" title={t.title} aria-label={t.title}>
+                            {t.tag}
+                          </span>
+                        ) : null;
+                      })()}
                       {r.p.level !== "member" && <span className="tag tag-neutral">{LEVELS[r.p.level]}</span>}
                       {r.p.id === s.me && <span className="tag tag-accent">You</span>}
                     </div>
                     {subOf(r.p) && <span style={{ color: r.p.resign ? "var(--color-accent-700)" : "var(--color-neutral-700)" }}>{subOf(r.p)}</span>}
-                    {todayOf(r.p) && <span className="grid-today">{todayOf(r.p)}</span>}
                   </div>
                   {r.cells.map((cell, j) => {
                     const d = dates[j];
@@ -311,8 +320,29 @@ export function CalendarGrid({ mgmt }: { mgmt?: boolean }) {
           ? "Click a day in your own row to request leave. Admins change schedules from the Calendar."
           : v.isAdmin
             ? "Click any day to change someone’s schedule or record leave. Use “Request leave” for your own time off."
-            : "Click a day in your own row to request leave or a schedule change for that date."}
+            : "Click a day in your own row to request leave or a schedule change for that date. On a holiday (HOL), click it to say you’re working."}
       </p>
     </>
+  );
+}
+
+/** Today is a holiday for me: say so, and let me update my status if I'm working. */
+function HolidayToday() {
+  const s = useCalendar();
+  const p = s.cal.people.get(s.me);
+  const h = p && s.cal.holFor(p, s.today);
+  if (!p || !h || isWk(s.today) || (p.resign && s.today > p.resign)) return null;
+  const o0 = s.data.overrides[p.id + "|" + s.today];
+  const o = o0 === "HOL" ? undefined : o0;
+  return (
+    <div className="banner" style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10, flexWrap: "wrap", marginBottom: 12 }}>
+      <span>
+        <strong>Today is {h.name}.</strong>{" "}
+        {o ? `You’re on holiday duty (${o === "WFH" ? "from home" : "in office"}).` : "Working anyway? Update your status."}
+      </span>
+      <button className="btn btn-secondary btn-36" onClick={() => s.setDialog({ kind: "holWork", date: s.today })}>
+        {o ? "Change" : "I’m working today"}
+      </button>
+    </div>
   );
 }

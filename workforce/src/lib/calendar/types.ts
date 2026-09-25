@@ -19,6 +19,23 @@ export interface OrgNode {
   notifyUser?: boolean;
   invite?: boolean;
   defaultScope?: "all" | "me";
+  /** Cost centre shown on the headcount report (teams). */
+  costCentre?: string;
+}
+
+export interface QuickLink {
+  label: string;
+  url: string;
+}
+
+/** App-wide links set by a system admin. */
+export interface AppLinks {
+  /** Where members file approved leave (shown after approval). */
+  bipoLeave?: string;
+  /** Where members file approved overtime. */
+  bipoOt?: string;
+  /** Shown to everyone in the Quick links bar. */
+  quick?: QuickLink[];
 }
 
 export interface CalPerson {
@@ -44,6 +61,8 @@ export interface CalPerson {
   wfhDays?: number[];
   /** Full admin rights everywhere (set for the first administrator). */
   sysAdmin?: boolean;
+  /** With allocations in several teams: the team they're counted in on the headcount report. */
+  primaryTeam?: string;
 }
 
 export interface LeaveRequest {
@@ -134,4 +153,7 @@ export interface CalendarData {
   checkins: Record<string, Record<number, Checkin>>;
   logs: NotifLog[];
   seq: number;
+  /** Headcount report: billed FTE overrides, "pid|teamId|yyyy-mm" → value. */
+  billing?: Record<string, number>;
+  links?: AppLinks;
 }
