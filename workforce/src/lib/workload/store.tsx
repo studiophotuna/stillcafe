@@ -5,7 +5,8 @@ import { applyAction, type Action } from "./actions";
 import { nowMs, setRealClock } from "./clock";
 import { loadMe, toLogin } from "../session";
 import { ADMIN_ID, EMPLOYEE_ID, person } from "./constants";
-import { personOf, type WorkloadData } from "./engine";
+import { canUpload } from "./authz";
+import { personOf, type AssistOffer, type WorkloadData } from "./engine";
 import { initialData } from "./seed";
 import type { Person, Toast, ViewAs } from "./types";
 
@@ -25,6 +26,7 @@ export type Dialog =
   | { kind: "task"; id: string }
   | { kind: "hold"; id: string }
   | { kind: "done"; id: string }
+  | { kind: "assist"; offer: AssistOffer }
   | null;
 
 interface Store {
@@ -40,6 +42,8 @@ interface Store {
   setViewAs?: (v: ViewAs) => void;
   me: Person;
   isAdmin: boolean;
+  /** Admins, and members an admin allowed to upload tasks. */
+  canUpload: boolean;
   sys: string;
   tr: string;
   /** Switch to another team this person can open (reloads its data). */
@@ -170,6 +174,8 @@ export function WorkloadProvider({ children }: { children: React.ReactNode }) {
       if (!dataRef.current) return;
       const local = applyAction(dataRef.current, action, nowMs());
       commit(local.data);
+      // Nothing left in the member's trades: ask whether they'll help elsewhere.
+      if (local.ask) setDialog({ kind: "assist", offer: local.ask });
       if (modeRef.current !== "db") {
         if (local.message) toast(local.message);
         return;
@@ -250,6 +256,7 @@ export function WorkloadProvider({ children }: { children: React.ReactNode }) {
             })
           : person(viewAs === "employee" ? EMPLOYEE_ID : ADMIN_ID)!,
       isAdmin: mode === "db" ? !!session && data.admins.includes(session.id) : viewAs !== "employee",
+      canUpload: mode === "db" ? !!session && canUpload(data, session.id) : viewAs !== "employee",
       sys,
       tr,
       setTeam,

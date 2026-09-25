@@ -77,6 +77,8 @@ export interface Task {
   startedAt: number | null;
   doneAt: number | null;
   ot: boolean;
+  /** Overtime minutes worked on this task (asked when it's finished after the shift ended). */
+  otMin?: number;
   hold: string;
   fields: Record<string, string | number>;
   email: TaskEmail | null;
@@ -105,6 +107,13 @@ export interface Settings {
   work: WorkingTime;
   targets: Record<string, number>;
   memberTargets: Record<number, string>;
+  /**
+   * What productivity counts: "tasks" (completed tasks) or a task field key —
+   * a number field is summed, any other field counts distinct values (e.g. tickets).
+   */
+  prodBasis?: string;
+  /** Members (not only admins) allowed to upload tasks. */
+  uploaders?: number[];
 }
 
 export interface Toast {

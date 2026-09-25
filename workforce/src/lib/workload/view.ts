@@ -2,7 +2,7 @@
 import { H, dur, fmtS, fmtT } from "./clock";
 import { AV, PR, ST, trPathOf } from "./constants";
 import type { Action } from "./actions";
-import { canWork, due, isBusy, personOf, type WorkloadData } from "./engine";
+import { canTake, due, isBusy, personOf, type WorkloadData } from "./engine";
 import type { Task } from "./types";
 
 export interface RowAction {
@@ -38,8 +38,8 @@ export function taskRow(d: WorkloadData, t: Task, me: number, isAdmin: boolean, 
   const meP = personOf(d, me) ?? { id: me, name: "", trades: [], avail: "available" as const, shift: "", shiftStart: 8 };
   const busy = isBusy(d.tasks, me);
   let action: RowAction | null = null;
-  if (t.status === "new" && s.mode === "self" && meP.trades.includes(t.trade))
-    action = { kind: "take", id: t.id, label: "Take", disabled: busy || !canWork(meP, s) };
+  if (t.status === "new" && s.mode === "self" && canTake(d, meP, t))
+    action = { kind: "take", id: t.id, label: meP.trades.includes(t.trade) ? "Take" : "Help", disabled: busy };
   else if (t.assignee === me && t.status === "assigned") action = { kind: "start", id: t.id, label: "Start", disabled: busy };
   else if (t.assignee === me && t.status === "on_hold") action = { kind: "resume", id: t.id, label: "Resume", disabled: busy };
   else if (isAdmin && t.status !== "done") action = { kind: "details", id: t.id, label: "Details", disabled: false };

@@ -92,6 +92,20 @@ Both modules save to Supabase: schema `workforce` in the stillcafe project
   - **Which teams someone can open:** their own teams, teams they administer, and the teams under
     a department or tower they're allocated to (system admins: all). The server checks this.
 - The Outlook mailbox is not connected yet; with live data, tasks come in by upload only.
+- **Getting work:** Start work gives a member's assigned tasks first, then the waiting tasks
+  in their own trades. When those are empty it asks whether they'll help with other trades
+  and, if they agree, gives tasks from other trades in their system first, then the rest of
+  the team (task history notes “helping …”). In “members pick” mode the same list appears.
+- **Overtime:** marking a task done outside the member's shift asks how much overtime it took
+  (suggested: the time outside the shift, at most the time on the task). Minutes are saved
+  per task (`ot_min`, migration 0005) and totalled per day on My work and the dashboard.
+- **Productivity** counts completed tasks by default; an admin can switch it (Targets) to the
+  total of a number field (e.g. No. of contracts) or distinct values of any field (e.g. one
+  per ticket). Targets are in that unit.
+- **Uploads:** admins, and members an admin ticks under Intake › Who can upload tasks (they
+  get an Upload tasks page). Required fields may be blank in the file; they must be filled
+  before the task can be marked done, and My work shows what's missing.
+- **Who sees tasks:** only people who can open the team (see above); the server refuses others.
 
 ### Starting fresh
 

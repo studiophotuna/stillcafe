@@ -23,11 +23,11 @@ import {
 import type { Priority, Settings, Task, TaskField } from "./types";
 
 export type Action =
-  | { type: "startWork"; pid: number }
+  | { type: "startWork"; pid: number; assist?: boolean }
   | { type: "startTask"; id: string; pid: number }
   | { type: "hold"; id: string; reason: string }
   | { type: "resume"; id: string; pid: number }
-  | { type: "complete"; id: string; vals: Task["fields"]; ot: boolean; pid: number }
+  | { type: "complete"; id: string; vals: Task["fields"]; otMin: number; pid: number }
   | { type: "distribute" }
   | { type: "setTrade"; id: string; trade: string }
   | { type: "setPriority"; id: string; pr: Priority }
@@ -38,16 +38,16 @@ export type Action =
   | { type: "setFields"; fields: TaskField[] };
 
 const SETTING_KEYS: (keyof Settings)[] = [
-  "mode", "order", "skipUnavail", "autoFeed", "sla", "mailbox", "mailTrade", "work", "targets", "memberTargets",
+  "mode", "order", "skipUnavail", "autoFeed", "sla", "mailbox", "mailTrade", "work", "targets", "memberTargets", "prodBasis", "uploaders",
 ];
 
 export function applyAction(d: WorkloadData, a: Action, now: number): Outcome {
   switch (a.type) {
-    case "startWork": return startWork(d, a.pid, now);
+    case "startWork": return startWork(d, a.pid, now, !!a.assist);
     case "startTask": return startTask(d, a.id, a.pid, now);
     case "hold": return holdTask(d, a.id, a.reason, now);
     case "resume": return resumeTask(d, a.id, a.pid, now);
-    case "complete": return completeTask(d, a.id, a.vals, a.ot, a.pid, now);
+    case "complete": return completeTask(d, a.id, a.vals, a.otMin, a.pid, now);
     case "distribute": return distribute(d, now);
     case "setTrade": return setTrade(d, a.id, a.trade, now);
     case "setPriority": return setPriority(d, a.id, a.pr, now);

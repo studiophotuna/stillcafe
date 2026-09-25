@@ -168,7 +168,7 @@ describe("server persistence", () => {
       type: "importRows",
       rows: [
         { Title: "Good", System: "RCM", Trade: "LCL", "Ticket no.": "1", Carrier: "MSCU", "No. of contracts": "2" },
-        { Title: "Bad", System: "RCM", Trade: "LCL" },
+        { Title: "Bad", System: "RCM", Trade: "Nope" },
       ],
     });
     expect(r.message).toBe("1 task added from upload.");

@@ -65,6 +65,7 @@ export function seedTasks(now: number): Task[] {
       startedAt: o.startedAt || null,
       doneAt: o.doneAt || null,
       ot: !!o.ot,
+      otMin: o.ot ? 30 + ((n * 7) % 4) * 15 : 0,
       hold: o.hold || "",
       fields: { ticket, carrier: car, contract, contracts, amendments, remarks: "" },
       email: null,
@@ -87,7 +88,7 @@ export function seedTasks(now: number): Task[] {
         text: (status === "assigned" ? "Assigned to " : "Started by ") + person(t.assignee)!.name,
       });
     if (status === "on_hold") t.history.push({ at: rec + 2 * H, text: "On hold: " + t.hold });
-    if (status === "done") t.history.push({ at: t.doneAt!, text: "Done" + (t.ot ? " (overtime)" : "") });
+    if (status === "done") t.history.push({ at: t.doneAt!, text: "Done" + (t.ot ? ` (overtime ${t.otMin} min)` : "") });
     tasks.push(t);
     return t;
   };
@@ -141,7 +142,6 @@ export function seedTasks(now: number): Task[] {
     mk({ trade: tr, status: "done", assignee: p, startedAt: st, doneAt: st + d * M, ot: i === 2 || i === 7, rec: st - 2 * H });
   });
   const ot1 = mk({ trade: "fewb", status: "done", assignee: 9, startedAt: now - 4.2 * H, doneAt: now - 3.4 * H, ot: true, rec: now - 6 * H });
-  ot1.history.push({ at: ot1.doneAt!, text: "Logged as overtime" });
   return tasks;
 }
 

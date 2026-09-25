@@ -14,14 +14,14 @@ const isAdminRoute = (path: string) => path.startsWith("/workload/admin") || pat
 
 /** Workload module shell. */
 export function Shell({ children }: { children: React.ReactNode }) {
-  const { data, now, mode, me, isAdmin, viewAs, setViewAs, sys, tr, setSys, setTr, setTeam } = useWorkload();
+  const { data, now, mode, me, isAdmin, canUpload, viewAs, setViewAs, sys, tr, setSys, setTr, setTeam } = useWorkload();
   const { trOpts } = useUnit();
   const { org } = data;
   // Teams grouped by tower for the picker.
   const towers = [...new Set(org.teams.map((t) => t.tower))];
   const path = usePathname();
   const router = useRouter();
-  const blocked = !isAdmin && isAdminRoute(path);
+  const blocked = (!isAdmin && isAdminRoute(path)) || (!canUpload && path === "/workload/upload");
 
   useEffect(() => {
     if (blocked) router.replace("/workload");
@@ -32,6 +32,7 @@ export function Shell({ children }: { children: React.ReactNode }) {
     { href: "/workload", icon: "my", label: "My work" },
     { href: "/workload/queue", icon: "queue", label: "Queue", badge: openQ },
     ...(isAdmin ? [{ href: "/workload/dashboard", icon: "dash" as const, label: "Dashboard" }] : []),
+    ...(!isAdmin && canUpload ? [{ href: "/workload/upload", icon: "intake" as const, label: "Upload tasks" }] : []),
   ];
   const adminNav: NavItem[] = isAdmin
     ? [
