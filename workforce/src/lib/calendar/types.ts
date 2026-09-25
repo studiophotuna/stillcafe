@@ -61,6 +61,8 @@ export interface CalPerson {
   wfhDays?: number[];
   /** Full admin rights everywhere (set for the first administrator). */
   sysAdmin?: boolean;
+  /** With allocations in several teams: the team they're counted in on the headcount report. */
+  primaryTeam?: string;
 }
 
 export interface LeaveRequest {

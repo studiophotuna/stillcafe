@@ -330,6 +330,7 @@ function MemberDialog({ pid: pid0 }: { pid: number | null }) {
   const wfhOf = (p: CalPerson | null) => p?.wfhDays ?? (p ? (p.pattern === "B" ? [4, 5] : [1, 2]) : []);
   const [f, setF] = useState(() => detailsOf(init));
   const [wfh, setWfh] = useState<number[]>(() => wfhOf(init));
+  const [primary, setPrimary] = useState(init?.primaryTeam ?? "");
   const [level, setLevel] = useState<Level>(init?.level ?? "member");
   const [shift, setShift] = useState(init?.shift ?? (s.data.shifts.some((x) => x.id === "D") ? "D" : s.data.shifts[0]?.id ?? "D"));
   const [adminHere, setAdminHere] = useState(init ? (v.branch.admins ?? []).includes(init.id) : false);
@@ -404,6 +405,7 @@ function MemberDialog({ pid: pid0 }: { pid: number | null }) {
       ytd: Number(f.ytd),
       ytdEl: Number(f.ytdEl),
       wfhDays: wfh,
+      primaryTeam: primary,
     };
     if (isNew && !existing) s.run({ type: "addPerson", details, level, shift, adminHere, bid: v.bid, assign });
     else s.run({ type: "saveMember", pid: pid!, level, shift, adminHere, bid: v.bid, assign, isNew, details });
@@ -461,6 +463,7 @@ function MemberDialog({ pid: pid0 }: { pid: number | null }) {
                 setPid(p.id);
                 setF(detailsOf(p));
                 setWfh(wfhOf(p));
+                setPrimary(p.primaryTeam ?? "");
                 setLevel(p.level);
                 setShift(p.shift);
                 setAlloc(p.assign.map(allocOf).concat(hereRow));
@@ -589,6 +592,27 @@ function MemberDialog({ pid: pid0 }: { pid: number | null }) {
               </button>
             </div>
           ))}
+          {(() => {
+            // Several teams: which one counts this person on the headcount report.
+            const teams = [...new Set(alloc.map((r) => r.branch).filter(Boolean))];
+            if (teams.length < 2) return null;
+            const cur = teams.includes(primary) ? primary : teams[0];
+            return (
+              <div className="field" style={{ maxWidth: 420 }}>
+                <label htmlFor="mem-primary">Primary team · counted in headcount</label>
+                <select id="mem-primary" className="input" value={cur} onChange={(e) => setPrimary(e.target.value)}>
+                  {teams.map((t) => (
+                    <option key={t} value={t}>
+                      {O.by[t]?.name ?? t}
+                    </option>
+                  ))}
+                </select>
+                <span className="small" style={{ fontSize: 12 }}>
+                  They appear on every team’s calendar, but are counted as 1 FTE only in this team on the headcount report.
+                </span>
+              </div>
+            );
+          })()}
           <div>
             <button className="btn btn-secondary btn-36" onClick={() => setAlloc(alloc.concat({ dept: v.dept.id, tower: "", branch: "", system: "", trade: "" }))}>
               <Icon name="plus" size={16} />

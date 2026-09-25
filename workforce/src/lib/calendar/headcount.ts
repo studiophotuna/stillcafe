@@ -2,7 +2,8 @@
  * Headcount monitoring report: per tower, per team (process), one row per person with
  * Actual and Billed FTE for each month of a year.
  *
- * - FTE: a person counts 1 ÷ the number of teams they're allocated to (0.5 each in two).
+ * - Each person is counted once, as 1 FTE, in their primary team (set by an admin when
+ *   they're allocated to several teams; otherwise their first allocation's team).
  * - Actual: blank before the hire month; FTE from the hire month through the month of
  *   the last working day; 0 in later months (the "tagged 0" after a resignation).
  * - Billed: FTE for members, 0 for team leads and above, unless an admin set an override
@@ -10,6 +11,7 @@
  */
 import { LEVELS } from "./constants";
 import type { Cal } from "./engine";
+import { primaryTeamOf } from "./org";
 import type { CalPerson, Level, OrgNode } from "./types";
 
 export const MONTHS = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
@@ -54,12 +56,11 @@ export function teamHeadcount(c: Cal, team: OrgNode, year: number): HcTeam {
   const from = `${year}-01-01`;
   const to = `${year}-12-31`;
   const people = c.d.people.filter(
-    (p) => O.inN(p, team.id) && (!p.hire || p.hire <= to) && !(p.resign && p.resign < from),
+    (p) => primaryTeamOf(O, p) === team.id && (!p.hire || p.hire <= to) && !(p.resign && p.resign < from),
   );
   const rows: HcRow[] = people
     .map((p: CalPerson) => {
-      const teams = O.branchesOf(p).length || 1;
-      const fte = r2(1 / teams);
+      const fte = 1;
       const lead = p.level !== "member";
       const subs = [...new Set(p.assign.filter((a) => O.anc(a).includes(team.id)).map((a) => O.sub(a)).filter(Boolean))];
       const sub = lead ? (p.level === "lead" ? "Team Leader" : LEVELS[p.level]) + (subs.length ? ` · ${subs.join(", ")}` : "") : subs.join(", ") || team.name;

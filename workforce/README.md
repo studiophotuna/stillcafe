@@ -59,7 +59,8 @@ Calendar › Admin › Headcount (admins, for the teams they administer): per to
 row per person with **Actual** and **Billed** FTE for each month of a year, with totals without
 and with team leads, and an Excel download (one sheet per tower) in the monthly headcount
 file's layout.
-- FTE: 1 ÷ the number of teams a person is allocated to (0.5 each in two teams).
+- Each person counts once, as 1 FTE, in their **primary team**: chosen in Members › Edit when
+  they're allocated to several teams (default: their first allocation's team).
 - Actual: blank before the hire month; FTE from the hire month through the month of the last
   day; 0 afterwards.
 - Billed: FTE for members, 0 for team leads and above; click a Billed cell to override it for

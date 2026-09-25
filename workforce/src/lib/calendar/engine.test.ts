@@ -377,7 +377,7 @@ describe("headcount report", async () => {
     );
     return d;
   };
-  it("counts from the hire month through the last day's month, then 0; leads billed 0; split FTE", () => {
+  it("counts from the hire month through the last day's month, then 0; leads billed 0; once per person", () => {
     const d = base();
     const c = new Cal(d, TODAY);
     const rm = teamHeadcount(c, c.O.by.rm, 2026);
@@ -387,8 +387,9 @@ describe("headcount report", async () => {
     const sam = row(SAM); // manager, team lead of RM
     expect(sam.lead).toBe(true);
     expect(sam.months[0]).toMatchObject({ actual: 1, billed: 0 });
-    const ana = row(ANA); // in Rate Management and Customer Service
-    expect(ana.fte).toBe(0.5);
+    // Ana is in Rate Management (first allocation) and Customer Service: counted once, in RM.
+    expect(row(ANA).fte).toBe(1);
+    expect(teamHeadcount(c, c.O.by.cs, 2026).rows.some((r) => r.pid === ANA)).toBe(false);
     expect(rm.rows[0].lead).toBe(true); // leads first
     const jan = rm.withTl[0].actual - rm.without[0].actual;
     expect(jan).toBe(rm.rows.filter((r) => r.lead).reduce((a, r) => a + (r.months[0].actual ?? 0), 0));
@@ -412,5 +413,24 @@ describe("headcount report", async () => {
     expect(rm.parent).toBe("t_rm");
     const l = run(fresh(), { type: "setLinks", links: { bipoLeave: "https://example.com/leave", bipoOt: "javascript:alert(1)", quick: [{ label: "HR", url: "https://hr.example.com" }, { label: "Bad", url: "http://x.y" }] } }).data.links;
     expect(l).toEqual({ bipoLeave: "https://example.com/leave", bipoOt: undefined, quick: [{ label: "HR", url: "https://hr.example.com" }] });
+  });
+});
+
+describe("primary team for headcount", async () => {
+  const { teamHeadcount } = await import("./headcount");
+  it("counts people in several teams only in the primary team an admin chose", () => {
+    const d = fresh();
+    const ana = d.people.find((p) => p.id === ANA)!;
+    const r = run(d, { type: "saveMember", pid: ANA, level: ana.level, shift: ana.shift, adminHere: false, bid: "cs", assign: ana.assign, isNew: false, details: { primaryTeam: "cs" } });
+    const c = new Cal(r.data, TODAY);
+    expect(c.person(ANA).primaryTeam).toBe("cs");
+    expect(teamHeadcount(c, c.O.by.cs, 2026).rows.map((x) => x.pid)).toContain(ANA);
+    expect(teamHeadcount(c, c.O.by.rm, 2026).rows.map((x) => x.pid)).not.toContain(ANA);
+    // Removed from the primary team: falls back to the remaining team.
+    const out = run(r.data, { type: "removeFromTeam", pid: ANA, bid: "cs" }).data;
+    expect(out.people.find((p) => p.id === ANA)!.primaryTeam).toBeUndefined();
+    // A team that isn't theirs isn't kept.
+    const bad = run(d, { type: "saveMember", pid: ANA, level: ana.level, shift: ana.shift, adminHere: false, bid: "rm", assign: ana.assign, isNew: false, details: { primaryTeam: "nope" } });
+    expect(bad.data.people.find((p) => p.id === ANA)!.primaryTeam).toBe("rm");
   });
 });

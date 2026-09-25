@@ -9,7 +9,7 @@ import { Cal, logsDecision, logsSubmit } from "./engine";
 import { allocProblem, teamDefaults } from "./org";
 import { planOrgImport, type OrgRow } from "./orgImport";
 import { applyUpload, checkUpload, type UploadMode, type UploadRow } from "./uploads";
-import type { AppLinks,
+import type { CalPerson, AppLinks,
   BcpEvent, BcpStatus, CalendarData, Code, Holiday, LeaveRequest, Level, NodeType, NotifLog, OrgNode, Shift,
 } from "./types";
 import type { ReadyKey } from "./constants";
@@ -63,9 +63,19 @@ export interface MemberDetails {
   ytdEl?: number;
   /** Weekdays worked from home by default, 1 = Mon … 5 = Fri. */
   wfhDays?: number[];
+  /** Headcount team when allocated to several teams ("" = the first allocation's team). */
+  primaryTeam?: string;
 }
 
 export const EMAIL_RE = /^[^@\s]+@[^@\s]+\.[^@\s]+$/;
+
+/** Keep primaryTeam only when it's one of several teams the person is allocated to. */
+function fixPrimary<T extends CalPerson>(O: Cal["O"], p: T): T {
+  const bs = O.branchesOf(p);
+  if (bs.length > 1 && bs.some((b) => b.id === p.primaryTeam)) return p;
+  const { primaryTeam: _drop, ...rest } = p;
+  return (bs.length > 1 ? { ...rest, primaryTeam: bs[0].id } : rest) as T;
+}
 
 /** Clean and validate details; returns an error message or the cleaned patch. */
 export function cleanDetails(d: CalendarData, m: MemberDetails, selfId: number | null): { error: string } | { patch: MemberDetails } {
@@ -105,6 +115,7 @@ export function cleanDetails(d: CalendarData, m: MemberDetails, selfId: number |
     return { error: (e as Error).message };
   }
   if (m.wfhDays !== undefined) out.wfhDays = [...new Set(m.wfhDays.filter((x) => x >= 1 && x <= 5))].sort();
+  if (typeof m.primaryTeam === "string") out.primaryTeam = m.primaryTeam;
   return { patch: out };
 }
 
@@ -313,8 +324,9 @@ export function applyCalAction(d: CalendarData, a: CalAction, today: string, now
         shift: d.shifts.some((x) => x.id === a.shift) ? a.shift : d.shifts[0]?.id ?? "D", hire: cl.patch.hire!, resign: null,
         ytd: cl.patch.ytd ?? 0, ytdEl: cl.patch.ytdEl ?? 0, carry: cl.patch.carry ?? 0, entitle: cl.patch.entitle ?? 25,
         elEnt: cl.patch.elEnt ?? 5, wfhDays: cl.patch.wfhDays ?? [],
+        primaryTeam: cl.patch.primaryTeam,
       };
-      let next: CalendarData = { ...d, people: d.people.concat(person) };
+      let next: CalendarData = { ...d, people: d.people.concat(fixPrimary(c.O, person)) };
       if (a.adminHere && a.assign.some((x) => c.O.anc(x).includes(a.bid))) next = setNode(next, a.bid, { admins: (b.admins ?? []).concat(id) });
       return { data: next, message: `${person.name} added.`, newPersonId: id };
     }
@@ -328,7 +340,7 @@ export function applyCalAction(d: CalendarData, a: CalAction, today: string, now
       if ("error" in cl) return { data: d, error: cl.error };
       let next: CalendarData = {
         ...d,
-        people: d.people.map((x) => (x.id === a.pid ? { ...x, ...cl.patch, assign: [...new Set(a.assign)], level: a.level, shift: a.shift || x.shift } : x)),
+        people: d.people.map((x) => (x.id === a.pid ? fixPrimary(c.O, { ...x, ...cl.patch, assign: [...new Set(a.assign)], level: a.level, shift: a.shift || x.shift }) : x)),
       };
       const inHere = a.assign.some((x) => c.O.anc(x).includes(a.bid));
       let na = (b.admins ?? []).filter((x) => x !== a.pid);
@@ -342,7 +354,7 @@ export function applyCalAction(d: CalendarData, a: CalAction, today: string, now
       const left = p.assign.filter((x) => !c.O.anc(x).includes(a.bid));
       if (!left.length) return { data: d, message: `${first(p.name)} has no other allocation. Use Edit to move them, or record a resignation.` };
       return {
-        data: { ...d, people: d.people.map((x) => (x.id === a.pid ? { ...x, assign: left } : x)) },
+        data: { ...d, people: d.people.map((x) => (x.id === a.pid ? fixPrimary(c.O, { ...x, assign: left }) : x)) },
         message: `${p.name} removed from ${c.O.by[a.bid]?.name}. Their other allocations are unchanged.`,
       };
     }

@@ -36,7 +36,7 @@ export default function HeadcountPage() {
         <div className="page-head">
           <h1>Headcount · {year}</h1>
           <span style={{ maxWidth: "90ch" }}>
-            From Calendar members: counted from the month they were hired through the month of their last day, then 0. A person in two teams counts 0.5 in each.
+            From Calendar members: counted from the month they were hired through the month of their last day, then 0. People in several teams are counted once, in their primary team (set in Members › Edit).
             Team leads and above are billed 0 unless changed — click a Billed cell to change it.
           </span>
         </div>

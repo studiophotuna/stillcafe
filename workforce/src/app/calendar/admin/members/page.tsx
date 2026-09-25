@@ -6,7 +6,7 @@ import { LEVELS } from "@/lib/calendar/constants";
 import { fmtY } from "@/lib/calendar/dates";
 import { useCalendar } from "@/lib/calendar/store";
 import { useCalView } from "@/lib/calendar/useCalView";
-import { isNodeAdmin } from "@/lib/calendar/org";
+import { isNodeAdmin, primaryTeamOf } from "@/lib/calendar/org";
 import type { CalPerson } from "@/lib/calendar/types";
 
 export default function MembersPage() {
@@ -122,9 +122,11 @@ export default function MembersPage() {
                         const b = O.up(a, "branch");
                         const sb = O.sub(a);
                         const n = O.by[a];
+                        const primary = !!b && O.branchesOf(p).length > 1 && primaryTeamOf(O, p) === b.id;
                         return (
                           <span key={a} className={"tag " + (O.anc(a).includes(v.bid) ? "tag-accent" : "tag-neutral")}>
                             {b ? b.name + (sb ? " › " + sb.replace(/ · /g, " › ") : "") : n ? `${n.name} · whole ${n.type === "dept" ? "department" : "tower"}` : "—"}
+                            {primary && <strong title="Counted in this team on the headcount report"> · primary</strong>}
                           </span>
                         );
                       })}
