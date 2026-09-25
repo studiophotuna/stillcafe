@@ -27,6 +27,7 @@ export type Dialog =
   | { kind: "hold"; id: string }
   | { kind: "done"; id: string }
   | { kind: "assist"; offer: AssistOffer }
+  | { kind: "endWork" }
   | null;
 
 interface Store {
@@ -44,6 +45,8 @@ interface Store {
   isAdmin: boolean;
   /** Admins, and members an admin allowed to upload tasks. */
   canUpload: boolean;
+  /** Workload admins and the team's leads: may approve overtime. */
+  isApprover: boolean;
   sys: string;
   tr: string;
   /** Switch to another team this person can open (reloads its data). */
@@ -257,6 +260,7 @@ export function WorkloadProvider({ children }: { children: React.ReactNode }) {
           : person(viewAs === "employee" ? EMPLOYEE_ID : ADMIN_ID)!,
       isAdmin: mode === "db" ? !!session && data.admins.includes(session.id) : viewAs !== "employee",
       canUpload: mode === "db" ? !!session && canUpload(data, session.id) : viewAs !== "employee",
+      isApprover: mode === "db" ? !!session && data.approvers.includes(session.id) : viewAs !== "employee",
       sys,
       tr,
       setTeam,

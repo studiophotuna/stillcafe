@@ -78,3 +78,17 @@ export function workloadAdmins(c: Cal, teamId: string): number[] {
   c.d.people.forEach((p) => p.sysAdmin && ids.add(p.id));
   return [...ids];
 }
+
+/**
+ * Who may approve overtime in a team: its Workload admins, plus leads, managers and
+ * directors allocated to the team, anything under it, or its tower or department.
+ */
+export function workloadApprovers(c: Cal, teamId: string): number[] {
+  const ids = new Set(workloadAdmins(c, teamId));
+  const above = new Set(c.O.anc(teamId));
+  c.d.people.forEach((p) => {
+    if (p.level === "member" || !c.alive(p, c.today)) return;
+    if (c.O.inN(p, teamId) || p.assign.some((a) => above.has(a))) ids.add(p.id);
+  });
+  return [...ids];
+}

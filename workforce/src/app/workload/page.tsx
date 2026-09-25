@@ -5,7 +5,8 @@ import { TaskTable } from "@/components/TaskTable";
 import { Blueprint, Icon, Kpi, PageHead, pct } from "@/components/ui";
 import { dur } from "@/lib/workload/clock";
 import { AV, trPathOf } from "@/lib/workload/constants";
-import { basisUnit, canWork, doneToday, fmtMin, helpQueue, missingRequired, ownQueue, personMetrics, sortTasks } from "@/lib/workload/engine";
+import { AWAY, awayLabel, basisUnit, canWork, currentAway, doneToday, endedToday, fmtMin, helpQueue, missingRequired, ownQueue, personMetrics, sortTasks } from "@/lib/workload/engine";
+import { fmtT } from "@/lib/workload/clock";
 import { useWorkload } from "@/lib/workload/store";
 import { taskDetail, taskRow } from "@/lib/workload/view";
 
@@ -22,10 +23,15 @@ export default function MyWorkPage() {
   const kpis = me.trades.length
     ? [
         { k: "Productivity", v: pct(mm.prod), m: `${mm.out} ${basisUnit(data)} of ${mm.target} target (so far ${mm.tgt.toFixed(1)})` },
-        { k: "Utilization", v: pct(mm.util), m: `${dur(mm.handle)} on tasks of ${dur(mm.avail)} productive time so far` },
+        { k: "Utilization", v: pct(mm.util), m: `${dur(mm.handle)} on tasks of ${dur(mm.avail)} available (shift so far minus time away)` },
+        {
+          k: "Time away",
+          v: fmtMin(Object.values(mm.away).reduce((a, b) => a + b, 0)),
+          m: Object.entries(mm.away).map(([k, v]) => `${awayLabel(k as never)} ${fmtMin(v)}`).join(" · ") || "nothing logged today",
+        },
         { k: "Timeliness", v: pct(mm.time), m: `${mm.onTime} of ${mm.done} done within SLA` },
         { k: "Average time", v: avg, m: "per task today" },
-        { k: "Overtime", v: mm.otMin ? fmtMin(mm.otMin) : "—", m: "reported today" },
+        { k: "Overtime", v: mm.otMin ? fmtMin(mm.otMin) : "—", m: mm.otPending ? `${fmtMin(mm.otPending)} waiting for approval` : "approved today" },
         ...metricF.map((f) => ({
           k: f.label.replace(/^No\. of /, ""),
           v: myDone.reduce((a, t) => a + (Number(t.fields[f.key]) || 0), 0),
@@ -61,6 +67,9 @@ export default function MyWorkPage() {
   const showStart = !!me.trades.length && (s.mode === "fifo" || hasAssigned);
 
   const c = cur ? taskDetail(data, cur, now) : null;
+  const away = currentAway(data, me.id);
+  const ended = endedToday(data, me.id, now);
+  const onTeam = data.people.some((p) => p.id === me.id);
   const curMissing = cur ? missingRequired(data.fields, cur.fields) : [];
 
   return (
@@ -74,6 +83,50 @@ export default function MyWorkPage() {
           <Kpi key={k.k} {...k} />
         ))}
       </div>
+
+      {onTeam && (
+        <Blueprint as="section" className="panel status-bar">
+          {ended ? (
+            <>
+              <span>
+                <strong>Work ended at {fmtT(ended.start).split(", ").pop()}.</strong>{" "}
+                {ended.otMin
+                  ? `${fmtMin(ended.otMin)} overtime ${ended.otStatus === "pending" ? "waiting for approval" : ended.otStatus}.`
+                  : "No overtime reported."}
+              </span>
+              {(!ended.otStatus || ended.otStatus === "pending") && (
+                <button className="btn btn-secondary btn-36" onClick={() => run({ type: "undoEnd", pid: me.id })}>
+                  Undo End work
+                </button>
+              )}
+            </>
+          ) : away ? (
+            <>
+              <span>
+                <strong>On {awayLabel(away.kind).toLowerCase()}</strong> since {fmtT(away.start).split(", ").pop()} · {fmtMin(Math.max(0, Math.round((now - away.start) / 60000)))}
+                {cur ? " · the time isn’t counted on your task" : ""}
+              </span>
+              <Blueprint as="button" className="btn btn-primary btn-36" style={{ padding: "0 16px" }} onClick={() => run({ type: "back", pid: me.id })}>
+                Back to work
+              </Blueprint>
+            </>
+          ) : (
+            <>
+              <span className="small">Away from tasks? Log it so utilization stays accurate.</span>
+              <div className="row" style={{ gap: 6 }}>
+                {AWAY.map(([k, l]) => (
+                  <button key={k} className="btn btn-secondary btn-36" onClick={() => run({ type: "away", kind: k, pid: me.id })}>
+                    {l}
+                  </button>
+                ))}
+                <button className="btn btn-secondary btn-36" style={{ marginLeft: 10 }} disabled={!!cur} title={cur ? "Finish your task or put it on hold first" : undefined} onClick={() => setDialog({ kind: "endWork" })}>
+                  End work
+                </button>
+              </div>
+            </>
+          )}
+        </Blueprint>
+      )}
 
       {cur && c ? (
         <Blueprint as="section" className="current">
@@ -125,7 +178,7 @@ export default function MyWorkPage() {
             <span>{idleText}</span>
           </div>
           {showStart && (
-            <Blueprint as="button" className="btn btn-primary btn-lg" disabled={unavailable} onClick={() => run({ type: "startWork", pid: me.id })}>
+            <Blueprint as="button" className="btn btn-primary btn-lg" disabled={unavailable || !!away || !!ended} onClick={() => run({ type: "startWork", pid: me.id })}>
               <Icon name="play" size={20} />
               Start work
             </Blueprint>

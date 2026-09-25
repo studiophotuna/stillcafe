@@ -67,6 +67,8 @@ const data = (tasks: Task[], p: Partial<Settings> = {}): WorkloadData => ({
   people: PEOPLE,
   admins: [23],
   org: DEMO_ORG,
+  activities: [],
+  approvers: [23],
 });
 
 const get = (d: WorkloadData, id: string) => d.tasks.find((t) => t.id === id)!;
@@ -148,19 +150,19 @@ describe("hold, resume, done", () => {
   it("done requires required fields", () => {
     const t = task({ status: "in_progress", assignee: ANA, startedAt: NOW - M });
     const d = { ...data([t]), fields: FIELDS0 };
-    const blocked = completeTask(d, t.id, {}, 0, ANA, NOW);
+    const blocked = completeTask(d, t.id, {}, ANA, NOW);
     expect(get(blocked.data, t.id).status).toBe("in_progress");
     expect(blocked.message).toMatch(/^Fill in /);
-    const ok = completeTask(d, t.id, { ticket: "RM-1", carrier: "MSCU", contracts: 2 }, 0, ANA, NOW);
-    expect(get(ok.data, t.id)).toMatchObject({ status: "done", doneAt: NOW, ot: false, otMin: 0 });
+    const ok = completeTask(d, t.id, { ticket: "RM-1", carrier: "MSCU", contracts: 2 }, ANA, NOW);
+    expect(get(ok.data, t.id)).toMatchObject({ status: "done", doneAt: NOW });
   });
 
   it("auto-feeds the next task when enabled", () => {
     const t = task({ status: "in_progress", assignee: ANA, startedAt: NOW - M });
     const next = task();
-    const fed = completeTask(data([t, next]), t.id, {}, 0, ANA, NOW);
+    const fed = completeTask(data([t, next]), t.id, {}, ANA, NOW);
     expect(get(fed.data, next.id).status).toBe("in_progress");
-    const manual = completeTask(data([t, next], { autoFeed: false }), t.id, {}, 0, ANA, NOW);
+    const manual = completeTask(data([t, next], { autoFeed: false }), t.id, {}, ANA, NOW);
     expect(get(manual.data, next.id).status).toBe("new");
     expect(manual.message).toMatch(/Click Start work/);
   });
@@ -239,7 +241,8 @@ describe("metrics", () => {
     expect(m.done).toBe(2);
     expect(m.tgt).toBeCloseTo(8 * fr);
     expect(m.prod).toBe(Math.round((2 / (8 * fr)) * 100));
-    expect(m.util).toBe(Math.round(((60 * M) / (6.8 * H * fr)) * 100));
+    // Available: shift so far minus the planned breaks (none logged): 9h×fr − 90 min×fr.
+    expect(m.util).toBe(Math.round(((60 * M) / (9 * H * fr - 90 * M * fr)) * 100));
     expect(m.time).toBe(100);
   });
 
@@ -279,27 +282,15 @@ describe("upload rows follow the team's org", () => {
 });
 
 describe("overtime, helping out, productivity basis and uploads", async () => {
-  const { outsideShiftMin, suggestedOt, helpQueue, personMetrics, canTake } = await import("./engine");
+  const { helpQueue, personMetrics, canTake } = await import("./engine");
   const { authorizeWl } = await import("./authz");
   const ana = PEOPLE.find((p) => p.id === ANA)!; // LCL (RCM), day shift 08:00, 9 h
   const EVE = Date.parse("2026-09-24T18:30:00+08:00"); // 1 h 30 past her 17:00 end
 
-  it("asks for overtime only outside the shift, capped by time on the task", () => {
-    const s = settings();
-    expect(outsideShiftMin(ana, s, NOW)).toBe(0);
-    expect(outsideShiftMin(ana, s, EVE)).toBe(90);
-    expect(outsideShiftMin(ana, s, Date.parse("2026-09-24T07:00:00+08:00"))).toBe(60); // before the shift
-    expect(suggestedOt(task({ startedAt: EVE - 30 * M }), ana, s, EVE)).toBe(30);
-    expect(suggestedOt(task({ startedAt: EVE - 3 * H }), ana, s, EVE)).toBe(90);
-  });
-
-  it("records overtime minutes, no more than the time on the task, and only by the assignee", () => {
+  it("only the assignee can mark a task done", () => {
     const t = task({ status: "in_progress", assignee: ANA, startedAt: EVE - 40 * M });
-    const d = data([t]);
-    expect(get(completeTask(d, t.id, {}, 25, ANA, EVE).data, t.id)).toMatchObject({ ot: true, otMin: 25 });
-    expect(get(completeTask(d, t.id, {}, 500, ANA, EVE).data, t.id).otMin).toBe(40);
-    expect(get(completeTask(d, t.id, {}, 10, 15, EVE).data, t.id).status).toBe("in_progress"); // Leo can't close Ana's task
-    expect(personMetrics(completeTask(d, t.id, {}, 25, ANA, EVE).data, ana, EVE).otMin).toBe(25);
+    expect(get(completeTask(data([t]), t.id, {}, 15, EVE).data, t.id).status).toBe("in_progress");
+    expect(get(completeTask(data([t]), t.id, {}, ANA, EVE).data, t.id).status).toBe("done");
   });
 
   it("asks before giving work from other trades: same system first, then the team", () => {
@@ -336,5 +327,57 @@ describe("overtime, helping out, productivity basis and uploads", async () => {
     expect("action" in authorizeWl({ type: "importRows", rows }, { ...d, settings: { ...d.settings, uploaders: [ANA] } }, ANA)).toBe(true);
     expect("action" in authorizeWl({ type: "importRows", rows }, d, 23)).toBe(true);
     expect(checkRows(rows, FIELDS0, DEMO_ORG)[0]).toMatchObject({ ok: true });
+  });
+});
+
+describe("status: time away, end of work and overtime approval", async () => {
+  const { startAway, backToWork, endWork, undoEndWork, decideOt, pastShiftMin, personMetrics, currentAway } = await import("./engine");
+  const { authorizeWl } = await import("./authz");
+  const ana = PEOPLE.find((p) => p.id === ANA)!; // day shift 08:00–17:00
+  const at = (hm: string) => Date.parse(`2026-09-24T${hm}:00+08:00`);
+
+  it("logs time away, doesn't count it on the open task, and blocks new work until back", () => {
+    const t = task({ status: "in_progress", assignee: ANA, startedAt: at("09:00") });
+    let d = data([t, task()]);
+    d = startAway(d, ANA, "meeting", at("09:30")).data;
+    expect(currentAway(d, ANA)?.kind).toBe("meeting");
+    d = startAway(d, ANA, "break", at("10:00")).data; // switching closes the meeting
+    expect(d.activities.map((a) => [a.kind, a.end])).toEqual([["meeting", at("10:00")], ["break", null]]);
+    d = backToWork(d, ANA, at("10:15")).data;
+    const m = personMetrics(d, ana, at("10:30"));
+    expect(m.away).toEqual({ meeting: 30, break: 15 });
+    expect(m.handle).toBe(45 * M); // 90 min open minus 45 away
+    // Available: 2.5 h of shift minus 45 min away.
+    expect(m.avail).toBe(105 * M);
+    const onBreak = startAway(data([task()]), ANA, "lunch", at("12:00")).data;
+    expect(startWork(onBreak, ANA, at("12:10")).message).toMatch(/on lunch/);
+  });
+
+  it("asks overtime only when ending after the shift; it waits for approval", () => {
+    expect(pastShiftMin(ana, settings(), at("16:00"))).toBe(0);
+    expect(pastShiftMin(ana, settings(), at("18:10"))).toBe(70);
+    // During the shift, reported overtime is ignored.
+    expect(endWork(data([]), ANA, 60, at("16:00")).data.activities[0]).toMatchObject({ kind: "end", otMin: 0, otStatus: null });
+    // After it: capped at the time past the shift, pending.
+    const e = endWork(data([]), ANA, 500, at("18:10"));
+    expect(e.data.activities[0]).toMatchObject({ otMin: 70, otStatus: "pending" });
+    expect(personMetrics(e.data, ana, at("18:10"))).toMatchObject({ otMin: 0, otPending: 70 });
+    // Can't end with a task in progress; can undo while pending.
+    expect(endWork(data([task({ status: "in_progress", assignee: ANA, startedAt: at("17:30") })]), ANA, 0, at("18:10")).message).toMatch(/Finish your task/);
+    expect(undoEndWork(e.data, ANA, at("18:20")).data.activities).toHaveLength(0);
+    expect(startWork({ ...e.data, tasks: [task()] }, ANA, at("18:20")).message).toMatch(/ended work/);
+  });
+
+  it("counts overtime once an approver (not the member) approves it", () => {
+    const e = endWork({ ...data([]), approvers: [23, ANA] }, ANA, 45, at("18:00")).data;
+    const id = e.activities[0].id;
+    expect(decideOt(e, id, "approved", ANA, at("19:00")).data).toBe(e); // not your own
+    expect(decideOt(e, id, "approved", 15, at("19:00")).data).toBe(e); // not an approver
+    const ok = decideOt(e, id, "approved", 23, at("19:00")).data;
+    expect(ok.activities[0]).toMatchObject({ otStatus: "approved", decidedBy: 23 });
+    expect(personMetrics(ok, ana, at("19:00"))).toMatchObject({ otMin: 45, otPending: 0 });
+    expect(undoEndWork(ok, ANA, at("19:10")).data).toBe(ok); // decided: can't undo
+    expect("error" in authorizeWl({ type: "decideOt", id, st: "approved", by: ANA }, e, ANA)).toBe(true);
+    expect(authorizeWl({ type: "decideOt", id, st: "approved", by: 0 }, e, 23)).toEqual({ action: { type: "decideOt", id, st: "approved", by: 23 } });
   });
 });

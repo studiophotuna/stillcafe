@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { fieldOptions, trPathOf } from "@/lib/workload/constants";
 import { nowMs } from "@/lib/workload/clock";
-import { fmtMin, missingRequired, outsideShiftMin, suggestedOt, type AssistOffer } from "@/lib/workload/engine";
+import { fmtMin, missingRequired, pastShiftMin, type AssistOffer } from "@/lib/workload/engine";
 import { useWorkload } from "@/lib/workload/store";
 import type { Priority, Task } from "@/lib/workload/types";
 import { assignOptions, taskDetail } from "@/lib/workload/view";
@@ -221,17 +221,9 @@ function DoneDialog({ id }: { id: string }) {
   const { data, run, me, setDialog } = useWorkload();
   const t = data.tasks.find((x) => x.id === id);
   const [vals, setVals] = useState<Task["fields"]>(() => ({ ...(t?.fields ?? {}) }));
-  // Finishing outside the shift: ask how much overtime this took (suggest the time past the shift, capped by time on the task).
-  const [nowAt] = useState(() => nowMs());
-  const outside = outsideShiftMin(me, data.settings, nowAt);
-  const [otH, setOtH] = useState(() => (t ? String(Math.floor(suggestedOt(t, me, data.settings, nowAt) / 60)) : "0"));
-  const [otM, setOtM] = useState(() => (t ? String(suggestedOt(t, me, data.settings, nowAt) % 60) : "0"));
   if (!t) return null;
   const close = () => setDialog(null);
   const miss = missingRequired(data.fields, vals);
-  const otMin = outside ? Math.max(0, (Number(otH) || 0) * 60 + (Number(otM) || 0)) : 0;
-  const onTask = Math.round((nowAt - (t.startedAt ?? nowAt)) / 60000);
-  const otBad = otMin > onTask;
   return (
     <Modal onClose={close} width={520}>
       <div className="dialog-scroll" style={{ gap: 12, padding: 20 }}>
@@ -269,19 +261,6 @@ function DoneDialog({ id }: { id: string }) {
             </div>
           );
         })}
-        {outside > 0 && (
-          <div className="banner" style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-            <strong>You’re outside your shift ({me.shift}).</strong>
-            <span style={{ fontSize: 13.5 }}>How much overtime did you work on this task? Enter 0 if none.</span>
-            <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-              <input aria-label="Overtime hours" className="input" type="number" min={0} value={otH} onChange={(e) => setOtH(e.target.value)} style={{ width: 80 }} />
-              <span>h</span>
-              <input aria-label="Overtime minutes" className="input" type="number" min={0} max={59} value={otM} onChange={(e) => setOtM(e.target.value)} style={{ width: 80 }} />
-              <span>min</span>
-            </div>
-            {otBad && <span style={{ fontSize: 12.5, color: "var(--color-accent-800)" }}>That’s more than the {fmtMin(onTask)} you’ve spent on this task.</span>}
-          </div>
-        )}
         <span style={{ fontSize: 12.5, color: "var(--color-accent-800)" }}>
           {miss.length ? "Required to close this task — fill in: " + miss.join(", ") : ""}
         </span>
@@ -293,10 +272,10 @@ function DoneDialog({ id }: { id: string }) {
             as="button"
             className="btn btn-primary btn-40"
             style={{ padding: "0 18px" }}
-            disabled={miss.length > 0 || otBad}
+            disabled={miss.length > 0}
             onClick={() => {
               close();
-              run({ type: "complete", id, vals, otMin, pid: me.id });
+              run({ type: "complete", id, vals, pid: me.id });
             }}
           >
             Mark done
@@ -348,9 +327,68 @@ function AssistDialog({ offer }: { offer: AssistOffer }) {
   );
 }
 
+/**
+ * End work: ends the day. Only when the member ends after their shift does it ask for
+ * overtime (at most the time past the shift); an admin or lead then approves it.
+ */
+function EndWorkDialog() {
+  const { data, run, me, setDialog } = useWorkload();
+  const [nowAt] = useState(() => nowMs());
+  const past = pastShiftMin(me, data.settings, nowAt);
+  const [h, setH] = useState(() => String(Math.floor(past / 60)));
+  const [m, setM] = useState(() => String(past % 60));
+  const close = () => setDialog(null);
+  const otMin = past ? Math.max(0, (Number(h) || 0) * 60 + (Number(m) || 0)) : 0;
+  const tooMuch = otMin > past;
+  return (
+    <Modal onClose={close} width={500}>
+      <div className="dialog-scroll" style={{ gap: 12, padding: 20 }}>
+        <div className="dialog-title" style={{ fontSize: 26 }}>
+          End work for today
+        </div>
+        {past > 0 ? (
+          <div className="banner" style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+            <strong>
+              You’re {fmtMin(past)} past your shift ({me.shift}).
+            </strong>
+            <span style={{ fontSize: 13.5 }}>How much overtime did you work? It goes to an admin or lead for approval. Enter 0 if none.</span>
+            <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+              <input aria-label="Overtime hours" className="input" type="number" min={0} value={h} onChange={(e) => setH(e.target.value)} style={{ width: 80 }} />
+              <span>h</span>
+              <input aria-label="Overtime minutes" className="input" type="number" min={0} max={59} value={m} onChange={(e) => setM(e.target.value)} style={{ width: 80 }} />
+              <span>min</span>
+            </div>
+            {tooMuch && <span style={{ fontSize: 12.5, color: "var(--color-accent-800)" }}>That’s more than the {fmtMin(past)} since your shift ended.</span>}
+          </div>
+        ) : (
+          <span>Your day will be marked as ended. You can undo this from My work if you pressed it by mistake.</span>
+        )}
+        <div className="dialog-actions" style={{ gap: 10 }}>
+          <button className="btn btn-secondary btn-40" onClick={close}>
+            Cancel
+          </button>
+          <Blueprint
+            as="button"
+            className="btn btn-primary btn-40"
+            style={{ padding: "0 18px" }}
+            disabled={tooMuch}
+            onClick={() => {
+              close();
+              run({ type: "endWork", otMin, pid: me.id });
+            }}
+          >
+            {otMin ? "End work and send overtime" : "End work"}
+          </Blueprint>
+        </div>
+      </div>
+    </Modal>
+  );
+}
+
 export function Dialogs() {
   const { dialog } = useWorkload();
   if (!dialog) return null;
+  if (dialog.kind === "endWork") return <EndWorkDialog />;
   if (dialog.kind === "assist") return <AssistDialog offer={dialog.offer} />;
   if (dialog.kind === "task") return <TaskDialog key={dialog.id} id={dialog.id} />;
   if (dialog.kind === "hold") return <HoldDialog key={dialog.id} id={dialog.id} />;

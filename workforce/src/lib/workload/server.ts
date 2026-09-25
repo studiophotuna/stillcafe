@@ -5,17 +5,18 @@ import { ConflictError, ForbiddenError, db } from "../db";
 import { authorizeWl } from "./authz";
 import { dayKey } from "./clock";
 import { visibleTeams } from "../calendar/authz";
-import { orgFor, peopleFromCalendar, workloadAdmins } from "./people";
+import { orgFor, peopleFromCalendar, workloadAdmins, workloadApprovers } from "./people";
 import { applyAction, type Action } from "./actions";
 import type { WorkloadData } from "./engine";
 import { initialData } from "./seed";
-import type { Task } from "./types";
+import type { Activity, Task } from "./types";
 
 /** Supabase persistence for the Workload module (schema `workforce`, see supabase/migrations). */
 
 interface Versions {
   team: number;
   tasks: Map<string, number>;
+  activities: Map<string, number>;
 }
 interface Snapshot {
   data: WorkloadData;
@@ -30,7 +31,10 @@ interface RawSnapshot {
   tasks: RawTask[];
 }
 
-type FromCal = Pick<WorkloadData, "people" | "admins" | "org">;
+type FromCal = Pick<WorkloadData, "people" | "admins" | "org" | "approvers">;
+type RawActivity = Activity & { version: number };
+/** Activity loaded with the team: recent days (reports) plus anything ongoing or pending. */
+const ACTIVITY_DAYS = 35;
 
 /**
  * Which team this request is for, and that team's org, people and admins from the
@@ -45,16 +49,27 @@ async function teamContext(token: string, me: number, want?: string | null): Pro
   if (!team) throw new ForbiddenError("You aren’t in a team yet. Ask your admin to allocate you in Calendar › Members.");
   return {
     team,
-    ctx: { people: peopleFromCalendar(c, Date.now(), team), admins: workloadAdmins(c, team), org: orgFor(c, team, teams) },
+    ctx: {
+      people: peopleFromCalendar(c, Date.now(), team),
+      admins: workloadAdmins(c, team),
+      approvers: workloadApprovers(c, team),
+      org: orgFor(c, team, teams),
+    },
   };
 }
 
 async function load(token: string, team: string, ctx: FromCal): Promise<Snapshot | null> {
-  const { data, error } = await db().rpc("workforce_snapshot", { p_token: token, p_team: team });
+  const since = Date.now() - ACTIVITY_DAYS * 24 * 3600_000;
+  const [{ data, error }, acts] = await Promise.all([
+    db().rpc("workforce_snapshot", { p_token: token, p_team: team }),
+    db().rpc("workforce_activities", { p_token: token, p_team: team, p_since: since }),
+  ]);
+  if (acts.error) throw new Error(acts.error.message);
   if (error) throw new Error(error.message);
   if (!data) return null;
   const raw = data as RawSnapshot;
   const tasks = new Map<string, number>();
+  const activities = new Map<string, number>();
   return {
     data: {
       settings: raw.team.settings,
@@ -65,9 +80,13 @@ async function load(token: string, team: string, ctx: FromCal): Promise<Snapshot
         tasks.set(t.id, version);
         return t;
       }),
+      activities: ((acts.data ?? []) as RawActivity[]).map(({ version, ...a }) => {
+        activities.set(a.id, version);
+        return a;
+      }),
       ...ctx,
     },
-    versions: { team: raw.team.version, tasks },
+    versions: { team: raw.team.version, tasks, activities },
   };
 }
 
@@ -81,6 +100,21 @@ async function save(token: string, team: string, before: Snapshot | null, after:
   const tasks = after.tasks
     .filter((t) => prev.get(t.id) !== t)
     .map((t) => ({ ...t, version: before?.versions.tasks.get(t.id) ?? 0 }));
+  // Activity rows (breaks, end of work, overtime decisions) are saved on their own.
+  const prevA = new Map(b?.activities.map((a) => [a.id, a]));
+  const nextIds = new Set(after.activities.map((a) => a.id));
+  const aver = (id: string) => before?.versions.activities.get(id) ?? 0;
+  const actRows = after.activities
+    .filter((a) => prevA.get(a.id) !== a)
+    .map((a) => ({ ...a, version: aver(a.id) }))
+    .concat([...prevA.values()].filter((a) => !nextIds.has(a.id)).map((a) => ({ ...a, version: aver(a.id), deleted: true })));
+  if (actRows.length) {
+    const r = await db().rpc("workforce_save_activities", { p_token: token, p_team: team, p_rows: actRows });
+    if (r.error) {
+      if (r.error.message.includes("workforce_conflict")) throw new ConflictError(r.error.details ?? "conflict");
+      throw new Error(r.error.message);
+    }
+  }
   if (!teamChanged && !tasks.length) return;
   const changes = {
     team: teamChanged

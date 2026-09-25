@@ -1,9 +1,9 @@
 "use client";
 
 import { Blueprint, Kpi, PageHead, pct } from "@/components/ui";
-import { dur, fmtT } from "@/lib/workload/clock";
+import { dayKey, dur, fmtT } from "@/lib/workload/clock";
 import { AV, tradeOf, trPathOf } from "@/lib/workload/constants";
-import { basisUnit, doneToday, fmtMin, isOverdue, personMetrics } from "@/lib/workload/engine";
+import { awayLabel, basisUnit, doneToday, fmtMin, isOverdue, personMetrics } from "@/lib/workload/engine";
 import { useWorkload } from "@/lib/workload/store";
 import type { Task } from "@/lib/workload/types";
 import { useUnit } from "@/lib/workload/useUnit";
@@ -37,7 +37,13 @@ export default function DashboardPage() {
     { k: "Done today", v: doneT.length, m: "tasks" },
     { k: "Average time", v: avg(doneT), m: "per task today" },
     ...metricF.map((f) => ({ k: f.label.replace(/^No\. of /, ""), v: sumF(doneT, f.key), m: "completed today" })),
-    { k: "Overtime", v: fmtMin(doneT.reduce((a, t) => a + (t.otMin ?? 0), 0)), m: `on ${doneT.filter((t) => t.ot).length} tasks today` },
+    (() => {
+      // Only approved overtime counts; pending is shown for follow-up.
+      const ends = data.activities.filter((a) => a.kind === "end" && dayKey(a.start) === dayKey(now));
+      const ok = ends.filter((a) => a.otStatus === "approved").reduce((x, a) => x + a.otMin, 0);
+      const wait = ends.filter((a) => a.otStatus === "pending").length;
+      return { k: "Overtime", v: ok ? fmtMin(ok) : "—", m: wait ? `approved today · ${wait} waiting for approval` : "approved today" };
+    })(),
   ];
 
   const byTrade = unitTrades.map((tr) => {
@@ -72,7 +78,9 @@ export default function DashboardPage() {
         m,
         avg: avg(d),
         metrics: metricF.map((f) => sumF(d, f.key)),
-        ot: m.otMin ? fmtMin(m.otMin) : "—",
+        ot: (m.otMin ? fmtMin(m.otMin) : "—") + (m.otPending ? ` (+${fmtMin(m.otPending)} pending)` : ""),
+        away: Object.values(m.away).reduce((a, b) => a + b, 0),
+        awayTip: Object.entries(m.away).map(([k, v]) => `${awayLabel(k as never)} ${fmtMin(v)}`).join(", "),
       };
     });
 
@@ -133,10 +141,11 @@ export default function DashboardPage() {
               <th>Utilization</th>
               <th>Timeliness</th>
               <th>Avg time</th>
+              <th>Time away</th>
               {metricF.map((f) => (
                 <th key={f.key}>{f.label.replace(/^No\. of /, "")}</th>
               ))}
-              <th>Overtime</th>
+              <th>Overtime (approved)</th>
             </tr>
           </thead>
           <tbody>
@@ -153,6 +162,7 @@ export default function DashboardPage() {
                 <td>{pct(r.m.util)}</td>
                 <td>{pct(r.m.time)}</td>
                 <td>{r.avg}</td>
+                <td title={r.awayTip}>{r.away ? fmtMin(r.away) : "—"}</td>
                 {r.metrics.map((v, i) => (
                   <td key={i}>{v}</td>
                 ))}

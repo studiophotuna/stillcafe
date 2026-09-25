@@ -263,3 +263,6 @@ main.page { padding: 24px 32px 56px; display: flex; flex-direction: column; gap:
 .auth-error { padding: 10px 12px; border-left: 3px solid #b3261e; background: color-mix(in srgb, #b3261e 8%, transparent); font-size: 13.5px; }
 .side-signout { display: flex; gap: 4px; padding: 0 2px; }
 .side-signout .btn { font-size: 12.5px; min-height: 28px; }
+
+/* — My work status bar (breaks, meetings, end work) — */
+.status-bar { flex-direction: row; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px 16px; padding: 12px 16px; }

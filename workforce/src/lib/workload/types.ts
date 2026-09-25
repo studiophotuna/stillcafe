@@ -17,6 +17,27 @@ export interface Trade {
   sys: string;
 }
 
+/** Time away from tasks, or the end of the working day. */
+export type ActivityKind = "break" | "lunch" | "meeting" | "adhoc" | "training" | "end";
+export type OtStatus = "pending" | "approved" | "declined";
+
+/**
+ * A member's status entry. Away kinds run from start until the member is back
+ * (end = null while ongoing). "end" marks the end of the working day and carries the
+ * overtime the member reported, which counts only once approved.
+ */
+export interface Activity {
+  id: string;
+  pid: number;
+  kind: ActivityKind;
+  start: number;
+  end: number | null;
+  otMin: number;
+  otStatus: OtStatus | null;
+  decidedBy: number | null;
+  decidedAt: number | null;
+}
+
 /** The team's structure, from the Calendar organization. */
 export interface WlOrg {
   team: { id: string; name: string };

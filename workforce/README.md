@@ -96,9 +96,16 @@ Both modules save to Supabase: schema `workforce` in the stillcafe project
   in their own trades. When those are empty it asks whether they'll help with other trades
   and, if they agree, gives tasks from other trades in their system first, then the rest of
   the team (task history notes “helping …”). In “members pick” mode the same list appears.
-- **Overtime:** marking a task done outside the member's shift asks how much overtime it took
-  (suggested: the time outside the shift, at most the time on the task). Minutes are saved
-  per task (`ot_min`, migration 0005) and totalled per day on My work and the dashboard.
+- **Status and utilization:** My work has Break, Lunch, Meeting, Ad hoc and Training buttons
+  (and Back to work). Time away isn't counted on an open task, new work can't start until
+  the member is back, and utilization = time on tasks ÷ (shift time so far − time away);
+  planned breaks (Targets) are assumed only when none were logged. Stored in
+  `workforce.activity` (migration 0006).
+- **End work and overtime:** End work closes the day (not with a task in progress; undo is
+  possible until overtime is decided). Only when it's pressed after the shift does it ask for
+  overtime, at most the time past the shift. Overtime counts in the dashboard and the Overtime
+  report only after a Workload admin or a lead/manager/director of the team approves it (not
+  their own); the database enforces this too.
 - **Productivity** counts completed tasks by default; an admin can switch it (Targets) to the
   total of a number field (e.g. No. of contracts) or distinct values of any field (e.g. one
   per ticket). Targets are in that unit.

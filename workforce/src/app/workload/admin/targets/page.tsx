@@ -47,7 +47,7 @@ export default function TargetsPage() {
       <PageHead
         title={`Targets · ${data.org.team.name}`}
         style={{ maxWidth: "85ch" }}
-        sub="Working time sets the productive hours used for utilization. Targets set how many tasks a member should finish in a full day; productivity compares tasks done with the target, pro-rated for the part of the shift that has passed."
+        sub="Utilization is time on tasks ÷ (shift time so far − time away that members log with Break, Lunch, Meeting, Ad hoc and Training). The planned breaks below are used only when a member logged none. Targets set the output expected in a full day; productivity compares output with the target, pro-rated for the part of the shift that has passed."
       />
       <Blueprint as="section" className="panel">
         <h2 className="h2">Working time per member</h2>

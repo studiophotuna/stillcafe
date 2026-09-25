@@ -3,10 +3,10 @@
  * these; a server implementation (Supabase RPC / route handlers) must apply
  * the same rules. See ../../../README.md › Workload rules.
  */
-import { H, dayKey, localHour } from "./clock";
+import { H, M, dayKey, localHour } from "./clock";
 import { CARRIERS, PR, fieldOptions, lc, sysName, trPathOf } from "./constants";
 import { SAMPLE_MAIL } from "./seed";
-import type { Person, Priority, Settings, Task, TaskField, WlOrg } from "./types";
+import type { Activity, ActivityKind, Person, Priority, Settings, Task, TaskField, WlOrg } from "./types";
 
 export interface WorkloadData {
   tasks: Task[];
@@ -25,6 +25,10 @@ export interface WorkloadData {
   admins: number[];
   /** The team, its systems and trades, and the teams this person can open (from the Calendar). */
   org: WlOrg;
+  /** Breaks, meetings etc. and end-of-day entries (recent days, plus any pending overtime). */
+  activities: Activity[];
+  /** Who may approve overtime: Workload admins and the team's leads, managers and directors. */
+  approvers: number[];
 }
 
 export const personOf = (d: Pick<WorkloadData, "people">, id: number | null) =>
@@ -82,6 +86,14 @@ function begin(d: WorkloadData, id: string, p: Person, now: number, note = ""): 
   }));
 }
 
+/** Why the member can't take work now (away, or day ended), or "". */
+function notWorking(d: WorkloadData, pid: number, now: number) {
+  const away = d.activities.find((a) => a.pid === pid && a.kind !== "end" && a.end === null);
+  if (away) return `You’re on ${awayLabel(away.kind).toLowerCase()}. Click Back to work first.`;
+  if (d.activities.some((a) => a.pid === pid && a.kind === "end" && dayKey(a.start) === dayKey(now))) return "You’ve ended work for today. Undo End work to continue.";
+  return "";
+}
+
 /** Waiting tasks in the member's own trades, next first. */
 export const ownQueue = (d: WorkloadData, me: Person) =>
   sortTasks(d.tasks.filter((t) => t.status === "new" && me.trades.includes(t.trade)), d.settings);
@@ -126,6 +138,8 @@ const helping = (d: WorkloadData, me: Person, t: Task) =>
 export function startWork(d: WorkloadData, pid: number, now: number, assist = false): Outcome {
   const me = personOf(d, pid);
   if (!me || isBusy(d.tasks, pid)) return { data: d };
+  const stop = notWorking(d, pid, now);
+  if (stop) return { data: d, message: stop };
   if (!canWork(me, d.settings)) return { data: d, message: "You’re marked unavailable, so tasks aren’t given to you." };
   const s = d.settings;
   const next = sortTasks(d.tasks.filter((t) => t.assignee === pid && t.status === "assigned"), s)[0] ?? (s.mode === "fifo" ? ownQueue(d, me)[0] : undefined);
@@ -143,6 +157,8 @@ export function startTask(d: WorkloadData, id: string, pid: number, now: number)
   const me = personOf(d, pid);
   const t = d.tasks.find((x) => x.id === id);
   if (!me || !t || isBusy(d.tasks, pid)) return { data: d };
+  const stop = notWorking(d, pid, now);
+  if (stop) return { data: d, message: stop };
   const take = d.settings.mode === "self" && canTake(d, me, t);
   const mine = t.status === "assigned" && t.assignee === pid;
   if (!take && !mine) return { data: d };
@@ -162,6 +178,8 @@ export function holdTask(d: WorkloadData, id: string, reason: string, now: numbe
 }
 
 export function resumeTask(d: WorkloadData, id: string, pid: number, now: number): Outcome {
+  const stop = notWorking(d, pid, now);
+  if (stop) return { data: d, message: stop };
   const t = d.tasks.find((x) => x.id === id);
   if (!t || t.assignee !== pid || t.status !== "on_hold" || isBusy(d.tasks, pid)) return { data: d };
   return { data: patch(d, id, (x) => ({ ...x, status: "in_progress", history: hist(x, now, "Resumed") })) };
@@ -170,45 +188,18 @@ export function resumeTask(d: WorkloadData, id: string, pid: number, now: number
 export const missingRequired = (fields: TaskField[], vals: Task["fields"]) =>
   fields.filter((f) => f.required && String(vals[f.key] ?? "").trim() === "").map((f) => f.label);
 
-/**
- * Minutes outside the person's shift right now (after it ended, or before it
- * started), or 0 during the shift.
- */
-export function outsideShiftMin(p: Person, s: Settings, now: number) {
-  const e = (localHour(now) - p.shiftStart + 24) % 24;
-  if (e < s.work.shift) return 0;
-  return Math.round(Math.min(e - s.work.shift, 24 - e) * 60);
-}
-
-/** Overtime to suggest for a task finished outside the shift: time outside the shift, at most the time on the task. */
-export function suggestedOt(t: Task, p: Person, s: Settings, now: number) {
-  const out = outsideShiftMin(p, s, now);
-  if (!out) return 0;
-  return Math.min(out, Math.round((now - (t.startedAt ?? now)) / 60000));
-}
-
 export const fmtMin = (m: number) => (m >= 60 ? `${Math.floor(m / 60)} h${m % 60 ? " " + (m % 60) + " min" : ""}` : `${m} min`);
 
 /**
- * Mark done (required fields must be filled — they may be blank when uploaded) with the
- * overtime minutes the member reports, then auto-feed the next task if the team uses it.
+ * Mark done (required fields must be filled — they may be blank when uploaded), then
+ * auto-feed the next task if the team uses it. Overtime is reported at End work.
  */
-export function completeTask(d: WorkloadData, id: string, vals: Task["fields"], otMin: number, pid: number, now: number): Outcome {
+export function completeTask(d: WorkloadData, id: string, vals: Task["fields"], pid: number, now: number): Outcome {
   const t = d.tasks.find((x) => x.id === id);
   if (!t || t.status !== "in_progress" || t.assignee !== pid) return { data: d };
   const miss = missingRequired(d.fields, vals);
   if (miss.length) return { data: d, message: `Fill in ${miss.join(", ")} before marking ${id} done.` };
-  // At most the time spent on the task.
-  const ot = Math.max(0, Math.min(Math.round(Number(otMin) || 0), Math.round((now - (t.startedAt ?? now)) / 60000)));
-  const done = patch(d, id, (x) => ({
-    ...x,
-    status: "done",
-    doneAt: now,
-    ot: ot > 0,
-    otMin: ot,
-    fields: { ...vals },
-    history: hist(x, now, "Done" + (ot ? ` (overtime ${fmtMin(ot)})` : "")),
-  }));
+  const done = patch(d, id, (x) => ({ ...x, status: "done", doneAt: now, fields: { ...vals }, history: hist(x, now, "Done") }));
   const s = d.settings;
   const feed = s.autoFeed && (s.mode === "fifo" || done.tasks.some((x) => x.assignee === pid && x.status === "assigned"));
   if (feed) {
@@ -443,8 +434,12 @@ export function output(d: Pick<WorkloadData, "fields" | "settings">, done: Task[
 export interface PersonMetrics {
   /** Output today in the team's productivity basis (tasks, or the chosen field). */
   out: number;
-  /** Overtime minutes reported today. */
+  /** Approved overtime minutes today (reported at end of work). */
   otMin: number;
+  /** Overtime reported today and still waiting for approval. */
+  otPending: number;
+  /** Minutes away today by kind (break, lunch, meeting, ad hoc, training). */
+  away: Record<string, number>;
   done: number;
   target: number;
   /** Target so far (target × elapsed fraction). */
@@ -462,20 +457,25 @@ export interface PersonMetrics {
 export function personMetrics(d: WorkloadData, p: Person, now: number): PersonMetrics {
   const s = d.settings;
   const today = dayKey(now);
-  const fr = elapsedFrac(p, s, now);
-  const avail = s.work.prod * H * fr;
+  const act = dayActivity(d, p.id, now);
+  // After End work, the day stops there.
+  const until = act.ended ? Math.min(now, act.ended.start) : now;
+  const fr = elapsedFrac(p, s, until);
+  // Time available for tasks: shift time so far minus time away. Unlogged time counts as
+  // available, except the planned breaks (Targets › Working time) when none were logged.
+  const avail = Math.max(0, s.work.shift * H * fr - Math.max(act.awayMs, (s.work.b1 + s.work.b2) * M * fr));
   const mine = d.tasks.filter((t) => t.assignee === p.id);
   const done = mine.filter((t) => t.status === "done" && t.doneAt !== null && dayKey(t.doneAt) === today);
-  const handle =
-    done.reduce((a, t) => a + (t.doneAt! - (t.startedAt ?? t.doneAt!)), 0) +
-    mine.filter((t) => t.status === "in_progress" && t.startedAt).reduce((a, t) => a + (now - t.startedAt!), 0);
+  const handle = done.concat(mine.filter((t) => t.status === "in_progress")).reduce((a, t) => a + taskWorkMs(d, t, until), 0);
   const target = targetOf(p, s);
   const tgt = target * fr;
   const onTime = done.filter((t) => t.doneAt! <= due(t, s)).length;
   const out = output(d, done);
   return {
     out,
-    otMin: done.reduce((a, t) => a + (t.otMin ?? 0), 0),
+    otMin: act.otApproved,
+    otPending: act.otPending,
+    away: act.away,
     done: done.length,
     target,
     tgt,
@@ -492,3 +492,125 @@ export const doneToday = (tasks: Task[], now: number) => {
   const today = dayKey(now);
   return tasks.filter((t) => t.status === "done" && t.doneAt !== null && dayKey(t.doneAt) === today);
 };
+
+// ── status: breaks, meetings, end of day, overtime ──
+
+export const AWAY: [Exclude<ActivityKind, "end">, string][] = [
+  ["break", "Break"],
+  ["lunch", "Lunch"],
+  ["meeting", "Meeting"],
+  ["adhoc", "Ad hoc"],
+  ["training", "Training"],
+];
+export const awayLabel = (k: ActivityKind) => AWAY.find(([x]) => x === k)?.[1] ?? "End of day";
+
+const sameDay = (a: number, b: number) => dayKey(a) === dayKey(b);
+/** The member's ongoing away entry, if any. */
+export const currentAway = (d: WorkloadData, pid: number) => d.activities.find((a) => a.pid === pid && a.kind !== "end" && a.end === null);
+/** The member's end-of-day entry for today, if they've ended work. */
+export const endedToday = (d: WorkloadData, pid: number, now: number) => d.activities.find((a) => a.pid === pid && a.kind === "end" && sameDay(a.start, now));
+
+const closeAway = (list: Activity[], pid: number, now: number) =>
+  list.map((a) => (a.pid === pid && a.kind !== "end" && a.end === null ? { ...a, end: now } : a));
+const newActivity = (pid: number, kind: ActivityKind, now: number, extra: Partial<Activity> = {}): Activity => ({
+  id: `A-${pid}-${now.toString(36)}`,
+  pid,
+  kind,
+  start: now,
+  end: kind === "end" ? now : null,
+  otMin: 0,
+  otStatus: null,
+  decidedBy: null,
+  decidedAt: null,
+  ...extra,
+});
+
+/** Go on a break / lunch / meeting / ad hoc / training (ends any other one). A task in progress keeps running but the time away isn't counted on it. */
+export function startAway(d: WorkloadData, pid: number, kind: ActivityKind, now: number): Outcome {
+  if (kind === "end" || !AWAY.some(([k]) => k === kind) || !personOf(d, pid)) return { data: d };
+  if (endedToday(d, pid, now)) return { data: d, message: "You’ve ended work for today." };
+  const cur = currentAway(d, pid);
+  if (cur?.kind === kind) return { data: d };
+  return { data: { ...d, activities: closeAway(d.activities, pid, now).concat(newActivity(pid, kind, now)) }, message: `${awayLabel(kind)} started.` };
+}
+
+export function backToWork(d: WorkloadData, pid: number, now: number): Outcome {
+  const cur = currentAway(d, pid);
+  if (!cur) return { data: d };
+  return { data: { ...d, activities: closeAway(d.activities, pid, now) }, message: `Back to work after ${fmtMin(Math.round((now - cur.start) / 60000))} ${awayLabel(cur.kind).toLowerCase()}.` };
+}
+
+/** Minutes worked past the end of today's shift so far (0 during or before the shift). */
+export function pastShiftMin(p: Person, s: Settings, now: number) {
+  const e = (localHour(now) - p.shiftStart + 24) % 24;
+  // Up to 12 hours past the shift end counts as overtime; beyond that it's before the next shift.
+  return e >= s.work.shift && e - s.work.shift <= 12 ? Math.round((e - s.work.shift) * 60) : 0;
+}
+
+/**
+ * End the working day. The member reports overtime only when they end after their
+ * shift (at most the time past it); it waits for approval by an admin or lead.
+ */
+export function endWork(d: WorkloadData, pid: number, otMin: number, now: number): Outcome {
+  const me = personOf(d, pid);
+  if (!me || endedToday(d, pid, now)) return { data: d };
+  if (isBusy(d.tasks, pid)) return { data: d, message: "Finish your task or put it on hold before you end work." };
+  const ot = Math.max(0, Math.min(Math.round(Number(otMin) || 0), pastShiftMin(me, d.settings, now)));
+  const end = newActivity(pid, "end", now, { otMin: ot, otStatus: ot ? "pending" : null });
+  return {
+    data: { ...d, activities: closeAway(d.activities, pid, now).concat(end) },
+    message: ot ? `Work ended. ${fmtMin(ot)} overtime sent for approval.` : "Work ended. See you next shift.",
+  };
+}
+
+/** Take back today's end of work (e.g. pressed by mistake), unless its overtime was already decided. */
+export function undoEndWork(d: WorkloadData, pid: number, now: number): Outcome {
+  const e = endedToday(d, pid, now);
+  if (!e || (e.otStatus && e.otStatus !== "pending")) return { data: d };
+  return { data: { ...d, activities: d.activities.filter((a) => a.id !== e.id) }, message: "You’re back at work." };
+}
+
+/** Approve or decline reported overtime (admins and leads, not their own). */
+export function decideOt(d: WorkloadData, id: string, st: "approved" | "declined", by: number, now: number): Outcome {
+  const a = d.activities.find((x) => x.id === id);
+  if (!a || a.kind !== "end" || a.otStatus !== "pending" || a.pid === by || !d.approvers.includes(by)) return { data: d };
+  const who = personOf(d, a.pid)?.name ?? "the member";
+  return {
+    data: { ...d, activities: d.activities.map((x) => (x.id === id ? { ...x, otStatus: st, decidedBy: by, decidedAt: now } : x)) },
+    message: `${fmtMin(a.otMin)} overtime ${st} for ${who}.`,
+  };
+}
+
+/** Minutes of each away kind today (ongoing ones up to now), and approved / pending overtime. */
+export function dayActivity(d: WorkloadData, pid: number, now: number) {
+  const mine = d.activities.filter((a) => a.pid === pid && sameDay(a.start, now));
+  const away: Record<string, number> = {};
+  let awayMs = 0;
+  for (const a of mine) {
+    if (a.kind === "end") continue;
+    const ms = (a.end ?? now) - a.start;
+    away[a.kind] = (away[a.kind] ?? 0) + Math.round(ms / 60000);
+    awayMs += ms;
+  }
+  const end = mine.find((a) => a.kind === "end");
+  return {
+    away,
+    awayMs,
+    otApproved: end?.otStatus === "approved" ? end.otMin : 0,
+    otPending: end?.otStatus === "pending" ? end.otMin : 0,
+    ended: end ?? null,
+  };
+}
+
+/** Time a task was worked, minus the member's time away while it was open. */
+function taskWorkMs(d: WorkloadData, t: Task, now: number) {
+  if (!t.startedAt) return 0;
+  const to = t.doneAt ?? now;
+  let ms = to - t.startedAt;
+  for (const a of d.activities) {
+    if (a.pid !== t.assignee || a.kind === "end") continue;
+    const ov = Math.min(to, a.end ?? now) - Math.max(t.startedAt, a.start);
+    if (ov > 0) ms -= ov;
+  }
+  return Math.max(0, ms);
+}
