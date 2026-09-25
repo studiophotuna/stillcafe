@@ -1225,6 +1225,85 @@ function OrgImportDialog() {
   );
 }
 
+/** Admins of a department or tower: they administer every team under it. */
+function NodeAdminsDialog({ id }: { id: string }) {
+  const s = useCalendar();
+  const { O } = s.cal;
+  const n = O.by[id];
+  const [pick, setPick] = useState("");
+  if (!n) return null;
+  const admins = n.admins ?? [];
+  const close = () => s.setDialog(null);
+  // Suggest people allocated here (directors and managers first), then everyone else.
+  const rank: Record<string, number> = { director: 0, manager: 1, lead: 2, member: 3 };
+  const cands = s.data.people
+    .filter((p) => !admins.includes(p.id) && !(p.resign && p.resign < s.today))
+    .sort((a, b) => Number(O.inN(b, id)) - Number(O.inN(a, id)) || rank[a.level] - rank[b.level] || a.name.localeCompare(b.name));
+  const kind = n.type === "dept" ? "department" : "tower";
+  return (
+    <Modal onClose={close} width={560}>
+      <div className="dialog-scroll" style={{ padding: 20 }}>
+        <Title>Admins of {n.name}</Title>
+        <Note>
+          Admins of this {kind} have admin rights in every team under it: approvals, members, settings, schedules and Workload — the same as each
+          team’s own admins.
+        </Note>
+        {admins.length ? (
+          <table className="table">
+            <tbody>
+              {admins.map((pid) => {
+                const p = s.cal.people.get(pid);
+                return (
+                  <tr key={pid}>
+                    <td style={{ fontWeight: 500 }}>
+                      {p?.name ?? `#${pid}`}
+                      <div className="small">{p ? LEVELS[p.level] : ""}</div>
+                    </td>
+                    <td style={{ textAlign: "right" }}>
+                      <button className="btn btn-ghost" onClick={() => s.run({ type: "removeAdmin", id, pid })}>
+                        Remove
+                      </button>
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        ) : (
+          <span className="small">No admins yet.</span>
+        )}
+        <div style={{ display: "flex", gap: 8, alignItems: "flex-end" }}>
+          <div className="field" style={{ flex: 1 }}>
+            <label htmlFor="na-p">Add an admin</label>
+            <select id="na-p" className="input" value={pick} onChange={(e) => setPick(e.target.value)}>
+              <option value="">Choose a person</option>
+              {cands.map((p) => (
+                <option key={p.id} value={p.id}>
+                  {p.name} · {LEVELS[p.level]}
+                  {O.inN(p, id) ? "" : " (not allocated here)"}
+                </option>
+              ))}
+            </select>
+          </div>
+          <button
+            className="btn btn-secondary btn-40"
+            disabled={!pick}
+            onClick={() => {
+              s.run({ type: "addAdmin", id, pid: Number(pick) });
+              setPick("");
+            }}
+          >
+            Add
+          </button>
+        </div>
+        <div className="dialog-actions">
+          <PrimaryBtn onClick={close}>Done</PrimaryBtn>
+        </div>
+      </div>
+    </Modal>
+  );
+}
+
 export function CalDialogs() {
   const { dialog: d } = useCalendar();
   if (!d) return null;
@@ -1253,5 +1332,7 @@ export function CalDialogs() {
       return <EventDialog />;
     case "orgImport":
       return <OrgImportDialog />;
+    case "nodeAdmins":
+      return <NodeAdminsDialog id={d.id} />;
   }
 }

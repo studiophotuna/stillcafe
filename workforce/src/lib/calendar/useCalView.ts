@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo } from "react";
+import { isNodeAdmin } from "./org";
 import { useCalendar } from "./store";
 import type { OrgNode } from "./types";
 
@@ -19,6 +20,10 @@ export function useCalView() {
     // Directors and managers allocated to a department or tower see the teams under it.
     const above = meP.assign.filter((a) => O.by[a] && (O.by[a].type === "dept" || O.by[a].type === "tower"));
     const scoped = above.flatMap((a) => O.desc(a, "branch")).filter((b) => !myBranches.includes(b));
+    // Teams under a department / tower this person administers.
+    data.nodes.forEach((n) => {
+      if (n.type === "branch" && !myBranches.includes(n) && !scoped.includes(n) && isNodeAdmin(O, n.id, me)) scoped.push(n);
+    });
     const viewBranches = meP.sysAdmin
       ? myBranches.concat(data.nodes.filter((n) => n.type === "branch" && !myBranches.includes(n)))
       : myBranches.concat([...new Set(scoped)]);
@@ -31,8 +36,8 @@ export function useCalView() {
     const tower = O.up(branch.id, "tower")!;
     const bid = branch.id;
     const sys = !!meP.sysAdmin;
-    const isAdmin = sys || (branch.admins ?? []).includes(me);
-    const anyAdmin = sys || O.desc(dept.id, "branch").some((b) => (b.admins ?? []).includes(me));
+    const isAdmin = sys || isNodeAdmin(O, branch.id, me);
+    const anyAdmin = sys || data.nodes.some((n) => (n.admins ?? []).includes(me) && O.anc(n.id).includes(dept.id));
     const isLeader = meP.level !== "member";
     const systems = O.kids(bid, "system");
     const system = systems.some((x) => x.id === sel.system) ? sel.system : "all";

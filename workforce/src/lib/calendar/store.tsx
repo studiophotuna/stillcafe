@@ -47,6 +47,7 @@ export type CalDialog =
   | { kind: "checkin"; pid: number; evId: string }
   | { kind: "event" }
   | { kind: "orgImport" }
+  | { kind: "nodeAdmins"; id: string }
   | null;
 
 interface Store {

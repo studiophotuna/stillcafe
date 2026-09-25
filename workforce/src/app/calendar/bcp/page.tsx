@@ -4,6 +4,7 @@ import { useState } from "react";
 import { Blueprint, Icon } from "@/components/ui";
 import { BCP_CLS, BCP_KEYS, BCP_ST, RD_CLS, RD_L, READY_F } from "@/lib/calendar/constants";
 import { fmtY } from "@/lib/calendar/dates";
+import { isNodeAdmin } from "@/lib/calendar/org";
 import { useCalendar } from "@/lib/calendar/store";
 import { useCalView } from "@/lib/calendar/useCalView";
 import type { BcpStatus, CalPerson } from "@/lib/calendar/types";
@@ -23,7 +24,7 @@ export default function BcpPage() {
   const stOf = (p: CalPerson): BcpStatus => ci[p.id]?.status || "none";
   const scoped = s.data.people.filter(inScope).sort(byName);
   const canSee = v.isLeader || v.anyAdmin;
-  const canEditP = (p: CalPerson) => O.branchesOf(p).some((b) => (b.admins ?? []).includes(s.me));
+  const canEditP = (p: CalPerson) => !!v.meP.sysAdmin || O.branchesOf(p).some((b) => isNodeAdmin(O, b.id, s.me));
   const myIn = !!ev && ev.status === "active" && inScope(v.meP);
   const myCi = ci[s.me];
   const rdOf = (p: CalPerson) => {

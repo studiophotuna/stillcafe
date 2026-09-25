@@ -47,6 +47,8 @@ the bottom of the side menu switches between the admin (Sam Delgado) and a membe
   `src/lib/workload/authz.ts`): members act only as themselves; team admins manage their team's
   people, schedule and settings; a **system admin** (`sysAdmin` on the person, set for the first
   administrator) can do everything, and only a system admin can change another system admin.
+  **Department and tower admins** (Calendar › Organization › Admins on a department or tower,
+  e.g. its director or manager) are admins of every team under it, in Calendar and Workload.
   The database also refuses non-admin changes to people, org, schedules, shifts, holidays,
   BCP events and Workload settings.
 - **First administrator:** created directly in the database (see *Starting fresh* below).
@@ -113,6 +115,10 @@ Both modules save to Supabase: schema `workforce` in the stillcafe project
   get an Upload tasks page). Required fields may be blank in the file; they must be filled
   before the task can be marked done, and My work shows what's missing.
 - **Who sees tasks:** only people who can open the team (see above); the server refuses others.
+- **On hold:** time on hold doesn't count on the task timer; task details list each hold with
+  its dates and reason, and Task history shows time on hold (CSV: minutes, dates and reasons).
+- **Due time and weekends:** Allocation › “Count weekends in the due time”; unticked, Saturdays
+  and Sundays are skipped both for the due time and for how long a task is overdue.
 - **Timers:** going on a break/lunch/meeting/ad hoc/training opens a pop-up with a running timer
   and Back to work (can be minimized to a corner chip on every Workload page). The current task
   shows its running time (paused while away) and start time; task details show started,

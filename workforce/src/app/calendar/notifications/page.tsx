@@ -2,12 +2,13 @@
 
 import { useState } from "react";
 import { Blueprint, Icon } from "@/components/ui";
+import { isNodeAdmin } from "@/lib/calendar/org";
 import { useCalendar } from "@/lib/calendar/store";
 
 export default function NotificationsPage() {
   const s = useCalendar();
   const { O } = s.cal;
-  const vis = s.data.logs.filter((l) => (O.by[l.did]?.admins ?? []).includes(s.me) || l.toIds.includes(s.me));
+  const vis = s.data.logs.filter((l) => (O.by[l.did] && isNodeAdmin(O, l.did, s.me)) || l.toIds.includes(s.me));
   const [sel, setSel] = useState<string | null>(null);
   const L = vis.find((l) => l.id === sel) ?? vis[0];
   const kind = (k: string) => (k === "invite" ? "Outlook reminder" : "Email");

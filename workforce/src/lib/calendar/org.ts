@@ -87,3 +87,10 @@ export function allocProblem(O: Pick<Org, "by">, level: Level, assign: string[])
     return `Choose ${allocNeeds(level)} for each allocation.`;
   return "";
 }
+
+/**
+ * Whether `pid` is an admin of a node: listed on it or on any node above it. Admins of a
+ * department (e.g. its director) or tower (e.g. its manager) administer every team under it.
+ */
+export const isNodeAdmin = (O: Pick<Org, "anc" | "by">, id: string, pid: number) =>
+  O.anc(id).some((n) => (O.by[n]?.admins ?? []).includes(pid));

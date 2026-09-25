@@ -139,6 +139,8 @@ export interface Settings {
   staleDays?: number;
   /** Task field holding the ticket number (Queue column and search). Default: a "ticket" field. */
   ticketField?: string;
+  /** false: Saturdays and Sundays don't count toward the SLA / due time. Default true. */
+  slaWeekends?: boolean;
 }
 
 export interface Toast {

@@ -3,7 +3,7 @@
  * these; a server implementation (Supabase RPC / route handlers) must apply
  * the same rules. See ../../../README.md › Workload rules.
  */
-import { H, M, dayKey, localHour } from "./clock";
+import { H, M, addHours, dayKey, localHour, spanMs } from "./clock";
 import { CARRIERS, PR, fieldOptions, lc, sysName, trPathOf } from "./constants";
 import { SAMPLE_MAIL } from "./seed";
 import type { Activity, ActivityKind, Person, Priority, Settings, Task, TaskField, WlOrg } from "./types";
@@ -53,7 +53,11 @@ export interface Outcome {
 
 const PRIORITY_WEIGHT: Record<Priority, number> = { high: 0, normal: 1, low: 2 };
 
-export const due = (t: Task, s: Settings) => t.received + (s.sla[t.pr] || 24) * H;
+/** Weekend hours count toward the SLA unless the team turned that off (Allocation). */
+export const skipsWeekends = (s: Settings) => s.slaWeekends === false;
+export const due = (t: Task, s: Settings) => addHours(t.received, s.sla[t.pr] || 24, skipsWeekends(s));
+/** How long a task is overdue (weekends excluded when the SLA excludes them). */
+export const overdueMs = (t: Task, s: Settings, now: number) => spanMs(due(t, s), t.doneAt ?? now, skipsWeekends(s));
 export const isOverdue = (t: Task, s: Settings, now: number) => t.status !== "done" && now > due(t, s);
 
 export function sortTasks(list: Task[], s: Settings): Task[] {
@@ -602,17 +606,39 @@ export function dayActivity(d: WorkloadData, pid: number, now: number) {
   };
 }
 
-/** Time a task was worked, minus the member's time away while it was open. */
+/**
+ * Periods a task was on hold (pending), from its history: each "On hold: reason" entry
+ * until the next change (e.g. "Resumed"), or until now while it's still on hold.
+ */
+export function holdPeriods(t: Task, now: number): { from: number; to: number | null; reason: string }[] {
+  const out: { from: number; to: number | null; reason: string }[] = [];
+  t.history.forEach((h, i) => {
+    if (!h.text.startsWith("On hold")) return;
+    const next = t.history.slice(i + 1).find((x) => x.at >= h.at);
+    const to = next ? next.at : t.status === "on_hold" ? null : (t.doneAt ?? now);
+    out.push({ from: h.at, to, reason: h.text.replace(/^On hold:?\s*/, "") || t.hold });
+  });
+  return out;
+}
+
+/** Time a task was worked: start to finish (or now), minus time on hold and the member's time away. */
 export function taskWorkMs(d: WorkloadData, t: Task, now: number) {
   if (!t.startedAt) return 0;
+  const from = t.startedAt;
   const to = t.doneAt ?? now;
-  let ms = to - t.startedAt;
-  for (const a of d.activities) {
-    if (a.pid !== t.assignee || a.kind === "end") continue;
-    const ov = Math.min(to, a.end ?? now) - Math.max(t.startedAt, a.start);
-    if (ov > 0) ms -= ov;
+  // Excluded time: hold periods plus the assignee's breaks etc., merged so overlaps count once.
+  const ex: [number, number][] = holdPeriods(t, now).map((p) => [p.from, p.to ?? now]);
+  for (const a of d.activities) if (a.pid === t.assignee && a.kind !== "end") ex.push([a.start, a.end ?? now]);
+  ex.sort((a, b) => a[0] - b[0]);
+  let off = 0;
+  let cur = -Infinity;
+  for (const [s0, e0] of ex) {
+    const s1 = Math.max(s0, from, cur);
+    const e1 = Math.min(e0, to);
+    if (e1 > s1) off += e1 - s1;
+    cur = Math.max(cur, Math.min(e0, to));
   }
-  return Math.max(0, ms);
+  return Math.max(0, to - from - off);
 }
 
 /** The team's ticket-number field: settings.ticketField, else a field called "ticket" / "Ticket …". */

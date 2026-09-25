@@ -73,8 +73,8 @@ export function peopleFromCalendar(c: Cal, now: number, teamId: string): Person[
 
 /** Team admins of the team plus system admins. */
 export function workloadAdmins(c: Cal, teamId: string): number[] {
-  const team = c.O.by[teamId];
-  const ids = new Set<number>(team?.admins ?? []);
+  // The team's admins and the admins of its tower and department.
+  const ids = new Set<number>(c.O.anc(teamId).flatMap((n) => c.O.by[n]?.admins ?? []));
   c.d.people.forEach((p) => p.sysAdmin && ids.add(p.id));
   return [...ids];
 }

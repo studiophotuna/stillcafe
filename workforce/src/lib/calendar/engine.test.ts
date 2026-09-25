@@ -342,3 +342,25 @@ describe("allocation depth by role", async () => {
     expect(rows[1].member?.leaf).toBe("t_rm");
   });
 });
+
+describe("department and tower admins", async () => {
+  const { authorizeCal, rightsOf, visibleTeams } = await import("./authz");
+  it("gives a department or tower admin rights in every team under it", () => {
+    const d = fresh();
+    d.nodes = d.nodes.map((n) => (n.id === "t_rm" ? { ...n, admins: [ANA] } : n));
+    const c = new Cal(d, TODAY);
+    const r = rightsOf(c, ANA);
+    expect(r.teamAdmin("rm")).toBe(true);
+    expect(r.teamAdmin("cs")).toBe(false); // other tower
+    expect(r.adminOf(15)).toBe(true); // Leo, in Rate Management
+    expect(visibleTeams(c, ANA).map((b) => b.id).sort()).toEqual(["cs", "rm"]);
+    expect("action" in authorizeCal({ type: "decide", rid: "x", bid: "rm", st: "approved", actor: ANA }, c, ANA)).toBe(true);
+  });
+  it("lets a department or tower lose its last admin, not a team", () => {
+    let d = run(fresh(), { type: "addAdmin", id: "bss", pid: SAM }).data;
+    d = run(d, { type: "removeAdmin", id: "bss", pid: SAM }).data;
+    expect(d.nodes.find((n) => n.id === "bss")!.admins).toEqual([]);
+    const only = fresh().nodes.find((n) => n.id === "rm")!.admins!;
+    if (only.length === 1) expect(run(fresh(), { type: "removeAdmin", id: "rm", pid: only[0] }).data.nodes.find((n) => n.id === "rm")!.admins).toEqual(only);
+  });
+});
