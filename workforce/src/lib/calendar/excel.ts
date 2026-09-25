@@ -253,3 +253,124 @@ export async function readCalendarUpload(file: File, mode: UploadMode): Promise<
   const rows = rowsToObjects(t);
   return mode === "members" ? rows.filter((r) => String(r.Name ?? "").trim() || String(r.Email ?? "").trim()) : rows;
 }
+
+/**
+ * Headcount monitoring workbook: one sheet per tower, laid out like the team's existing
+ * file — Cost Centre, Process, Employee, Sub Process, FTE, then Actual / Billed per month,
+ * with totals without and with the team leads.
+ */
+export async function downloadHeadcount(towers: import("./headcount").HcTower[], year: number, title: string) {
+  const { default: ExcelJS } = await import("exceljs");
+  const { MONTHS } = await import("./headcount");
+  const wb = new ExcelJS.Workbook();
+  wb.creator = "Workforce Management";
+  const NAVY = "FF0B2265";
+  const GREY = "FFD9D9D9";
+  const TEAM = "FFDCE3EF";
+  const LEAD = "FF8EA9DB";
+  const ZERO = "FFF8CBAD";
+  const TOTAL = "FFEBF1DE";
+  const thin = { style: "thin" as const, color: { argb: "FFBFBFBF" } };
+  const border = { top: thin, left: thin, bottom: thin, right: thin };
+  const used = new Set<string>();
+  for (const t of towers) {
+    // Sheet names: max 31 chars, unique, no []:*?/\
+    let nm = t.name.replace(/[[\]:*?/\\]/g, " ").slice(0, 31).trim() || "Tower";
+    for (let i = 2; used.has(nm); i++) nm = `${nm.slice(0, 28)} ${i}`;
+    used.add(nm);
+    const ws = wb.addWorksheet(nm, { views: [{ state: "frozen", xSplit: 5, ySplit: 4 }] });
+    ws.getCell(1, 1).value = `${title} ${year} – ${t.name.toUpperCase()}`;
+    ws.getCell(1, 1).font = { bold: true, size: 12 };
+    const hdr = ["Cost Centre", "PROCESS", "EMPLOYEE NAME", "Sub Process", "FTE Allocation"];
+    hdr.forEach((h, i) => {
+      ws.mergeCells(3, i + 1, 4, i + 1);
+      const c = ws.getCell(3, i + 1);
+      c.value = h;
+    });
+    MONTHS.forEach((m, i) => {
+      const col = 6 + i * 2;
+      ws.mergeCells(3, col, 3, col + 1);
+      ws.getCell(3, col).value = m;
+      ws.getCell(4, col).value = "Actual";
+      ws.getCell(4, col + 1).value = "Billed";
+    });
+    const last = 5 + MONTHS.length * 2;
+    for (let r = 3; r <= 4; r++)
+      for (let c = 1; c <= last; c++) {
+        const cell = ws.getCell(r, c);
+        cell.font = { bold: true, color: { argb: "FFFFFFFF" } };
+        cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: NAVY } };
+        cell.alignment = { horizontal: "center", vertical: "middle", wrapText: true };
+        cell.border = border;
+      }
+    ws.getColumn(1).width = 16;
+    ws.getColumn(2).width = 22;
+    ws.getColumn(3).width = 30;
+    ws.getColumn(4).width = 24;
+    ws.getColumn(5).width = 10;
+    for (let c = 6; c <= last; c++) ws.getColumn(c).width = 7.5;
+
+    let r = 5;
+    for (const tm of t.teams) {
+      const start = r;
+      for (const row of tm.rows) {
+        ws.getCell(r, 3).value = row.name;
+        ws.getCell(r, 4).value = row.sub;
+        ws.getCell(r, 5).value = row.fte;
+        row.months.forEach((m, i) => {
+          const col = 6 + i * 2;
+          ws.getCell(r, col).value = m.actual;
+          ws.getCell(r, col + 1).value = m.billed;
+          for (const [cc, v] of [[col, m.actual], [col + 1, m.billed]] as const) {
+            const cell = ws.getCell(r, cc);
+            cell.alignment = { horizontal: "center" };
+            if (v === null) cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: GREY } };
+            else if (v === 0 && m.actual === 0) cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: ZERO } };
+          }
+        });
+        if (row.lead)
+          for (let c = 3; c <= 5; c++) {
+            ws.getCell(r, c).font = { bold: true };
+            ws.getCell(r, c).fill = { type: "pattern", pattern: "solid", fgColor: { argb: LEAD } };
+          }
+        for (let c = 3; c <= last; c++) ws.getCell(r, c).border = border;
+        r++;
+      }
+      const end = Math.max(start, r - 1);
+      if (r === start) r++; // empty team: keep one row
+      if (end > start) {
+        ws.mergeCells(start, 1, end, 1);
+        ws.mergeCells(start, 2, end, 2);
+      }
+      ws.getCell(start, 1).value = tm.costCentre;
+      ws.getCell(start, 2).value = tm.name;
+      for (const c of [1, 2]) {
+        const cell = ws.getCell(start, c);
+        cell.alignment = { horizontal: "center", vertical: "middle", wrapText: true };
+        cell.font = { bold: true };
+        cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: TEAM } };
+        cell.border = border;
+      }
+      for (const [label, tot] of [[`Total ${tm.name} without TL`, tm.without], [`Total ${tm.name} with TL`, tm.withTl]] as const) {
+        ws.mergeCells(r, 3, r, 5);
+        ws.getCell(r, 3).value = label;
+        ws.getCell(r, 3).alignment = { horizontal: "right" };
+        tot.forEach((x, i) => {
+          ws.getCell(r, 6 + i * 2).value = x.actual;
+          ws.getCell(r, 7 + i * 2).value = x.billed;
+        });
+        for (let c = 3; c <= last; c++) {
+          const cell = ws.getCell(r, c);
+          cell.font = { bold: true };
+          cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: TOTAL } };
+          cell.border = border;
+          if (c >= 6) cell.alignment = { horizontal: "center" };
+        }
+        r++;
+      }
+      r++;
+    }
+  }
+  if (!towers.length) wb.addWorksheet("Headcount");
+  await save(await wb.xlsx.writeBuffer(), `Headcount_${year}.xlsx`);
+}

@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import { Blueprint, Icon } from "@/components/ui";
 import { TYPE_L } from "@/lib/calendar/constants";
 import { useCalendar } from "@/lib/calendar/store";
@@ -93,6 +94,51 @@ export default function OrganizationPage() {
           );
         })}
       </Blueprint>
+      {v.meP.sysAdmin && <AppLinksPanel />}
     </>
+  );
+}
+
+/** System admins: BIPO links (shown after leave / overtime approval) and links everyone sees in Quick links. */
+function AppLinksPanel() {
+  const s = useCalendar();
+  const l = s.data.links ?? {};
+  const [leave, setLeave] = useState(l.bipoLeave ?? "");
+  const [ot, setOt] = useState(l.bipoOt ?? "");
+  const [quick, setQuick] = useState<{ label: string; url: string }[]>(l.quick ?? []);
+  const save = () => s.run({ type: "setLinks", links: { bipoLeave: leave, bipoOt: ot, quick: quick.filter((q) => q.label.trim() && q.url.trim()) } });
+  return (
+    <Blueprint as="section" className="panel">
+      <h2 className="h2">App links</h2>
+      <span className="small">Addresses must start with https://. Only system admins see this.</span>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(320px,1fr))", gap: 12 }}>
+        <div className="field">
+          <label htmlFor="bipo-l">BIPO — filing approved leave</label>
+          <input id="bipo-l" className="input" value={leave} onChange={(e) => setLeave(e.target.value)} placeholder="https://…" />
+        </div>
+        <div className="field">
+          <label htmlFor="bipo-o">BIPO — filing approved overtime</label>
+          <input id="bipo-o" className="input" value={ot} onChange={(e) => setOt(e.target.value)} placeholder="https://…" />
+        </div>
+      </div>
+      <span className="small" style={{ fontSize: 12 }}>Quick links everyone sees (members add their own on top)</span>
+      {quick.map((q, i) => (
+        <div key={i} style={{ display: "flex", gap: 8 }}>
+          <input className="input" aria-label="Name" value={q.label} maxLength={40} onChange={(e) => setQuick(quick.map((x, j) => (j === i ? { ...x, label: e.target.value } : x)))} style={{ width: 200 }} />
+          <input className="input" aria-label="Address" value={q.url} onChange={(e) => setQuick(quick.map((x, j) => (j === i ? { ...x, url: e.target.value } : x)))} style={{ flex: 1 }} />
+          <button className="btn btn-ghost" onClick={() => setQuick(quick.filter((_, j) => j !== i))}>
+            Remove
+          </button>
+        </div>
+      ))}
+      <div className="row">
+        <button className="btn btn-secondary btn-36" onClick={() => setQuick(quick.concat({ label: "", url: "https://" }))}>
+          Add a shared link
+        </button>
+        <Blueprint as="button" className="btn btn-primary btn-36" style={{ padding: "0 16px" }} onClick={save}>
+          Save links
+        </Blueprint>
+      </div>
+    </Blueprint>
   );
 }

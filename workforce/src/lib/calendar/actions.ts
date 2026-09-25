@@ -9,7 +9,7 @@ import { Cal, logsDecision, logsSubmit } from "./engine";
 import { allocProblem, teamDefaults } from "./org";
 import { planOrgImport, type OrgRow } from "./orgImport";
 import { applyUpload, checkUpload, type UploadMode, type UploadRow } from "./uploads";
-import type {
+import type { AppLinks,
   BcpEvent, BcpStatus, CalendarData, Code, Holiday, LeaveRequest, Level, NodeType, NotifLog, OrgNode, Shift,
 } from "./types";
 import type { ReadyKey } from "./constants";
@@ -28,7 +28,9 @@ export type CalAction =
   | { type: "cancelRequest"; rid: string; via: "self" | "admin" }
   | { type: "setOverride"; pid: number; date: string; code: Code | null }
   | { type: "setShiftDay"; pid: number; date: string; shift: string }
-  | { type: "teamSettings"; id: string; patch: Pick<OrgNode, "mode" | "notifyAdmin" | "notifyUser" | "invite" | "defaultScope"> }
+  | { type: "teamSettings"; id: string; patch: Partial<Pick<OrgNode, "mode" | "notifyAdmin" | "notifyUser" | "invite" | "defaultScope" | "costCentre">> }
+  | { type: "setBilled"; pid: number; bid: string; months: string[]; value: number | null }
+  | { type: "setLinks"; links: AppLinks }
   | { type: "addAdmin"; id: string; pid: number }
   | { type: "removeAdmin"; id: string; pid: number }
   | { type: "addNode"; ntype: NodeType; parent: string | null; name: string; actor: number }
@@ -205,8 +207,43 @@ export function applyCalAction(d: CalendarData, a: CalAction, today: string, now
         data: { ...d, roster: { ...d.roster, [a.pid + "|" + a.date]: a.shift } },
         message: `Shift updated for ${first(c.person(a.pid).name)}.`,
       };
-    case "teamSettings":
-      return { data: setNode(d, a.id, a.patch), message: "Saved." };
+    case "teamSettings": {
+      // Only these settings; admins, parent etc. change through their own actions.
+      const p = a.patch ?? {};
+      const patch: Partial<OrgNode> = {};
+      if (p.mode === "auto" || p.mode === "approval") patch.mode = p.mode;
+      if (p.defaultScope === "all" || p.defaultScope === "me") patch.defaultScope = p.defaultScope;
+      for (const k of ["notifyAdmin", "notifyUser", "invite"] as const) if (typeof p[k] === "boolean") patch[k] = p[k];
+      if (typeof p.costCentre === "string") patch.costCentre = p.costCentre.trim().slice(0, 40);
+      if (!c.O.by[a.id] || !Object.keys(patch).length) return { data: d };
+      return { data: setNode(d, a.id, patch), message: "Saved." };
+    }
+    case "setBilled": {
+      // Headcount report: billed FTE for a person in a team for some months (null = back to the default).
+      if (!c.people.has(a.pid) || !c.O.by[a.bid] || !Array.isArray(a.months) || a.months.length > 12) return { data: d };
+      if (a.value !== null && !(typeof a.value === "number" && a.value >= 0 && a.value <= 1)) return { data: d, error: "Billed must be between 0 and 1." };
+      const billing = { ...(d.billing ?? {}) };
+      for (const m of a.months) {
+        if (!/^\d{4}-\d{2}$/.test(m)) continue;
+        const k = `${a.pid}|${a.bid}|${m}`;
+        if (a.value === null) delete billing[k];
+        else billing[k] = Math.round(a.value * 100) / 100;
+      }
+      return { data: { ...d, billing }, message: "Billed updated." };
+    }
+    case "setLinks": {
+      const ok = (u: unknown) => typeof u === "string" && /^https:\/\/\S{3,490}$/.test(u.trim());
+      const l = a.links ?? {};
+      const links: AppLinks = {
+        bipoLeave: ok(l.bipoLeave) ? l.bipoLeave!.trim() : undefined,
+        bipoOt: ok(l.bipoOt) ? l.bipoOt!.trim() : undefined,
+        quick: (Array.isArray(l.quick) ? l.quick : [])
+          .filter((q) => q && ok(q.url) && typeof q.label === "string" && q.label.trim())
+          .slice(0, 20)
+          .map((q) => ({ label: q.label.trim().slice(0, 40), url: q.url.trim() })),
+      };
+      return { data: { ...d, links }, message: "Links saved." };
+    }
     case "addAdmin": {
       const b = c.O.by[a.id];
       if (!b || b.admins?.includes(a.pid)) return { data: d };

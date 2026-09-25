@@ -75,6 +75,10 @@ export function authorizeCal(a: CalAction, c: Cal, me: number): { action: CalAct
     case "addAdmin":
     case "removeAdmin":
       return ok(r.teamAdmin(a.id));
+    case "setBilled":
+      return ok(r.teamAdmin(a.bid));
+    case "setLinks":
+      return ok(r.sys);
     case "saveMember": {
       // Name, email and leave balances: only for people this admin already manages
       // (not someone just being added from another team), and system admins only by one.
