@@ -96,9 +96,16 @@ Both modules save to Supabase: schema `workforce` in the stillcafe project
   in their own trades. When those are empty it asks whether they'll help with other trades
   and, if they agree, gives tasks from other trades in their system first, then the rest of
   the team (task history notes “helping …”). In “members pick” mode the same list appears.
-- **Overtime:** marking a task done outside the member's shift asks how much overtime it took
-  (suggested: the time outside the shift, at most the time on the task). Minutes are saved
-  per task (`ot_min`, migration 0005) and totalled per day on My work and the dashboard.
+- **Status and utilization:** My work has Break, Lunch, Meeting, Ad hoc and Training buttons
+  (and Back to work). Time away isn't counted on an open task, new work can't start until
+  the member is back, and utilization = time on tasks ÷ (shift time so far − time away);
+  planned breaks (Targets) are assumed only when none were logged. Stored in
+  `workforce.activity` (migration 0006).
+- **End work and overtime:** End work closes the day (not with a task in progress; undo is
+  possible until overtime is decided). Only when it's pressed after the shift does it ask for
+  overtime, at most the time past the shift. Overtime counts in the dashboard and the Overtime
+  report only after a Workload admin or a lead/manager/director of the team approves it (not
+  their own); the database enforces this too.
 - **Productivity** counts completed tasks by default; an admin can switch it (Targets) to the
   total of a number field (e.g. No. of contracts) or distinct values of any field (e.g. one
   per ticket). Targets are in that unit.
@@ -106,6 +113,20 @@ Both modules save to Supabase: schema `workforce` in the stillcafe project
   get an Upload tasks page). Required fields may be blank in the file; they must be filled
   before the task can be marked done, and My work shows what's missing.
 - **Who sees tasks:** only people who can open the team (see above); the server refuses others.
+- **Timers:** going on a break/lunch/meeting/ad hoc/training opens a pop-up with a running timer
+  and Back to work (can be minimized to a corner chip on every Workload page). The current task
+  shows its running time (paused while away) and start time; task details show started,
+  finished and time worked.
+- **Reminders:** a pop-up (once a day) lists open tasks received N days ago or more — the team's
+  for admins, their own for members — and overtime waiting that long for approvers. N is set
+  under Allocation (default 2, 0 = off).
+- **Queue:** Active and Completed tabs with a Day/Week/Month navigator (Active: by received
+  date, all dates by default; Completed: by finish date, today by default). Overdue rows are red
+  and rows due within 2 hours amber. A ticket-number column (Allocation › Ticket number field;
+  defaults to a field named “ticket”) is searchable.
+- **Task history:** completed tasks by day/week/month — members their own, admins and leads the
+  team's or their own — filtered by person, trade and timeliness, searchable, with totals and a
+  CSV including start and finish times and time worked.
 
 ### Starting fresh
 

@@ -10,6 +10,7 @@ type Row = { t: Task; v: number };
 const db = {
   team: null as null | { settings: unknown; fields: unknown; seq: number; mailCount: number; version: number },
   tasks: new Map<string, Row>(),
+  activities: new Map<string, { a: Record<string, unknown>; v: number }>(),
   /** Runs once just before the next apply — simulates someone else writing in between. */
   beforeApply: null as null | (() => void),
   applies: 0,
@@ -58,6 +59,17 @@ vi.mock("@supabase/supabase-js", () => ({
       if (args.p_token !== TOKEN) return { data: null, error: { message: "workforce_unauthorized" } };
       if (fn === "workforce_cal_snapshot") return { data: { data: structuredClone(calendar), version: 1 }, error: null };
       if (fn === "workforce_snapshot") return { data: structuredClone(snapshot()), error: null };
+      if (fn === "workforce_activities") return { data: [...db.activities.values()].map(({ a, v }) => ({ ...a, version: v })), error: null };
+      if (fn === "workforce_save_activities") {
+        for (const r of structuredClone((args as { p_rows: ({ id: string; version: number; deleted?: boolean } & Record<string, unknown>)[] }).p_rows)) {
+          const cur = db.activities.get(r.id);
+          if (r.version === 0 ? cur : !cur || cur.v !== r.version) return { data: null, error: { message: "workforce_conflict", details: "x" } };
+          const { version, deleted, ...a } = r;
+          if (deleted) db.activities.delete(r.id);
+          else db.activities.set(r.id, { a, v: version + 1 });
+        }
+        return { data: null, error: null };
+      }
       return apply(structuredClone(args.p_changes) as never);
     },
   }),
@@ -84,6 +96,7 @@ const runAction = (a: Parameters<typeof runAction0>[2], me = ADMIN) => runAction
 beforeEach(() => {
   db.team = null;
   db.tasks = new Map();
+  db.activities = new Map();
   db.beforeApply = null;
   db.applies = 0;
 });
@@ -116,6 +129,15 @@ describe("server persistence", () => {
     // Leo is only in Rate Management.
     await expect(getData0(TOKEN, LEO, "cs")).rejects.toThrow(/can’t open that team/);
     expect((await getData0(TOKEN, LEO)).org.team.id).toBe("rm");
+  });
+
+  it("saves time away and end of work, and approvals by a lead", async () => {
+    await getData();
+    const r = await runAction({ type: "away", kind: "meeting", pid: LEO }, ANA); // pid forced to Ana
+    expect(r.data.activities).toMatchObject([{ pid: ANA, kind: "meeting", end: null }]);
+    expect([...db.activities.values()]).toHaveLength(1);
+    await runAction({ type: "back", pid: ANA }, ANA);
+    expect([...db.activities.values()][0].a.end).not.toBeNull();
   });
 
   it("refuses sample mailbox emails in live data", async () => {

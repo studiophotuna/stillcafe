@@ -20,7 +20,17 @@ export function authorizeWl(a: Action, d: WorkloadData, me: number): { action: A
     case "startTask":
     case "resume":
     case "complete":
+    case "away":
+    case "back":
+    case "endWork":
+    case "undoEnd":
       return { action: { ...a, pid: me } };
+    case "decideOt": {
+      const x = d.activities.find((y) => y.id === a.id);
+      if (!d.approvers.includes(me)) return { error: "Only Workload admins and leads can approve overtime." };
+      if (x?.pid === me) return { error: "Someone else needs to approve your overtime." };
+      return { action: { ...a, by: me } };
+    }
     case "hold": {
       const t = d.tasks.find((x) => x.id === a.id);
       return t && (t.assignee === me || admin) ? { action: a } : { error: "You can only put your own task on hold." };

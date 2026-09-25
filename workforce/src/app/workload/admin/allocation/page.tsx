@@ -2,6 +2,7 @@
 
 import { Blueprint, PageHead } from "@/components/ui";
 import { MODES, PR } from "@/lib/workload/constants";
+import { ticketField } from "@/lib/workload/engine";
 import { useWorkload } from "@/lib/workload/store";
 import type { OrderRule, Priority, Settings } from "@/lib/workload/types";
 
@@ -98,6 +99,42 @@ export default function AllocationPage() {
           </div>
         </Blueprint>
       </div>
+      <Blueprint as="section" className="panel">
+        <h2 className="h2">Reminders and ticket number</h2>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(260px,1fr))", gap: 14, alignItems: "end" }}>
+          <div className="field">
+            <label htmlFor="stale">Remind about tasks waiting this many days (0 = off)</label>
+            <input
+              id="stale"
+              className="input"
+              type="number"
+              min={0}
+              max={60}
+              defaultValue={s.staleDays ?? 2}
+              onBlur={(e) => {
+                const v = Math.max(0, Math.min(60, Math.round(Number(e.target.value) || 0)));
+                e.target.value = String(v);
+                set({ staleDays: v });
+              }}
+            />
+            <span className="small" style={{ fontSize: 12 }}>
+              A pop-up lists open tasks received that long ago (admins: the team’s; members: their own), and overtime waiting that long for approvers. Once a day.
+            </span>
+          </div>
+          <div className="field">
+            <label htmlFor="tfield">Ticket number field</label>
+            <select id="tfield" className="input" value={ticketField(data)?.key ?? ""} onChange={(e) => set({ ticketField: e.target.value })}>
+              <option value="">None</option>
+              {data.fields.map((f) => (
+                <option key={f.key} value={f.key}>
+                  {f.label}
+                </option>
+              ))}
+            </select>
+            <span className="small" style={{ fontSize: 12 }}>Shown as the first column in Queue and Task history, and searchable.</span>
+          </div>
+        </div>
+      </Blueprint>
     </>
   );
 }
