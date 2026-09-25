@@ -603,7 +603,7 @@ export function dayActivity(d: WorkloadData, pid: number, now: number) {
 }
 
 /** Time a task was worked, minus the member's time away while it was open. */
-function taskWorkMs(d: WorkloadData, t: Task, now: number) {
+export function taskWorkMs(d: WorkloadData, t: Task, now: number) {
   if (!t.startedAt) return 0;
   const to = t.doneAt ?? now;
   let ms = to - t.startedAt;
@@ -613,4 +613,29 @@ function taskWorkMs(d: WorkloadData, t: Task, now: number) {
     if (ov > 0) ms -= ov;
   }
   return Math.max(0, ms);
+}
+
+/** The team's ticket-number field: settings.ticketField, else a field called "ticket" / "Ticket …". */
+export function ticketField(d: Pick<WorkloadData, "fields" | "settings">) {
+  const k = d.settings.ticketField;
+  if (k === "") return undefined; // switched off
+  return (k ? d.fields.find((f) => f.key === k) : undefined) ?? d.fields.find((f) => f.key === "ticket" || /ticket/i.test(f.label));
+}
+export const ticketOf = (d: Pick<WorkloadData, "fields" | "settings">, t: Task) => {
+  const f = ticketField(d);
+  return f ? String(t.fields[f.key] ?? "").trim() : "";
+};
+
+/**
+ * Tasks waiting too long (not done, received at least `staleDays` days ago; 0 = off).
+ * Admins see the team's; members their own assigned or on-hold tasks.
+ */
+export function staleTasks(d: WorkloadData, me: number, admin: boolean, now: number) {
+  const days = d.settings.staleDays ?? 2;
+  if (!days) return [];
+  const cut = now - days * 24 * H;
+  return sortTasks(
+    d.tasks.filter((t) => t.status !== "done" && t.received <= cut && (admin || t.assignee === me)),
+    d.settings,
+  );
 }

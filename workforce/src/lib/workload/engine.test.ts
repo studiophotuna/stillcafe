@@ -381,3 +381,34 @@ describe("status: time away, end of work and overtime approval", async () => {
     expect(authorizeWl({ type: "decideOt", id, st: "approved", by: 0 }, e, 23)).toEqual({ action: { type: "decideOt", id, st: "approved", by: 23 } });
   });
 });
+
+describe("periods, ticket field and stale reminders", async () => {
+  const { periodRange, shiftPeriod, periodLabel } = await import("./period");
+  const { ticketField, ticketOf, staleTasks } = await import("./engine");
+  it("builds day / week (Mon–Sun) / month ranges in team time", () => {
+    const [d0, d1] = periodRange("day", NOW);
+    expect(new Date(d0).toISOString()).toBe("2026-09-23T16:00:00.000Z"); // 24 Sep 00:00 Manila
+    expect(d1 - d0).toBe(24 * H);
+    const [w0] = periodRange("week", NOW); // Thu 24 Sep → Mon 21 Sep
+    expect(new Date(w0).toISOString()).toBe("2026-09-20T16:00:00.000Z");
+    const [m0, m1] = periodRange("month", NOW);
+    expect([new Date(m0).toISOString(), new Date(m1).toISOString()]).toEqual(["2026-08-31T16:00:00.000Z", "2026-09-30T16:00:00.000Z"]);
+    expect(periodLabel("month", shiftPeriod("month", NOW, -1), NOW)).toBe("Aug 2026");
+    expect(periodLabel("week", NOW, NOW)).toBe("21 Sep – 27 Sep 2026");
+  });
+  it("finds the ticket field, or none when switched off", () => {
+    const d = { ...data([task({ fields: { ticket: "RM-7" } })]), fields: FIELDS0 };
+    expect(ticketField(d)?.key).toBe("ticket");
+    expect(ticketOf(d, d.tasks[0])).toBe("RM-7");
+    expect(ticketField({ ...d, settings: { ...d.settings, ticketField: "" } })).toBeUndefined();
+  });
+  it("lists tasks waiting N days: the team's for admins, own for members", () => {
+    const old = task({ received: NOW - 3 * 24 * H, status: "assigned", assignee: 15 });
+    const fresh = task({ received: NOW - 1 * 24 * H });
+    const d = data([old, fresh]);
+    expect(staleTasks(d, 23, true, NOW).map((t) => t.id)).toEqual([old.id]);
+    expect(staleTasks(d, ANA, false, NOW)).toHaveLength(0);
+    expect(staleTasks(d, 15, false, NOW)).toHaveLength(1);
+    expect(staleTasks({ ...d, settings: { ...d.settings, staleDays: 0 } }, 23, true, NOW)).toHaveLength(0);
+  });
+});

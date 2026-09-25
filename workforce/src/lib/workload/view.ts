@@ -2,7 +2,7 @@
 import { H, dur, fmtS, fmtT } from "./clock";
 import { AV, PR, ST, trPathOf } from "./constants";
 import type { Action } from "./actions";
-import { canTake, due, isBusy, personOf, type WorkloadData } from "./engine";
+import { canTake, due, isBusy, personOf, taskWorkMs, ticketOf, type WorkloadData } from "./engine";
 import type { Task } from "./types";
 
 export interface RowAction {
@@ -28,6 +28,16 @@ export interface TaskRowVM {
   dueBold: boolean;
   assignee: string;
   action: RowAction | null;
+  /** Ticket number (the team's ticket field), or "". */
+  ticket: string;
+  /** Row highlight: overdue, due within 2 hours, or none. */
+  dueState: "overdue" | "soon" | "";
+  started: string;
+  finished: string;
+  /** Time worked on the task (time away excluded). */
+  worked: string;
+  /** Done within the SLA. */
+  onTime: boolean;
 }
 
 export function taskRow(d: WorkloadData, t: Task, me: number, isAdmin: boolean, now: number): TaskRowVM {
@@ -60,6 +70,12 @@ export function taskRow(d: WorkloadData, t: Task, me: number, isAdmin: boolean, 
     dueBold: od,
     assignee: p ? p.name : "—",
     action,
+    ticket: ticketOf(d, t),
+    dueState: od ? "overdue" : soon ? "soon" : "",
+    started: t.startedAt ? fmtS(t.startedAt, now) : "—",
+    finished: t.doneAt ? fmtS(t.doneAt, now) : "—",
+    worked: t.startedAt ? dur(taskWorkMs(d, t, now)) : "—",
+    onTime: !!t.doneAt && t.doneAt <= dueAt,
   };
 }
 
@@ -72,7 +88,16 @@ export function taskDetail(d: WorkloadData, t: Task, now: number) {
   const s = d.settings;
   const dueAt = due(t, s);
   const od = t.status !== "done" && now > dueAt;
+  // Start / finish / worked, e.g. when an admin asks for the times per task.
+  const timeRows = t.startedAt
+    ? [
+        { label: "Started", value: fmtT(t.startedAt) },
+        { label: "Finished", value: t.doneAt ? fmtT(t.doneAt) : "In progress" },
+        { label: "Time worked", value: dur(taskWorkMs(d, t, now)) + " (time away excluded)" },
+      ]
+    : [];
   const fieldRows = [{ label: "System › Trade", value: trPathOf(d.org, t.trade) }]
+    .concat(timeRows)
     .concat(d.fields.map((f) => ({ label: f.label, value: (t.fields[f.key] ?? "") === "" ? "—" : String(t.fields[f.key]) })))
     .concat(t.hold ? [{ label: "On hold because", value: t.hold }] : []);
   return {

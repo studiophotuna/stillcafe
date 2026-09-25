@@ -113,6 +113,20 @@ Both modules save to Supabase: schema `workforce` in the stillcafe project
   get an Upload tasks page). Required fields may be blank in the file; they must be filled
   before the task can be marked done, and My work shows what's missing.
 - **Who sees tasks:** only people who can open the team (see above); the server refuses others.
+- **Timers:** going on a break/lunch/meeting/ad hoc/training opens a pop-up with a running timer
+  and Back to work (can be minimized to a corner chip on every Workload page). The current task
+  shows its running time (paused while away) and start time; task details show started,
+  finished and time worked.
+- **Reminders:** a pop-up (once a day) lists open tasks received N days ago or more — the team's
+  for admins, their own for members — and overtime waiting that long for approvers. N is set
+  under Allocation (default 2, 0 = off).
+- **Queue:** Active and Completed tabs with a Day/Week/Month navigator (Active: by received
+  date, all dates by default; Completed: by finish date, today by default). Overdue rows are red
+  and rows due within 2 hours amber. A ticket-number column (Allocation › Ticket number field;
+  defaults to a field named “ticket”) is searchable.
+- **Task history:** completed tasks by day/week/month — members their own, admins and leads the
+  team's or their own — filtered by person, trade and timeliness, searchable, with totals and a
+  CSV including start and finish times and time worked.
 
 ### Starting fresh
 

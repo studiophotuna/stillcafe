@@ -135,6 +135,10 @@ export interface Settings {
   prodBasis?: string;
   /** Members (not only admins) allowed to upload tasks. */
   uploaders?: number[];
+  /** Remind about tasks (and overtime) waiting this many days or more; 0 = off. Default 2. */
+  staleDays?: number;
+  /** Task field holding the ticket number (Queue column and search). Default: a "ticket" field. */
+  ticketField?: string;
 }
 
 export interface Toast {

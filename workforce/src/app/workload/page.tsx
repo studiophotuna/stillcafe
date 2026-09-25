@@ -7,6 +7,7 @@ import { dur } from "@/lib/workload/clock";
 import { AV, trPathOf } from "@/lib/workload/constants";
 import { AWAY, awayLabel, basisUnit, canWork, currentAway, doneToday, endedToday, fmtMin, helpQueue, missingRequired, ownQueue, personMetrics, sortTasks } from "@/lib/workload/engine";
 import { fmtT } from "@/lib/workload/clock";
+import { TaskTimer } from "@/components/WorkloadBits";
 import { useWorkload } from "@/lib/workload/store";
 import { taskDetail, taskRow } from "@/lib/workload/view";
 
@@ -140,9 +141,10 @@ export default function MyWorkPage() {
                 </span>
               </div>
               <h2>{cur.title}</h2>
-              <span style={{ fontSize: 13.5, color: c.dueColor }}>
-                {c.dueText} · started {c.startedAgo} ago
-              </span>
+              <div style={{ display: "flex", gap: 16, alignItems: "baseline", flexWrap: "wrap" }}>
+                <TaskTimer task={cur} />
+                <span style={{ fontSize: 13.5, color: c.dueColor }}>{c.dueText}</span>
+              </div>
               {curMissing.length > 0 && (
                 <span style={{ display: "block", fontSize: 13, color: "var(--color-accent-800)", marginTop: 4 }}>
                   Needed before you can mark it done: {curMissing.join(", ")}

@@ -8,6 +8,7 @@ import { useWorkload } from "@/lib/workload/store";
 import { useUnit } from "@/lib/workload/useUnit";
 import { AppFrame, type NavItem } from "./AppFrame";
 import { Dialogs, Toasts } from "./Dialogs";
+import { AwayPopup, StaleNotice } from "./WorkloadBits";
 
 /** Admin-only routes; members are sent back to My work. */
 const isAdminRoute = (path: string) => path.startsWith("/workload/admin") || path.startsWith("/workload/dashboard");
@@ -32,6 +33,7 @@ export function Shell({ children }: { children: React.ReactNode }) {
   const nav: NavItem[] = [
     { href: "/workload", icon: "my", label: "My work" },
     { href: "/workload/queue", icon: "queue", label: "Queue", badge: openQ },
+    { href: "/workload/history", icon: "reports", label: "Task history" },
     ...(isAdmin ? [{ href: "/workload/dashboard", icon: "dash" as const, label: "Dashboard" }] : []),
     ...(!isAdmin && canUpload ? [{ href: "/workload/upload", icon: "intake" as const, label: "Upload tasks" }] : []),
     ...(isApprover ? [{ href: "/workload/overtime", icon: "targets" as const, label: "Overtime", badge: otPending }] : []),
@@ -61,6 +63,8 @@ export function Shell({ children }: { children: React.ReactNode }) {
         <>
           <Dialogs />
           <Toasts />
+          <AwayPopup />
+          <StaleNotice />
         </>
       }
       filterBar={
