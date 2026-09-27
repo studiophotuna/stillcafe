@@ -109,6 +109,7 @@ export interface Readiness {
 export interface BcpEvent {
   id: string;
   name: string;
+  /** The active date: check-ins are open on this date only. */
   start: string;
   end: string;
   scope: string;

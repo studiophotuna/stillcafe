@@ -6,7 +6,7 @@
 import { ANNUAL, CODES, OOO, POOL, WORKING, first } from "./constants";
 import { dowOf, isWk, rng2, fmt, workdays } from "./dates";
 import { mkOrg, type Org } from "./org";
-import type { CalPerson, CalendarData, Code, Holiday, LeaveRequest, NotifLog } from "./types";
+import type { BcpEvent, CalPerson, CalendarData, Code, Holiday, LeaveRequest, NotifLog } from "./types";
 
 export interface Cell {
   code: Code | "";
@@ -19,6 +19,11 @@ export interface Cell {
   note?: string;
   shift?: string | null;
 }
+
+/** A BCP event is active on its date only: scheduled before it, closed after it (or when an admin closes it). */
+export type EvState = "scheduled" | "active" | "closed";
+export const evState = (e: Pick<BcpEvent, "start" | "status">, today: string): EvState =>
+  e.status === "closed" || e.start < today ? "closed" : e.start > today ? "scheduled" : "active";
 
 export const allApproved = (q: LeaveRequest) => Object.values(q.approvals).every((v) => v === "approved");
 export const anyPending = (q: LeaveRequest) => Object.values(q.approvals).some((v) => v === "pending");

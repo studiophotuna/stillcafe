@@ -145,7 +145,7 @@ export function initialCalendar(today: string): CalendarData {
     };
   }
   const bcpEvents = [
-    { id: "E2", name: "Typhoon Helen – Signal No. 3 (NCR)", start: "2026-09-24", end: "", scope: "bss", status: "active" as const, note: "Office closes at 12:00. Work from home if it is safe to do so, and check in below." },
+    { id: "E2", name: "Typhoon Helen – Signal No. 3 (NCR)", start: today, end: "", scope: "bss", status: "active" as const, note: "Office closes at 12:00. Work from home if it is safe to do so, and check in below." },
     { id: "E1", name: "Power interruption – Ortigas", start: "2026-08-12", end: "2026-08-12", scope: "bss", status: "closed" as const, note: "" },
   ];
   const stK = ["wfh", "wfh", "wfh", "wfh", "office", "aff_ok", "aff_no", "wfh", "leave"] as const;

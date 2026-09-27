@@ -5,7 +5,7 @@
 import { fmtT } from "../workload/clock";
 import { ANNUAL, CODES, LEVELS, TYPE_L, first } from "./constants";
 import { addDays, dowOf, fmtY, isWk, MONL } from "./dates";
-import { Cal, logsDecision, logsSubmit } from "./engine";
+import { Cal, evState, logsDecision, logsSubmit } from "./engine";
 import { allocProblem, teamDefaults } from "./org";
 import { planOrgImport, type OrgRow } from "./orgImport";
 import { applyUpload, checkUpload, type UploadMode, type UploadRow } from "./uploads";
@@ -498,7 +498,7 @@ export function applyCalAction(d: CalendarData, a: CalAction, today: string, now
     }
     case "checkin": {
       const ev = d.bcpEvents.find((e) => e.id === a.evId);
-      if (!ev || ev.status !== "active" || !c.people.has(a.pid)) return { data: d };
+      if (!ev || evState(ev, today) !== "active" || !c.people.has(a.pid)) return { data: d };
       const by = a.actor !== a.pid ? ` (by ${c.person(a.actor).name})` : "";
       return {
         data: {
@@ -510,6 +510,7 @@ export function applyCalAction(d: CalendarData, a: CalAction, today: string, now
     }
     case "startEvent": {
       if (!a.name.trim() || !a.start || !c.O.by[a.scope]) return { data: d };
+      if (a.start < today) return { data: d, error: "Pick today or a later date." };
       const id = "E" + now.toString(36);
       const n = d.people.filter((p) => c.O.inN(p, a.scope) && !(p.resign && p.resign < a.start)).length;
       return {
@@ -518,15 +519,18 @@ export function applyCalAction(d: CalendarData, a: CalAction, today: string, now
           bcpEvents: [{ id, name: a.name.trim(), start: a.start, end: "", scope: a.scope, status: "active", note: a.note } as BcpEvent].concat(d.bcpEvents),
           checkins: { ...d.checkins, [id]: {} },
         },
-        message: `BCP event started. ${n} people will be asked to check in by email.`,
+        message:
+          a.start === today
+            ? `BCP event started for today. ${n} people will be asked to check in by email.`
+            : `BCP event set for ${fmtY(a.start)}. ${n} people will be asked to check in on that day.`,
       };
     }
     case "closeEvent": {
       const ev = d.bcpEvents.find((e) => e.id === a.id);
       if (!ev) return { data: d };
       return {
-        data: { ...d, bcpEvents: d.bcpEvents.map((e) => (e.id === a.id ? { ...e, status: "closed" as const, end: today } : e)) },
-        message: `${ev.name} closed.`,
+        data: { ...d, bcpEvents: d.bcpEvents.map((e) => (e.id === a.id ? { ...e, status: "closed" as const, end: today < e.start ? "" : today } : e)) },
+        message: evState(ev, today) === "scheduled" ? `${ev.name} cancelled.` : `${ev.name} closed.`,
       };
     }
     case "importUpload": {

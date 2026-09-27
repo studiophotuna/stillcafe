@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { applyCalAction } from "./actions";
-import { Cal } from "./engine";
+import { Cal, evState } from "./engine";
 import { buildReport, toCsv } from "./reports";
 import { initialCalendar } from "./seed";
 import { checkUpload } from "./uploads";
@@ -19,7 +19,7 @@ describe("seed", () => {
     expect(d.people).toHaveLength(34);
     expect(d.nodes.filter((n) => n.type === "tower")).toHaveLength(5);
     expect(d.requests.slice(0, 8).map((q) => q.id)).toEqual(["LR000001", "LR000002", "LR000003", "LR000004", "LR000005", "LR000006", "LR000007", "LR000008"]);
-    expect(d.bcpEvents.find((e) => e.status === "active")?.id).toBe("E2");
+    expect(d.bcpEvents.find((e) => evState(e, TODAY) === "active")?.id).toBe("E2");
     expect(d.logs.length).toBeGreaterThan(0);
   });
 });
@@ -543,5 +543,27 @@ describe("update schedules for several members", async () => {
   it("saves the team's planning period", () => {
     const r = run(fresh(), { type: "teamSettings", id: "rm", patch: { schedPeriod: "month" } });
     expect(r.data.nodes.find((n) => n.id === "rm")!.schedPeriod).toBe("month");
+  });
+});
+
+describe("BCP events are active on their date only", () => {
+  const start = (date: string) => run(fresh(), { type: "startEvent", name: "Flood", start: date, scope: "bss", note: "" });
+  it("scheduled before, active on, closed after the date", () => {
+    const e = { start: "2026-09-24", status: "active" as const };
+    expect(evState(e, "2026-09-23")).toBe("scheduled");
+    expect(evState(e, "2026-09-24")).toBe("active");
+    expect(evState(e, "2026-09-25")).toBe("closed");
+    expect(evState({ ...e, status: "closed" }, "2026-09-24")).toBe("closed");
+  });
+  it("takes check-ins only on the active date", () => {
+    const later = start("2026-09-30");
+    expect(later.message).toContain("set for");
+    const ev = later.data.bcpEvents[0];
+    const ci = { type: "checkin" as const, evId: ev.id, pid: ANA, status: "wfh" as const, note: "", actor: ANA };
+    expect(run(later.data, ci).data).toBe(later.data); // not yet
+    const today = start(TODAY);
+    const r = run(today.data, { ...ci, evId: today.data.bcpEvents[0].id });
+    expect(r.data.checkins[today.data.bcpEvents[0].id][ANA]).toBeTruthy();
+    expect(start("2026-09-20").error).toBeTruthy(); // past date
   });
 });

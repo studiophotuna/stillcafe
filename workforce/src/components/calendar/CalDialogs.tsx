@@ -1360,8 +1360,8 @@ function EventDialog() {
         </div>
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
           <div className="field">
-            <label htmlFor="ev-s">Start date</label>
-            <input id="ev-s" className="input" type="date" value={r.start} onChange={(e) => setR({ ...r, start: e.target.value })} />
+            <label htmlFor="ev-s">Active date</label>
+            <input id="ev-s" className="input" type="date" value={r.start} min={s.today} onChange={(e) => setR({ ...r, start: e.target.value })} />
           </div>
           <div className="field">
             <label htmlFor="ev-sc">Who needs to check in</label>
@@ -1378,13 +1378,15 @@ function EventDialog() {
           <label htmlFor="ev-note">Message to staff</label>
           <textarea id="ev-note" className="input" value={r.note} placeholder="e.g. Office is closed. Work from home if it is safe to do so." onChange={(e) => setR({ ...r, note: e.target.value })} style={{ minHeight: 70 }} />
         </div>
-        <span className="small" style={{ fontSize: 13 }}>Everyone in scope sees a check-in banner in Workforce Management and gets an email.</span>
+        <span className="small" style={{ fontSize: 13 }}>
+          The event is active on this date only: everyone in scope sees a check-in banner in Workforce Management and gets an email, and check-ins close at the end of the day.
+        </span>
         <div className="dialog-actions" style={{ gap: 10 }}>
           <button className="btn btn-secondary btn-40" onClick={close}>
             Cancel
           </button>
           <PrimaryBtn
-            disabled={!r.name.trim() || !r.start}
+            disabled={!r.name.trim() || !r.start || r.start < s.today}
             onClick={() => {
               s.run({ type: "startEvent", ...r });
               close();
