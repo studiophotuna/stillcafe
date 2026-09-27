@@ -53,8 +53,8 @@ export interface Outcome {
 
 const PRIORITY_WEIGHT: Record<Priority, number> = { high: 0, normal: 1, low: 2 };
 
-/** Weekend hours count toward the SLA unless the team turned that off (Allocation). */
-export const skipsWeekends = (s: Settings) => s.slaWeekends === false;
+/** Weekends don't count toward the SLA unless the team turned that on (Allocation). */
+export const skipsWeekends = (s: Settings) => s.slaWeekends !== true;
 export const due = (t: Task, s: Settings) => addHours(t.received, s.sla[t.pr] || 24, skipsWeekends(s));
 /** How long a task is overdue (weekends excluded when the SLA excludes them). */
 export const overdueMs = (t: Task, s: Settings, now: number) => spanMs(due(t, s), t.doneAt ?? now, skipsWeekends(s));

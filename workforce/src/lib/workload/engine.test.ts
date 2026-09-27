@@ -438,8 +438,16 @@ describe("on-hold time and weekend SLA", async () => {
     const mon = Date.parse("2026-09-28T09:00:00+08:00");
     expect(spanMs(fri, mon, true)).toBe(9 * H + 9 * H); // Fri 15→24, Mon 0→9
     const t = task({ received: fri, pr: "normal" });
+    // Skipped by default; counted only when the team turns weekends on.
+    expect(due(t, settings({}))).toBe(addHours(fri, 24, true));
     expect(due(t, settings({ slaWeekends: false }))).toBe(addHours(fri, 24, true));
-    expect(overdueMs(t, settings({ slaWeekends: false }), Date.parse("2026-09-28T17:00:00+08:00"))).toBe(2 * H);
+    expect(overdueMs(t, settings({}), Date.parse("2026-09-28T17:00:00+08:00"))).toBe(2 * H);
+    expect(due(t, settings({ slaWeekends: true }))).toBe(fri + 24 * H);
+    // The ticket from the report: Fri 25 Sep 15:59, 48 h SLA, seen Sun 27 Sep 02:07 — not overdue.
+    const t2 = task({ received: Date.parse("2026-09-25T15:59:00+08:00"), pr: "normal" });
+    const s48 = settings({ sla: { high: 24, normal: 48, low: 72 } });
+    expect(overdueMs(t2, s48, Date.parse("2026-09-27T02:07:00+08:00"))).toBe(0);
+    expect(new Date(due(t2, s48)).toISOString()).toBe("2026-09-29T07:59:00.000Z"); // Tue 15:59
   });
 });
 

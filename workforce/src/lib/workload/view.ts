@@ -1,8 +1,8 @@
 /** View models shared by task tables and the task detail screens. */
-import { H, dur, fmtS, fmtT } from "./clock";
+import { H, dur, fmtS, fmtT, spanMs } from "./clock";
 import { AV, PR, ST, trPathOf } from "./constants";
 import type { Action } from "./actions";
-import { canTake, due, holdPeriods, isBusy, overdueMs, personOf, taskWorkMs, ticketOf, type WorkloadData } from "./engine";
+import { canTake, due, holdPeriods, isBusy, overdueMs, personOf, skipsWeekends, taskWorkMs, ticketOf, type WorkloadData } from "./engine";
 import type { Task } from "./types";
 
 export interface RowAction {
@@ -66,7 +66,7 @@ export function taskRow(d: WorkloadData, t: Task, me: number, isAdmin: boolean, 
     stCls: ST[t.status][1],
     sourceLabel: t.source === "outlook" ? "Outlook" : "Upload",
     receivedShort: fmtS(t.received, now),
-    age: t.status === "done" ? "—" : dur(now - t.received),
+    age: t.status === "done" ? "—" : dur(spanMs(t.received, now, skipsWeekends(s))),
     dueShort: t.status === "done" ? "Done " + fmtS(t.doneAt!, now) : od ? "Overdue " + dur(overdueMs(t, s, now)) : fmtS(dueAt, now),
     dueColor: od ? "var(--color-accent-800)" : soon ? "var(--color-accent-700)" : "var(--color-neutral-800)",
     dueBold: od,

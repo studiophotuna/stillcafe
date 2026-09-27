@@ -81,14 +81,14 @@ export default function AllocationPage() {
               <input
                 type="checkbox"
                 className="check"
-                checked={s.slaWeekends !== false}
-                onChange={() => set({ slaWeekends: s.slaWeekends === false })}
+                checked={s.slaWeekends === true}
+                onChange={() => set({ slaWeekends: s.slaWeekends !== true })}
               />
               Count weekends in the due time
             </label>
             <span style={{ fontSize: 12, color: "var(--color-neutral-700)" }}>
-              {s.slaWeekends === false
-                ? "Saturdays and Sundays are skipped: a task received Friday afternoon with a 24-hour SLA is due Monday afternoon, and overdue time doesn’t grow over the weekend."
+              {s.slaWeekends !== true
+                ? "Saturdays and Sundays are skipped: a task received Friday afternoon with a 24-hour SLA is due Monday afternoon, and waiting and overdue time don’t grow over the weekend."
                 : "Due time runs through weekends. Untick to skip Saturdays and Sundays."}
             </span>
             <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 10 }}>
