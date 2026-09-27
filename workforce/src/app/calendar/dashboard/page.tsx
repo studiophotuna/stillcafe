@@ -18,7 +18,7 @@ export default function CalDashboardPage() {
   const { bid, unitId, unitLabel } = v;
   const mStart = isoOf(s.y, s.m, 1);
   const dates = Array.from({ length: daysInMonth(s.y, s.m) }, (_, i) => isoOf(s.y, s.m, i + 1));
-  const act = s.data.people.filter((p) => O.inN(p, unitId) && c.alive(p, mStart));
+  const act = s.data.people.filter((p) => v.inUnit(p) && c.alive(p, mStart));
   const wdays = dates.filter((d) => !isWk(d));
   const inMonth = s.today.slice(0, 7) === mStart.slice(0, 7);
   const ref = inMonth ? s.today : wdays.find((d) => !c.hols[d]) || wdays[0];

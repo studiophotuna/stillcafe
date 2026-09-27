@@ -82,7 +82,7 @@ export function CalendarGrid({ mgmt }: { mgmt?: boolean }) {
       g.forEach((p) => rows.push({ p, cells: dates.map((d) => c.raw(p, d, null)) }));
     });
   } else {
-    active = s.data.people.filter((p) => O.inN(p, v.unitId) && c.alive(p, mStart)).sort(byName);
+    active = s.data.people.filter((p) => v.inUnit(p) && c.alive(p, mStart)).sort(byName);
     active.forEach((p) => rawMap.set(p.id, dates.map((d) => c.raw(p, d, bid))));
     shown = scope === "me" ? active.filter((p) => p.id === s.me) : active;
     if (ql) shown = shown.filter((p) => p.name.toLowerCase().includes(ql));

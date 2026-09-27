@@ -53,7 +53,7 @@ export default function MembersPage() {
   // Directors and managers allocated to this team's department or tower are listed too.
   const above = (p: CalPerson) => v.unitId === v.bid && !O.inN(p, v.bid) && p.assign.some((a) => O.by[a] && (O.by[a].type === "dept" || O.by[a].type === "tower") && O.anc(v.bid).includes(a));
   const members = s.data.people
-    .filter((p) => (O.inN(p, v.unitId) || above(p)) && (!mq || p.name.toLowerCase().includes(mq)))
+    .filter((p) => (v.inUnit(p) || above(p)) && (!mq || p.name.toLowerCase().includes(mq)))
     .sort((a, b) => Number(above(b)) - Number(above(a)) || a.name.localeCompare(b.name));
   // Team admins manage the people in their teams; system admins manage everyone.
   const canManage = (p: CalPerson) =>

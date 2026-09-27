@@ -30,13 +30,13 @@ const headerStyle = (c: { font: unknown; fill: unknown; alignment?: unknown }) =
  * (rows = people, columns = dates), a drop-down in every cell, weekends and
  * holidays shaded, pre-filled with the current schedule. Only changed cells import.
  */
-export async function downloadScheduleTemplate(c: Cal, unitId: string, unitLabel: string, bid: string, ym: string) {
+export async function downloadScheduleTemplate(c: Cal, unitIds: string[], unitLabel: string, bid: string, ym: string) {
   const { default: ExcelJS } = await import("exceljs");
   const [y, m] = ym.split("-").map(Number);
   const n = daysInMonth(y, m - 1);
   const mS = isoOf(y, m - 1, 1);
   const dates = Array.from({ length: n }, (_, i) => isoOf(y, m - 1, i + 1));
-  const ppl = c.d.people.filter((p) => c.O.inN(p, unitId) && (!p.resign || p.resign >= mS)).sort((a, b) => a.name.localeCompare(b.name));
+  const ppl = c.d.people.filter((p) => unitIds.some((u) => c.O.inN(p, u)) && (!p.resign || p.resign >= mS)).sort((a, b) => a.name.localeCompare(b.name));
   const wb = new ExcelJS.Workbook();
   wb.creator = "Workforce Management";
   const codes = ["RTO", "WFH", "RD", "VL", "SL", "EL", "HD", "BT", "HDY"];

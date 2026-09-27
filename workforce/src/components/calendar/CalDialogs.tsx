@@ -578,7 +578,7 @@ function MemberDialog({ pid: pid0 }: { pid: number | null }) {
   const [level, setLevel] = useState<Level>(init?.level ?? "member");
   const [shift, setShift] = useState(init?.shift ?? (s.data.shifts.some((x) => x.id === "D") ? "D" : s.data.shifts[0]?.id ?? "D"));
   const [adminHere, setAdminHere] = useState(init ? (v.branch.admins ?? []).includes(init.id) : false);
-  const hereRow: AllocRow = { dept: v.dept.id, tower: v.tower.id, branch: v.bid, system: v.system !== "all" ? v.system : "", trade: v.trade !== "all" ? v.trade : "" };
+  const hereRow: AllocRow = { dept: v.dept.id, tower: v.tower.id, branch: v.bid, system: v.system !== "all" ? v.system : "", trade: v.trade !== "all" && v.unitIds.length === 1 ? v.trade : "" };
   const [alloc, setAlloc] = useState<AllocRow[]>(init ? init.assign.map(allocOf) : [hereRow]);
   const close = () => s.setDialog(null);
   const setA = (i: number, k: keyof AllocRow, val: string) =>
@@ -1202,7 +1202,7 @@ function UploadDialog({ mode: mode0 }: { mode: "members" | "schedule" }) {
               try {
                 const name =
                   mode === "schedule"
-                    ? await downloadScheduleTemplate(s.cal, v.unitId, v.unitLabel, v.bid, month)
+                    ? await downloadScheduleTemplate(s.cal, v.unitIds, v.unitLabel, v.bid, month)
                     : await downloadMembersTemplate(s.cal, v.dept, v.tower, v.branch);
                 s.toast(name + " downloaded.");
               } catch {
