@@ -5,7 +5,7 @@ import { TaskTable } from "@/components/TaskTable";
 import { Blueprint, Icon, Kpi, PageHead, pct } from "@/components/ui";
 import { dur } from "@/lib/workload/clock";
 import { AV, trPathOf } from "@/lib/workload/constants";
-import { AWAY, awayLabel, basisUnit, canWork, currentAway, doneToday, endedToday, fmtMin, helpQueue, missingRequired, ownQueue, personMetrics, sortTasks } from "@/lib/workload/engine";
+import { AWAY, awayLabel, basisUnit, typeTargets, canWork, currentAway, doneToday, endedToday, fmtMin, helpQueue, missingRequired, ownQueue, personMetrics, sortTasks } from "@/lib/workload/engine";
 import { fmtT } from "@/lib/workload/clock";
 import { TaskTimer } from "@/components/WorkloadBits";
 import { useWorkload } from "@/lib/workload/store";
@@ -24,7 +24,13 @@ export default function MyWorkPage() {
 
   const kpis = me.trades.length
     ? [
-        { k: "Productivity", v: pct(mm.prod), m: `${mm.out} ${basisUnit(data)} of ${mm.target} target (so far ${mm.tgt.toFixed(1)})` },
+        {
+          k: "Productivity",
+          v: pct(mm.prod),
+          m: typeTargets(data)
+            ? `${Math.round(mm.share * 100)}% of a day’s target done${mm.mix ? ` · ${mm.mix}` : ""} (so far ${Math.round(mm.exp * 100)}%)`
+            : `${mm.out} ${basisUnit(data)} of ${mm.target} target (so far ${mm.tgt.toFixed(1)})`,
+        },
         { k: "Utilization", v: pct(mm.util), m: `${dur(mm.handle)} on tasks of ${dur(mm.avail)} available (shift so far minus time away)` },
         {
           k: "Time away",

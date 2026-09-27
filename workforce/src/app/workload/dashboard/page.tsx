@@ -3,7 +3,7 @@
 import { Blueprint, Kpi, PageHead, pct } from "@/components/ui";
 import { dayKey, dur, fmtT } from "@/lib/workload/clock";
 import { AV, tradeOf, trPathOf } from "@/lib/workload/constants";
-import { awayLabel, basisUnit, doneToday, due, fmtMin, isOverdue, personMetrics, slaText, taskTypeOf } from "@/lib/workload/engine";
+import { awayLabel, basisUnit, doneToday, due, typeTargets, fmtMin, isOverdue, personMetrics, slaText, taskTypeOf } from "@/lib/workload/engine";
 import { useWorkload } from "@/lib/workload/store";
 import type { Task } from "@/lib/workload/types";
 import { useUnit } from "@/lib/workload/useUnit";
@@ -22,13 +22,21 @@ export default function DashboardPage() {
   const metricF = data.fields.filter((f) => f.type === "number" && f.metric);
 
   const ms = people.map((p) => personMetrics(data, p, now));
-  const S = (k: "done" | "tgt" | "avail" | "handle" | "onTime") => ms.reduce((a, m) => a + m[k], 0);
-  const tp = S("tgt") ? Math.round((S("done") / S("tgt")) * 100) : null;
+  const S = (k: "done" | "tgt" | "avail" | "handle" | "onTime" | "share" | "exp") => ms.reduce((a, m) => a + m[k], 0);
+  // Team productivity: work done ÷ work expected so far, each person weighted by their own targets.
+  const tp = S("exp") ? Math.round((S("share") / S("exp")) * 100) : null;
+  const weighted = typeTargets(data);
   const tu = S("avail") ? Math.round((S("handle") / S("avail")) * 100) : null;
   const tt = S("done") ? Math.round((S("onTime") / S("done")) * 100) : null;
 
   const kpis = [
-    { k: "Productivity", v: pct(tp), m: `${S("done")} done vs ${S("tgt").toFixed(1)} target so far` },
+    {
+      k: "Productivity",
+      v: pct(tp),
+      m: weighted
+        ? `${S("done")} done · ${S("share").toFixed(2)} of ${S("exp").toFixed(2)} person-days’ targets so far (weighted by task type)`
+        : `${S("done")} done vs ${S("tgt").toFixed(1)} target so far`,
+    },
     { k: "Utilization", v: pct(tu), m: "task time ÷ productive time so far" },
     { k: "Timeliness", v: pct(tt), m: `${S("onTime")} of ${S("done")} within SLA` },
     { k: "In queue", v: q.length, m: `${q.filter((t) => !t.trade).length} need a trade` },
@@ -87,7 +95,8 @@ export default function DashboardPage() {
         p,
         trades: p.trades.map((x) => tradeOf(data.org, x)?.name ?? x).join(", "),
         working: w ? `${w.id} · ${dur(now - w.startedAt!)}` : "—",
-        done: `${m.out} / ${m.target}`,
+        done: weighted ? `${Math.round(m.share * 100)}% of day` : `${m.out} / ${m.target}`,
+        mix: m.mix,
         m,
         avg: avg(d),
         metrics: metricF.map((f) => sumF(d, f.key)),
@@ -178,7 +187,7 @@ export default function DashboardPage() {
               <th>Trades</th>
               <th>Availability</th>
               <th>Working on</th>
-              <th>{basisUnit(data) === "tasks" ? "Done / target" : `${basisUnit(data)} / target`}</th>
+              <th>{weighted ? "Done (share of day)" : basisUnit(data) === "tasks" ? "Done / target" : `${basisUnit(data)} / target`}</th>
               <th>Productivity</th>
               <th>Utilization</th>
               <th>Timeliness</th>
@@ -202,7 +211,10 @@ export default function DashboardPage() {
                   <span className={"tag " + AV[r.p.avail][1]}>{AV[r.p.avail][0]}</span>
                 </td>
                 <td style={{ fontSize: 13 }}>{r.working}</td>
-                <td>{r.done}</td>
+                <td title={r.mix || undefined}>
+                  {r.done}
+                  {weighted && r.mix && <div className="small">{r.mix}</div>}
+                </td>
                 <td>{pct(r.m.prod)}</td>
                 <td>{pct(r.m.util)}</td>
                 <td>{pct(r.m.time)}</td>

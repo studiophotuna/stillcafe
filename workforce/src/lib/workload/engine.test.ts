@@ -555,3 +555,38 @@ describe("task types with their own SLA, and holidays", async () => {
     expect(E.waitingMs(t, sc({}, ["2026-09-30"]), Date.parse("2026-10-01T09:00:00+08:00"))).toBe(9 * H + 9 * H);
   });
 });
+
+describe("task type targets weight productivity", async () => {
+  const E = await import("./engine");
+  const TYPES = [
+    { id: "doc", name: "Doc review", sla: 2, target: 4, trades: [], keywords: [] },
+    { id: "bk", name: "Booking", sla: 4, target: 2, trades: [], keywords: [] },
+    { id: "misc", name: "Misc", sla: 8, trades: [], keywords: [] },
+  ];
+  it("3 Doc reviews (of 4) and 1 Booking (of 2) make 125% of the day", () => {
+    const d = data([], { taskTypes: TYPES });
+    const done = [...Array(3)].map(() => task({ ttype: "doc", status: "done" })).concat(task({ ttype: "bk", status: "done" }));
+    const r = E.dayShare(d, done, 8);
+    expect(r.share).toBeCloseTo(1.25);
+    expect(r.mix).toBe("3 Doc review of 4 · 1 Booking of 2");
+    expect(E.typeTargets(d)).toBe(true);
+  });
+  it("tasks without a type target count against the member's target", () => {
+    const d = data([], { taskTypes: TYPES });
+    const r = E.dayShare(d, [task({ ttype: "misc" }), task({}), task({ ttype: "doc" })], 8);
+    expect(r.share).toBeCloseTo(2 / 8 + 1 / 4);
+    expect(r.mix).toBe("2 standard of 8 · 1 Doc review of 4");
+  });
+  it("personMetrics: full shift, weighted productivity", () => {
+    const at = Date.parse("2026-09-24T18:00:00+08:00"); // after a 09:00 shift
+    const ana = person(ANA)!;
+    const mk = (ttype: string, i: number) =>
+      task({ ttype, status: "done", assignee: ANA, startedAt: at - (i + 2) * H, doneAt: at - (i + 1) * H, received: at - 10 * H });
+    const d = data([mk("doc", 0), mk("doc", 1), mk("doc", 2), mk("bk", 3)], { taskTypes: TYPES });
+    const m = E.personMetrics(d, { ...ana, shiftStart: 8 }, at);
+    expect(m.prod).toBe(125);
+    // Without task types, the same tasks count 1 each against the member's target (8 for LCL).
+    const plain = E.personMetrics(data(d.tasks), { ...ana, shiftStart: 8 }, at);
+    expect(plain.prod).toBe(50);
+  });
+});

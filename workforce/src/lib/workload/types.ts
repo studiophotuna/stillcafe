@@ -121,6 +121,12 @@ export interface TaskType {
   name: string;
   /** SLA in hours from received (weekends and holidays skipped as the team's settings say). */
   sla: number;
+  /**
+   * Tasks of this type one person is expected to finish in a day (e.g. 4). Each one done
+   * counts 1/target of a day's work toward productivity. Missing or 0: it counts like a
+   * standard task against the member's own target.
+   */
+  target?: number;
   /** Trades it applies to; empty = every trade in the team. */
   trades: string[];
   /** Words in an email subject or upload title that mark a task as this type. */

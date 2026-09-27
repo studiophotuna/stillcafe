@@ -544,9 +544,43 @@ export function output(d: Pick<WorkloadData, "fields" | "settings">, done: Task[
   return new Set(done.map((t) => String(t.fields[f.key] ?? "").trim().toLowerCase()).filter(Boolean)).size;
 }
 
+/** Whether productivity is weighted by task type targets (counting tasks, and a type has a target). */
+export const typeTargets = (d: Pick<WorkloadData, "fields" | "settings">) =>
+  !basisField(d) && (d.settings.taskTypes ?? []).some((t) => (t.target ?? 0) > 0);
+
+/**
+ * How much of a full day's work the done tasks make. Counting tasks: each task of a type
+ * with a daily target counts 1/target, every other task 1/the member's target (so 3 Doc
+ * reviews of 4 plus 1 Booking of 2 = 1.25 days). With a field as the basis: output ÷ target.
+ */
+export function dayShare(d: Pick<WorkloadData, "fields" | "settings">, done: Task[], target: number) {
+  if (basisField(d)) return { share: target > 0 ? output(d, done) / target : 0, mix: "", any: false };
+  const groups = new Map<string, { name: string; n: number; of: number }>();
+  let share = 0;
+  let any = false;
+  for (const t of done) {
+    const ty = taskTypeOf(d.settings, t);
+    const of = ty && (ty.target ?? 0) > 0 ? ty.target! : target;
+    if (ty && (ty.target ?? 0) > 0) any = true;
+    if (of > 0) share += 1 / of;
+    const key = ty && (ty.target ?? 0) > 0 ? ty.id : "";
+    const g = groups.get(key) ?? { name: key ? ty!.name : "standard", n: 0, of };
+    g.n++;
+    groups.set(key, g);
+  }
+  const mix = [...groups.values()].map((g) => `${g.n} ${g.name}${g.of ? " of " + g.of : ""}`).join(" · ");
+  return { share, mix, any };
+}
+
 export interface PersonMetrics {
   /** Output today in the team's productivity basis (tasks, or the chosen field). */
   out: number;
+  /** Share of a full day's work done today (1 = the day's target), weighted by task type targets. */
+  share: number;
+  /** Share of the day expected so far (the elapsed part of the shift), 0 when there is no target. */
+  exp: number;
+  /** Done today per task type against its daily target, e.g. "3 Doc review of 4 · 1 Booking of 2". */
+  mix: string;
   /** Approved overtime minutes today (reported at end of work). */
   otMin: number;
   /** Overtime reported today and still waiting for approval. */
@@ -584,8 +618,13 @@ export function personMetrics(d: WorkloadData, p: Person, now: number): PersonMe
   const tgt = target * fr;
   const onTime = done.filter((t) => t.doneAt! <= due(t, d)).length;
   const out = output(d, done);
+  const { share, mix, any } = dayShare(d, done, target);
+  const exp = target > 0 || any ? fr : 0;
   return {
     out,
+    share,
+    exp,
+    mix,
     otMin: act.otApproved,
     otPending: act.otPending,
     away: act.away,
@@ -595,7 +634,7 @@ export function personMetrics(d: WorkloadData, p: Person, now: number): PersonMe
     avail,
     handle,
     onTime,
-    prod: tgt ? Math.round((out / tgt) * 100) : null,
+    prod: exp ? Math.round((share / exp) * 100) : null,
     util: avail ? Math.round((handle / avail) * 100) : null,
     time: done.length ? Math.round((onTime / done.length) * 100) : null,
   };

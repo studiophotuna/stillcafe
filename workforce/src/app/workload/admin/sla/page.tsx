@@ -87,7 +87,8 @@ export default function SlaPage() {
           <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
             <h2 className="h2">Task types</h2>
             <span className="small">
-              Requests with their own SLA, e.g. Doc review 2 h or Booking 4 h. A task gets its type from the upload’s Task type column, from keywords in the email subject or
+              Requests with their own SLA and daily target, e.g. Doc review 2 h, 4 a day, or Booking 4 h, 2 a day. Each task done counts 1 ÷ its type’s target
+              toward productivity, so 3 Doc reviews and 1 Booking = 3/4 + 1/2 = 125% of a day. A task gets its type from the upload’s Task type column, from keywords in the email subject or
               title, or when an admin sets it in the task details.
             </span>
           </div>
@@ -103,6 +104,7 @@ export default function SlaPage() {
                 <tr>
                   <th>Task type</th>
                   <th>SLA</th>
+                  <th>Target / day</th>
                   <th>Trades</th>
                   <th>Keywords</th>
                   <th>Open tasks</th>
@@ -114,6 +116,7 @@ export default function SlaPage() {
                   <tr key={t.id}>
                     <td style={{ fontWeight: 500 }}>{t.name}</td>
                     <td className="nowrap">{slaText(t.sla)}</td>
+                    <td>{t.target ? t.target : <span className="muted">Member’s target</span>}</td>
                     <td>{t.trades.length ? t.trades.map((x) => trPathOf(data.org, x)).join(", ") : <span className="muted">All trades</span>}</td>
                     <td>{t.keywords.length ? t.keywords.join(", ") : <span className="muted">—</span>}</td>
                     <td>{openOf(t.id)}</td>
@@ -189,6 +192,8 @@ function TypeDialog({ orig, others, onClose, onSave }: { orig: TaskType | null; 
   const [sla, setSla] = useState(orig ? String(orig.sla < 1 ? Math.round(orig.sla * 60) : orig.sla) : "");
   const [trades, setTrades] = useState<string[]>(orig?.trades ?? []);
   const [kw, setKw] = useState((orig?.keywords ?? []).join(", "));
+  const [target, setTarget] = useState(orig?.target ? String(orig.target) : "");
+  const tgtN = target.trim() === "" ? 0 : Number(target);
   const hours = unit === "min" ? Number(sla) / 60 : Number(sla);
   const dup = others.some((t) => lc(t.name) === lc(name.trim()));
   const problem = !name.trim()
@@ -197,7 +202,9 @@ function TypeDialog({ orig, others, onClose, onSave }: { orig: TaskType | null; 
       ? "Another task type has that name."
       : !(hours > 0) || hours > 2000
         ? "Enter an SLA above 0 (up to 2000 hours)."
-        : "";
+        : !(tgtN >= 0) || tgtN > 1000
+          ? "Enter a daily target of 0 to 1000, or leave it blank."
+          : "";
   const multi = data.org.trades.length > 1;
   return (
     <Modal onClose={onClose} width={560}>
@@ -229,6 +236,14 @@ function TypeDialog({ orig, others, onClose, onSave }: { orig: TaskType | null; 
               </select>
             </div>
           </div>
+        </div>
+        <div className="field">
+          <label htmlFor="tt-t">Target per day (optional)</label>
+          <input id="tt-t" className="input" type="number" min={0} step={0.5} value={target} placeholder="e.g. 4" onChange={(e) => setTarget(e.target.value)} style={{ width: 160 }} />
+          <span className="small">
+            How many of these one person finishes in a full day. Each one done counts 1 ÷ this toward productivity. Blank: it counts like any other task against the
+            member’s target (Admin › Targets).
+          </span>
         </div>
         {multi && (
           <div className="field">
@@ -272,6 +287,7 @@ function TypeDialog({ orig, others, onClose, onSave }: { orig: TaskType | null; 
                 id: orig?.id ?? "TT" + Date.now().toString(36),
                 name: name.trim(),
                 sla: Math.round(hours * 100) / 100,
+                ...(tgtN > 0 ? { target: tgtN } : {}),
                 trades,
                 keywords: [...new Set(kw.split(",").map((k) => k.trim()).filter(Boolean))],
               })
