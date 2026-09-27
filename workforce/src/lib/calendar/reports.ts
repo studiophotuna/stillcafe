@@ -75,13 +75,13 @@ export function buildReport(c: Cal, type: ReportType, scope: string, from: strin
     }
   }
   if (type === "holiday") {
-    // Tower / Team / Name, then one column per holiday in the date range with each person's status.
+    // Department / Tower / Team / Name, then one column per holiday in the date range with each person's status.
     const hdays = [...new Set(s.holidays.filter((h) => h.date >= from && h.date <= to && !isWk(h.date)).map((h) => h.date))].sort();
     const hname = (d: string) => [...new Set(s.holidays.filter((h) => h.date === d).map((h) => h.name))].join(" / ");
     desc = hdays.length
       ? `One row per person, one column per holiday (${hdays.length}) in the range. Holiday duty shows where they work (RTO or WFH); “Holiday” means not working.`
       : "No holidays fall on a weekday in this date range. Pick a range that includes a holiday.";
-    rows.push(["Tower", "Team", "Name", ...hdays.map((d) => `${d} ${DOW_NAMES[dowOf(d)]} · ${hname(d)}`)]);
+    rows.push(["Department", "Tower", "Team", "Name", ...hdays.map((d) => `${d} ${DOW_NAMES[dowOf(d)]} · ${hname(d)}`)]);
     const st = (p: CalPerson, d: string) => {
       const x = c.raw(p, d, null);
       if (x.gone || (p.hire && p.hire > d)) return "—";
@@ -93,12 +93,16 @@ export function buildReport(c: Cal, type: ReportType, scope: string, from: strin
       // The holiday doesn't apply to this person's team: their usual status.
       return x.code ? `${CODES[x.code].label}${x.pending ? " (pending)" : ""}` : "";
     };
+    const deptOf = (p: CalPerson) => {
+      const a = p.assign.find((x) => O.anc(x).includes(scope)) || p.assign[0];
+      return O.up(a, "dept")?.name ?? "";
+    };
     const byTeam = ppl
-      .map((p) => ({ p, pth: path(p) }))
-      .sort((a, b) => a.pth[0].localeCompare(b.pth[0]) || a.pth[1].localeCompare(b.pth[1]) || a.p.name.localeCompare(b.p.name));
-    for (const { p, pth } of byTeam) rows.push([pth[0], pth[1], p.name, ...hdays.map((d) => st(p, d))]);
+      .map((p) => ({ p, pth: [deptOf(p), ...path(p)] }))
+      .sort((a, b) => a.pth[0].localeCompare(b.pth[0]) || a.pth[1].localeCompare(b.pth[1]) || a.pth[2].localeCompare(b.pth[2]) || a.p.name.localeCompare(b.p.name));
+    for (const { p, pth } of byTeam) rows.push([pth[0], pth[1], pth[2], p.name, ...hdays.map((d) => st(p, d))]);
     if (hdays.length && byTeam.length)
-      rows.push(["", "", "Total on holiday duty", ...hdays.map((d) => byTeam.filter(({ p }) => c.raw(p, d, null).code === "HDY").length)]);
+      rows.push(["", "", "", "Total on holiday duty", ...hdays.map((d) => byTeam.filter(({ p }) => c.raw(p, d, null).code === "HDY").length)]);
   }
   if (type === "manning") {
     desc = "One row per day: headcount by status and shift group (Morning, Midshift, GY), plus who is on holiday duty.";

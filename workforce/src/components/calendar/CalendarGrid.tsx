@@ -182,6 +182,12 @@ export function CalendarGrid({ mgmt }: { mgmt?: boolean }) {
           )}
           <Seg name="cellmode" value={cellMode} options={[["status", "Status"], ["shift", "Shift"]]} onChange={setCellMode} />
           {!mgmt && v.isAdmin && (
+            <button className="btn btn-secondary btn-36" onClick={() => s.setDialog({ kind: "schedule" })}>
+              <Icon name="members" size={16} />
+              Update schedules
+            </button>
+          )}
+          {!mgmt && v.isAdmin && (
             <button className="btn btn-secondary btn-36" onClick={() => s.setDialog({ kind: "upload", mode: "schedule" })}>
               <Icon name="upload" size={16} />
               Upload schedule
