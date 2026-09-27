@@ -503,3 +503,45 @@ describe("holiday replies and holiday manning", async () => {
     expect(rep.rows[rep.rows.length - 1][col]).toBe(1);
   });
 });
+
+describe("update schedules for several members", async () => {
+  const { authorizeCal } = await import("./authz");
+  const base = { type: "setSchedule" as const, bid: "rm", from: "2026-10-05", to: "2026-10-11" };
+  it("sets shift and weekday status for a week, keeping holidays and other days", () => {
+    const d = fresh();
+    d.holidays = d.holidays.concat({ id: "HT", date: "2026-10-07", name: "Test Day", type: "regular", scope: "all" });
+    const other = d.people.find((p) => p.id !== ANA && p.assign.some((a) => new Cal(d, TODAY).O.anc(a).includes("rm")))!.id;
+    const shift = d.shifts.find((x) => x.id !== d.people[ANA].shift)!.id;
+    const r = run(d, { ...base, pids: [ANA, other], shift, days: { 1: "WFH", 5: "RD", 6: "RTO" } });
+    expect(r.error).toBeUndefined();
+    const c = new Cal(r.data, TODAY);
+    for (const pid of [ANA, other]) {
+      const p = c.person(pid);
+      expect(c.raw(p, "2026-10-05", "rm").code).toBe("WFH"); // Mon
+      expect(c.raw(p, "2026-10-09", "rm").code).toBe("RD"); // Fri
+      expect(c.raw(p, "2026-10-10", "rm").code).toBe("RTO"); // Sat: working weekend
+      expect(c.raw(p, "2026-10-07", "rm").code).toBe("HOL"); // holiday kept
+      expect(c.shiftFor(p, "2026-10-06")).toBe(shift);
+      expect(c.shiftFor(p, "2026-10-12")).toBe(p.shift); // outside the week
+    }
+    expect(r.message).toContain("2 members");
+    const back = run(r.data, { ...base, pids: [ANA], shift: null, days: { 1: "" } });
+    const c2 = new Cal(back.data, TODAY);
+    expect(c2.raw(c2.person(ANA), "2026-10-05", "rm").code).toBe("RTO"); // usual pattern
+  });
+  it("covers a whole month and needs something to change", () => {
+    const r = run(fresh(), { ...base, from: "2026-11-01", to: "2026-11-30", pids: [ANA], shift: null, days: { 2: "WFH" } });
+    const c = new Cal(r.data, TODAY);
+    expect(["2026-11-03", "2026-11-10", "2026-11-17", "2026-11-24"].map((x) => c.raw(c.person(ANA), x, "rm").code)).toEqual(["WFH", "WFH", "WFH", "WFH"]);
+    expect(run(fresh(), { ...base, pids: [ANA], shift: null, days: {} }).error).toBeTruthy();
+  });
+  it("only admins, only for people they manage", () => {
+    const c = new Cal(fresh(), TODAY);
+    expect("error" in authorizeCal({ ...base, pids: [ANA], shift: null, days: { 1: "RTO" } }, c, ANA)).toBe(true);
+    expect("action" in authorizeCal({ ...base, pids: [ANA], shift: null, days: { 1: "RTO" } }, c, SAM)).toBe(true);
+  });
+  it("saves the team's planning period", () => {
+    const r = run(fresh(), { type: "teamSettings", id: "rm", patch: { schedPeriod: "month" } });
+    expect(r.data.nodes.find((n) => n.id === "rm")!.schedPeriod).toBe("month");
+  });
+});

@@ -21,6 +21,8 @@ export interface OrgNode {
   defaultScope?: "all" | "me";
   /** Cost centre shown on the headcount report (teams). */
   costCentre?: string;
+  /** How admins plan this team's schedules: a week or a month at a time (default week). */
+  schedPeriod?: "week" | "month";
 }
 
 export interface QuickLink {

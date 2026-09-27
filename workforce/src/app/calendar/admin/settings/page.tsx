@@ -112,6 +112,11 @@ export default function SettingsPage() {
             <label>Default view when someone opens the calendar</label>
             <Seg name="defscope" value={b.defaultScope ?? "all"} options={[["all", "Everyone in view"], ["me", "Just me"]]} onChange={(val) => set({ defaultScope: val })} />
           </div>
+          <div className="field">
+            <label>Plan member schedules and shifts per</label>
+            <Seg name="schedper" value={b.schedPeriod ?? "week"} options={[["week", "Week"], ["month", "Month"]]} onChange={(val) => set({ schedPeriod: val })} />
+            <span className="small">Update schedules (Calendar) opens on a week or a month. Admins can still switch for a single update.</span>
+          </div>
         </Blueprint>
         <Blueprint as="section" className="panel" style={{ gap: 10 }}>
           <h2 className="h2">Leave policy</h2>

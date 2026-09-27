@@ -6,14 +6,15 @@ import { Blueprint, Icon } from "@/components/ui";
 import {
   ANNUAL, APPR_WORD, BCP_ST, BUCKETS, CI_DESC, CODES, HTYPE, LEVELS, OOO, POOL, REQ_TYPES, TYPE_L, first,
 } from "@/lib/calendar/constants";
-import { fmt, fmtY, MONL, rng2 } from "@/lib/calendar/dates";
+import { DOW, addDays, daysInMonth, dowOf, fmt, fmtY, MONL, rng2 } from "@/lib/calendar/dates";
 import { downloadMembersTemplate, downloadScheduleTemplate, readCalendarUpload } from "@/lib/calendar/excel";
 import { useCalendar, type Issued } from "@/lib/calendar/store";
 import { ALLOC_MIN, allocNeeds, allocProblem } from "@/lib/calendar/org";
 import { parseOrgText, planOrgImport } from "@/lib/calendar/orgImport";
 import { checkUpload, type UploadRow } from "@/lib/calendar/uploads";
 import { useCalView } from "@/lib/calendar/useCalView";
-import { EMAIL_RE } from "@/lib/calendar/actions";
+import { rightsOf } from "@/lib/calendar/authz";
+import { EMAIL_RE, type SchedDay } from "@/lib/calendar/actions";
 import type { BcpStatus, Bucket, CalPerson, Code, HolidayType, Level } from "@/lib/calendar/types";
 import { Chip, Seg } from "./bits";
 
@@ -201,6 +202,189 @@ function HolidayWorkDialog({ date }: { date: string }) {
   );
 }
 
+// ── Admin: update schedules for several members, a week or a month at a time ──
+const mondayOf = (d: string) => addDays(d, -((dowOf(d) + 6) % 7));
+const DAY_OPTS: [SchedDay | "keep", string][] = [["keep", "Keep"], ["RTO", "RTO"], ["WFH", "WFH"], ["RD", "RD (rest)"], ["", "Usual"]];
+function ScheduleDialog({ pids: pids0, date }: { pids?: number[]; date?: string }) {
+  const s = useCalendar();
+  const v = useCalView();
+  const c = s.cal;
+  const b = v.branch;
+  const close = () => s.setDialog(null);
+  const [per, setPer] = useState<"week" | "month">(b.schedPeriod ?? "week");
+  const start0 = date ?? s.today;
+  const [week, setWeek] = useState(mondayOf(start0 < s.today && !date ? s.today : start0));
+  const [month, setMonth] = useState(start0.slice(0, 7));
+  const [q, setQ] = useState("");
+  const { adminOf } = rightsOf(c, s.me);
+  const members = s.data.people
+    .filter((p) => c.O.inN(p, b.id) && !(p.resign && p.resign < s.today) && adminOf(p.id))
+    .sort((a, x) => a.name.localeCompare(x.name));
+  const [pick, setPick] = useState<Set<number>>(new Set(pids0 ?? []));
+  const [shift, setShift] = useState("");
+  const [days, setDays] = useState<Record<number, SchedDay | "keep">>({ 0: "keep", 1: "keep", 2: "keep", 3: "keep", 4: "keep", 5: "keep", 6: "keep" });
+  const [y, m] = month.split("-").map(Number);
+  const from = per === "week" ? week : `${month}-01`;
+  const to = per === "week" ? addDays(week, 6) : `${month}-${String(daysInMonth(y, m - 1)).padStart(2, "0")}`;
+  const shown = members.filter((p) => !q || p.name.toLowerCase().includes(q.toLowerCase()));
+  const allOn = shown.length > 0 && shown.every((p) => pick.has(p.id));
+  const setAll = (val: SchedDay | "keep", which: number[]) => setDays({ ...days, ...Object.fromEntries(which.map((k) => [k, val])) });
+  const chosen = Object.entries(days).filter(([, val]) => val !== "keep");
+  const ok = pick.size > 0 && (!!shift || chosen.length > 0);
+  const months = Array.from({ length: 6 }, (_, i) => {
+    const dt = new Date(Date.UTC(Number(s.today.slice(0, 4)), Number(s.today.slice(5, 7)) - 2 + i, 1));
+    return dt.toISOString().slice(0, 7);
+  });
+  if (!months.includes(month)) months.unshift(month);
+  return (
+    <Modal onClose={close} width={680}>
+      <div className="dialog-scroll" style={{ padding: 20 }}>
+        <Title>Update schedules</Title>
+        <span className="muted">
+          {b.name} · plan {per === "week" ? "a week" : "a month"} for several members at once. Holidays and approved leave keep their own status.
+        </span>
+
+        <div style={{ display: "flex", flexWrap: "wrap", gap: 12, alignItems: "flex-end" }}>
+          <div className="field">
+            <label>Period</label>
+            <Seg name="sched-per" value={per} options={[["week", "Week"], ["month", "Month"]]} onChange={setPer} />
+          </div>
+          {per === "week" ? (
+            <div className="field">
+              <label htmlFor="sched-week">Week</label>
+              <div style={{ display: "flex", gap: 6 }}>
+                <button className="btn btn-secondary btn-40" aria-label="Previous week" onClick={() => setWeek(addDays(week, -7))}>
+                  ‹
+                </button>
+                <input id="sched-week" className="input" type="date" value={week} onChange={(e) => e.target.value && setWeek(mondayOf(e.target.value))} style={{ width: 170 }} />
+                <button className="btn btn-secondary btn-40" aria-label="Next week" onClick={() => setWeek(addDays(week, 7))}>
+                  ›
+                </button>
+              </div>
+            </div>
+          ) : (
+            <div className="field">
+              <label htmlFor="sched-month">Month</label>
+              <select id="sched-month" className="input" value={month} onChange={(e) => setMonth(e.target.value)} style={{ width: 200 }}>
+                {months.map((mo) => (
+                  <option key={mo} value={mo}>
+                    {MONL[Number(mo.slice(5, 7)) - 1]} {mo.slice(0, 4)}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
+          <span className="small" style={{ paddingBottom: 10 }}>
+            {fmtY(from)} – {fmtY(to)}
+          </span>
+        </div>
+
+        <div className="field">
+          <label>
+            Members · {pick.size} of {members.length} selected
+          </label>
+          <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+            <input className="input" type="search" placeholder="Find a name" aria-label="Find a member" value={q} onChange={(e) => setQ(e.target.value)} style={{ flex: 1 }} />
+            <button
+              className="btn btn-secondary btn-40"
+              onClick={() => {
+                const x = new Set(pick);
+                shown.forEach((p) => (allOn ? x.delete(p.id) : x.add(p.id)));
+                setPick(x);
+              }}
+            >
+              {allOn ? "Clear" : "Select all"}
+              {q ? " shown" : ""}
+            </button>
+          </div>
+          <div className="sched-members">
+            {shown.map((p) => (
+              <label key={p.id} className="sched-member">
+                <input
+                  type="checkbox"
+                  className="check"
+                  checked={pick.has(p.id)}
+                  onChange={() => {
+                    const x = new Set(pick);
+                    if (x.has(p.id)) x.delete(p.id);
+                    else x.add(p.id);
+                    setPick(x);
+                  }}
+                />
+                <span>
+                  {p.name}
+                  <span className="small"> · {c.d.shifts.find((x) => x.id === p.shift)?.name ?? p.shift}</span>
+                </span>
+              </label>
+            ))}
+            {!shown.length && <span className="small">No members match.</span>}
+          </div>
+        </div>
+
+        <div className="field">
+          <label htmlFor="sched-shift">Shift</label>
+          <select id="sched-shift" className="input" value={shift} onChange={(e) => setShift(e.target.value)}>
+            <option value="">Keep each member’s shift</option>
+            {s.data.shifts.map((x) => (
+              <option key={x.id} value={x.id}>
+                {x.name} ({x.start}–{x.end})
+              </option>
+            ))}
+          </select>
+        </div>
+
+        <div className="field">
+          <label>Status by day of the week</label>
+          <div className="row" style={{ gap: 6, marginBottom: 6 }}>
+            <button className="btn btn-ghost" onClick={() => setAll("RTO", [1, 2, 3, 4, 5])}>Weekdays RTO</button>
+            <button className="btn btn-ghost" onClick={() => setAll("WFH", [1, 2, 3, 4, 5])}>Weekdays WFH</button>
+            <button className="btn btn-ghost" onClick={() => setAll("", [0, 1, 2, 3, 4, 5, 6])}>Back to usual</button>
+            <button className="btn btn-ghost" onClick={() => setAll("keep", [0, 1, 2, 3, 4, 5, 6])}>Keep all</button>
+          </div>
+          <div className="sched-days">
+            {[1, 2, 3, 4, 5, 6, 0].map((k) => (
+              <div key={k} className="field">
+                <label htmlFor={"sched-d" + k}>{DOW[k]}</label>
+                <select id={"sched-d" + k} className="input" value={days[k]} onChange={(e) => setDays({ ...days, [k]: e.target.value as SchedDay | "keep" })}>
+                  {DAY_OPTS.map(([val, l]) => (
+                    <option key={val} value={val}>
+                      {l}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            ))}
+          </div>
+          <span className="small">RD is a rest day. “Usual” goes back to the member’s weekly RTO / WFH pattern. Weekend days set to RTO or WFH become working days.</span>
+        </div>
+
+        <div className="dialog-actions" style={{ gap: 10 }}>
+          <button className="btn btn-secondary btn-40" onClick={close}>
+            Cancel
+          </button>
+          <PrimaryBtn
+            disabled={!ok}
+            onClick={() => {
+              s.run({
+                type: "setSchedule",
+                bid: b.id,
+                pids: [...pick],
+                from,
+                to,
+                shift: shift || null,
+                days: Object.fromEntries(chosen) as Partial<Record<number, SchedDay>>,
+              });
+              close();
+            }}
+          >
+            Apply to {pick.size || ""} member{pick.size === 1 ? "" : "s"}
+          </PrimaryBtn>
+        </div>
+      </div>
+    </Modal>
+  );
+}
+
 // ── Admin: change one person's day ──
 function CellDialog({ pid, date }: { pid: number; date: string }) {
   const s = useCalendar();
@@ -270,6 +454,13 @@ function CellDialog({ pid, date }: { pid: number; date: string }) {
           ))}
         </select>
       </div>
+      <button
+        className="btn btn-ghost"
+        style={{ alignSelf: "flex-start", paddingLeft: 0 }}
+        onClick={() => s.setDialog({ kind: "schedule", pids: [pid], date })}
+      >
+        Change {first(p.name)}’s whole {v.branch.schedPeriod === "month" ? "month" : "week"}…
+      </button>
       <span className="small">
         Leave you enter here is approved for {v.branch.name}. Other teams {first(p.name)} belongs to follow their own approval setting.
       </span>
@@ -1387,6 +1578,8 @@ export function CalDialogs() {
   switch (d.kind) {
     case "request":
       return <RequestDialog date={d.date} />;
+    case "schedule":
+      return <ScheduleDialog pids={d.pids} date={d.date} />;
     case "holWork":
       return <HolidayWorkDialog date={d.date} />;
     case "cell":

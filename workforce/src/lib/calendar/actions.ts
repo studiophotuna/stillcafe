@@ -4,7 +4,7 @@
  */
 import { fmtT } from "../workload/clock";
 import { ANNUAL, CODES, LEVELS, TYPE_L, first } from "./constants";
-import { fmtY, isWk, MONL } from "./dates";
+import { addDays, dowOf, fmtY, isWk, MONL } from "./dates";
 import { Cal, logsDecision, logsSubmit } from "./engine";
 import { allocProblem, teamDefaults } from "./org";
 import { planOrgImport, type OrgRow } from "./orgImport";
@@ -29,7 +29,8 @@ export type CalAction =
   | { type: "setOverride"; pid: number; date: string; code: Code | null }
   | { type: "setShiftDay"; pid: number; date: string; shift: string }
   | { type: "holidayWork"; pid: number; date: string; code: "RTO" | "WFH" | "HOL" | null; actor: number }
-  | { type: "teamSettings"; id: string; patch: Partial<Pick<OrgNode, "mode" | "notifyAdmin" | "notifyUser" | "invite" | "defaultScope" | "costCentre">> }
+  | { type: "teamSettings"; id: string; patch: Partial<Pick<OrgNode, "mode" | "notifyAdmin" | "notifyUser" | "invite" | "defaultScope" | "costCentre" | "schedPeriod">> }
+  | { type: "setSchedule"; bid: string; pids: number[]; from: string; to: string; shift: string | null; days: Partial<Record<number, SchedDay>> }
   | { type: "setBilled"; pid: number; bid: string; months: string[]; value: number | null }
   | { type: "setLinks"; links: AppLinks }
   | { type: "addAdmin"; id: string; pid: number }
@@ -51,6 +52,10 @@ export type CalAction =
   | { type: "startEvent"; name: string; start: string; scope: string; note: string }
   | { type: "closeEvent"; id: string }
   | { type: "importUpload"; mode: UploadMode; rows: UploadRow[]; bid: string };
+
+/** What a weekday becomes in Update schedules: a status, or "" for the person's usual pattern. */
+export type SchedDay = "RTO" | "WFH" | "RD" | "";
+const SCHED_DAYS: SchedDay[] = ["RTO", "WFH", "RD", ""];
 
 /** Editable person details (Members › Add / Edit). */
 export interface MemberDetails {
@@ -249,6 +254,39 @@ export function applyCalAction(d: CalendarData, a: CalAction, today: string, now
           : `${fmtY(a.date)} is back to a holiday${self ? " for you" : " for " + first(p.name)}.`,
       };
     }
+    case "setSchedule": {
+      // Several members at once, for a week or a month: shift and/or each weekday's status.
+      // Holidays keep their own status (members reply to those); approved leave still shows over it.
+      const days = Object.entries(a.days ?? {}).filter(([k, v]) => /^[0-6]$/.test(k) && SCHED_DAYS.includes(v as SchedDay));
+      const shift = a.shift && d.shifts.some((x) => x.id === a.shift) ? a.shift : null;
+      const pids = [...new Set(a.pids)].filter((id) => c.people.has(id) && c.O.inN(c.person(id), a.bid));
+      if (!pids.length || !/^\d{4}-\d{2}-\d{2}$/.test(a.from) || !/^\d{4}-\d{2}-\d{2}$/.test(a.to) || a.to < a.from) return { data: d, error: "Pick members and dates." };
+      if (!shift && !days.length) return { data: d, error: "Choose a shift or a status for at least one day." };
+      const overrides = { ...d.overrides };
+      const roster = { ...d.roster };
+      let n = 0;
+      for (let dt = a.from, g = 0; dt <= a.to && g < 62; dt = addDays(dt, 1), g++) {
+        const dow = String(dowOf(dt));
+        const set = days.find(([k]) => k === dow)?.[1] as SchedDay | undefined;
+        for (const pid of pids) {
+          const p = c.person(pid);
+          if (!c.alive(p, dt)) continue;
+          const k = pid + "|" + dt;
+          if (!isWk(dt) && c.holFor(p, dt)) continue;
+          if (set !== undefined) {
+            if (set) overrides[k] = set;
+            else delete overrides[k];
+            n++;
+          }
+          if (shift) {
+            if (shift === p.shift) delete roster[k];
+            else roster[k] = shift;
+          }
+        }
+      }
+      const who = pids.length === 1 ? first(c.person(pids[0]).name) : `${pids.length} members`;
+      return { data: { ...d, overrides, roster }, message: `Schedule updated for ${who}, ${fmtY(a.from)} – ${fmtY(a.to)}.` + (n || shift ? "" : " Nothing to change.") };
+    }
     case "setShiftDay":
       return {
         data: { ...d, roster: { ...d.roster, [a.pid + "|" + a.date]: a.shift } },
@@ -262,6 +300,7 @@ export function applyCalAction(d: CalendarData, a: CalAction, today: string, now
       if (p.defaultScope === "all" || p.defaultScope === "me") patch.defaultScope = p.defaultScope;
       for (const k of ["notifyAdmin", "notifyUser", "invite"] as const) if (typeof p[k] === "boolean") patch[k] = p[k];
       if (typeof p.costCentre === "string") patch.costCentre = p.costCentre.trim().slice(0, 40);
+      if (p.schedPeriod === "week" || p.schedPeriod === "month") patch.schedPeriod = p.schedPeriod;
       if (!c.O.by[a.id] || !Object.keys(patch).length) return { data: d };
       return { data: setNode(d, a.id, patch), message: "Saved." };
     }

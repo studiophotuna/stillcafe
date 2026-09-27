@@ -77,6 +77,12 @@ export function authorizeCal(a: CalAction, c: Cal, me: number): { action: CalAct
     case "addAdmin":
     case "removeAdmin":
       return ok(r.teamAdmin(a.id));
+    case "setSchedule": {
+      // Only the members this admin manages.
+      if (!r.teamAdmin(a.bid)) return NO;
+      const pids = (a.pids ?? []).filter((pid) => r.adminOf(pid));
+      return pids.length ? { action: { ...a, pids } } : NO;
+    }
     case "setBilled":
       return ok(r.teamAdmin(a.bid));
     case "setLinks":
