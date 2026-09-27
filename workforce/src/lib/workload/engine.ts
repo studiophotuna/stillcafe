@@ -3,10 +3,10 @@
  * these; a server implementation (Supabase RPC / route handlers) must apply
  * the same rules. See ../../../README.md › Workload rules.
  */
-import { H, M, TZ_OFFSET_H, addHours, dayKey, fmtT, localHour, spanMs } from "./clock";
+import { H, M, TZ_OFFSET_H, addHours, dayKey, fmtT, localHour, spanMs, weekend } from "./clock";
 import { CARRIERS, PR, fieldOptions, lc, sysName, trPathOf } from "./constants";
 import { SAMPLE_MAIL } from "./seed";
-import type { Activity, ActivityKind, Person, Priority, Settings, Task, TaskField, WlOrg } from "./types";
+import type { Activity, ActivityKind, Person, Priority, Settings, Task, TaskField, TaskType, WlOrg } from "./types";
 
 export interface WorkloadData {
   tasks: Task[];
@@ -29,6 +29,8 @@ export interface WorkloadData {
   activities: Activity[];
   /** Who may approve overtime: Workload admins and the team's leads, managers and directors. */
   approvers: number[];
+  /** Calendar holidays for this team (yyyy-mm-dd), skipped in SLA time unless the team counts them. */
+  holidays: string[];
 }
 
 export const personOf = (d: Pick<WorkloadData, "people">, id: number | null) =>
@@ -53,19 +55,60 @@ export interface Outcome {
 
 const PRIORITY_WEIGHT: Record<Priority, number> = { high: 0, normal: 1, low: 2 };
 
-/** Weekends don't count toward the SLA unless the team turned that on (Allocation). */
-export const skipsWeekends = (s: Settings) => s.slaWeekends !== true;
-export const due = (t: Task, s: Settings) => addHours(t.received, s.sla[t.pr] || 24, skipsWeekends(s));
-/** How long a task is overdue (weekends excluded when the SLA excludes them). */
-export const overdueMs = (t: Task, s: Settings, now: number) => spanMs(due(t, s), t.doneAt ?? now, skipsWeekends(s));
-export const isOverdue = (t: Task, s: Settings, now: number) => t.status !== "done" && now > due(t, s);
+// ── SLA ──
+// Standard SLA: by priority (Settings.sla). Task types (Settings.taskTypes) have their own SLA,
+// used instead of the standard one. The hours are fixed on the task when it comes in (slaH),
+// and SLA time skips weekends and Calendar holidays unless the team counts them.
 
-export function sortTasks(list: Task[], s: Settings): Task[] {
+/** What SLA time needs: the team's settings and its Calendar holidays. */
+export type SlaCtx = Pick<WorkloadData, "settings" | "holidays">;
+export const skipsWeekends = (s: Settings) => s.slaWeekends !== true;
+export const skipsHolidays = (s: Settings) => s.slaHolidays !== true;
+const offCache = new WeakMap<Settings, { h: string[] | undefined; f: (ms: number) => boolean }>();
+/** Whether a moment falls on a day that doesn't count toward the SLA. */
+export function offTime(c: SlaCtx): (ms: number) => boolean {
+  const hit = offCache.get(c.settings);
+  if (hit && hit.h === c.holidays) return hit.f;
+  const wk = skipsWeekends(c.settings);
+  const hol = new Set(skipsHolidays(c.settings) ? (c.holidays ?? []) : []);
+  const f = (ms: number) => (wk && weekend(ms)) || (hol.size > 0 && hol.has(dayKey(ms)));
+  offCache.set(c.settings, { h: c.holidays, f });
+  return f;
+}
+export const taskTypeOf = (s: Settings, t: Pick<Task, "ttype">) => (t.ttype ? (s.taskTypes ?? []).find((x) => x.id === t.ttype) : undefined);
+/** SLA hours the settings give a task now: its type's, else the standard SLA for its priority. */
+export const slaHoursFor = (t: Pick<Task, "ttype" | "pr">, s: Settings) => taskTypeOf(s, t)?.sla || s.sla[t.pr] || 24;
+/** The task's SLA hours: fixed when it came in, or from the settings for older tasks. */
+export const slaOf = (t: Task, s: Settings) => t.slaH ?? slaHoursFor(t, s);
+/** Fix the SLA on a task from the current settings. */
+export const withSla = <T extends Pick<Task, "ttype" | "pr">>(t: T, s: Settings): T & { slaH: number } => ({ ...t, slaH: slaHoursFor(t, s) });
+export const due = (t: Task, c: SlaCtx) => addHours(t.received, slaOf(t, c.settings), offTime(c));
+/** How long a task is overdue (days that don't count excluded). */
+export const overdueMs = (t: Task, c: SlaCtx, now: number) => spanMs(due(t, c), t.doneAt ?? now, offTime(c));
+export const isOverdue = (t: Task, c: SlaCtx, now: number) => t.status !== "done" && now > due(t, c);
+/** How long a task has been waiting, in SLA time. */
+export const waitingMs = (t: Task, c: SlaCtx, now: number) => spanMs(t.received, now, offTime(c));
+
+/** SLA hours as people read them: "30 min", "2 h", "2 days (48 h)". */
+export const slaText = (h: number) =>
+  h < 1 ? `${Math.round(h * 60)} min` : h >= 24 && h % 24 === 0 ? `${h / 24} day${h === 24 ? "" : "s"} (${h} h)` : `${+h.toFixed(2)} h`;
+
+/** The first task type whose keywords appear in the title (and that covers the trade). */
+export function detectType(s: Settings, title: string, trade: string): string {
+  const x = lc(title);
+  const hit = (s.taskTypes ?? []).find(
+    (y) => (!y.trades.length || !trade || y.trades.includes(trade)) && y.keywords.some((k) => k.trim() && x.includes(lc(k))),
+  );
+  return hit?.id ?? "";
+}
+
+export function sortTasks(list: Task[], c: SlaCtx): Task[] {
+  const s = c.settings;
   return list
     .slice()
     .sort((a, b) =>
       s.order === "priority"
-        ? PRIORITY_WEIGHT[a.pr] - PRIORITY_WEIGHT[b.pr] || due(a, s) - due(b, s) || a.received - b.received
+        ? PRIORITY_WEIGHT[a.pr] - PRIORITY_WEIGHT[b.pr] || due(a, c) - due(b, c) || a.received - b.received
         : a.received - b.received,
     );
 }
@@ -100,7 +143,7 @@ function notWorking(d: WorkloadData, pid: number, now: number) {
 
 /** Waiting tasks in the member's own trades, next first. */
 export const ownQueue = (d: WorkloadData, me: Person) =>
-  sortTasks(d.tasks.filter((t) => t.status === "new" && me.trades.includes(t.trade)), d.settings);
+  sortTasks(d.tasks.filter((t) => t.status === "new" && me.trades.includes(t.trade)), d);
 
 /**
  * Tasks the member can help with when their own trades are empty: other trades in
@@ -110,7 +153,7 @@ export const ownQueue = (d: WorkloadData, me: Person) =>
 export function helpQueue(d: WorkloadData, me: Person): { t: Task; sameSystem: boolean }[] {
   const tradeSys = (id: string) => d.org.trades.find((x) => x.id === id)?.sys ?? "";
   const mySys = new Set(me.trades.map(tradeSys).filter(Boolean));
-  const sorted = sortTasks(d.tasks.filter((t) => t.status === "new" && t.trade && !me.trades.includes(t.trade)), d.settings);
+  const sorted = sortTasks(d.tasks.filter((t) => t.status === "new" && t.trade && !me.trades.includes(t.trade)), d);
   const tagged = sorted.map((t) => ({ t, sameSystem: mySys.has(tradeSys(t.trade)) }));
   return tagged.filter((x) => x.sameSystem).concat(tagged.filter((x) => !x.sameSystem));
 }
@@ -146,7 +189,7 @@ export function startWork(d: WorkloadData, pid: number, now: number, assist = fa
   if (stop) return { data: d, message: stop };
   if (!canWork(me, d.settings)) return { data: d, message: "You’re marked unavailable, so tasks aren’t given to you." };
   const s = d.settings;
-  const next = sortTasks(d.tasks.filter((t) => t.assignee === pid && t.status === "assigned"), s)[0] ?? (s.mode === "fifo" ? ownQueue(d, me)[0] : undefined);
+  const next = sortTasks(d.tasks.filter((t) => t.assignee === pid && t.status === "assigned"), d)[0] ?? (s.mode === "fifo" ? ownQueue(d, me)[0] : undefined);
   if (next) return { data: begin(d, next.id, me, now), message: `Started ${next.id}.` };
   if (s.mode !== "fifo" || !me.trades.length) return { data: d, message: "Done. No more tasks waiting in your trades right now." };
   const help = helpQueue(d, me)[0];
@@ -248,7 +291,7 @@ export function addTasks(d: WorkloadData, newTasks: Task[], label: string, now: 
 
 /** "Share out queue now": round-robin every waiting task that has a trade. */
 export function distribute(d: WorkloadData, now: number): Outcome {
-  const ids = sortTasks(d.tasks.filter((t) => t.status === "new" && t.trade), d.settings).map((t) => t.id);
+  const ids = sortTasks(d.tasks.filter((t) => t.status === "new" && t.trade), d).map((t) => t.id);
   const { tasks, n } = rrAssign(d.tasks, ids, d.settings, d.people, now);
   return { data: { ...d, tasks }, message: `${n} tasks shared out.` };
 }
@@ -272,7 +315,26 @@ export function setTrade(d: WorkloadData, id: string, tradeId: string, now: numb
 }
 
 export function setPriority(d: WorkloadData, id: string, pr: Priority, now: number): Outcome {
-  return { data: patch(d, id, (x) => ({ ...x, pr, history: hist(x, now, "Priority set to " + PR[pr][0]) })) };
+  return {
+    data: patch(d, id, (x) => {
+      // A standard request's SLA follows its priority; a typed task keeps its type's SLA.
+      const y = taskTypeOf(d.settings, x) ? { ...x, pr } : withSla({ ...x, pr }, d.settings);
+      return { ...y, history: hist(x, now, "Priority set to " + PR[pr][0] + (y.slaH !== slaOf(x, d.settings) ? ` · SLA ${y.slaH} h` : "")) };
+    }),
+  };
+}
+
+/** Set a task's type ("" = standard request); its SLA is fixed again from the settings. */
+export function setTaskType(d: WorkloadData, id: string, ttype: string, now: number): Outcome {
+  const ty = ttype ? (d.settings.taskTypes ?? []).find((x) => x.id === ttype) : undefined;
+  if (ttype && !ty) return { data: d, message: "That task type isn’t set up." };
+  const t = d.tasks.find((x) => x.id === id);
+  if (!t || t.status === "done") return { data: d };
+  const y = withSla({ ...t, ttype }, d.settings);
+  return {
+    data: patch(d, id, () => ({ ...y, history: hist(t, now, (ty ? `Task type set to ${ty.name}` : "Set as a standard request") + ` · SLA ${y.slaH} h`) })),
+    message: `${id}: ${ty ? ty.name : "standard request"}, SLA ${y.slaH} h.`,
+  };
 }
 
 /** Assign to a person, or pid = null to return the task to the queue. */
@@ -319,13 +381,14 @@ export function checkMail(d: WorkloadData, now: number): Outcome {
       ...blankTask("T-" + seq++, rec),
       title: subject.replace(/^URGENT: /, ""),
       trade: tr,
-      pr: /urgent/i.test(subject) ? "high" : "normal",
-      source: "outlook",
+      ttype: detectType(d.settings, subject, tr),
+      pr: /urgent/i.test(subject) ? ("high" as const) : ("normal" as const),
+      source: "outlook" as const,
       fields: { carrier: CARRIERS.find((c) => subject.includes(c)) ?? "" },
       email: { from, cc: "rm.team@dsv.com", subject, body, attachments },
       history: [{ at: rec, text: "Received from Outlook" + (tr ? "" : " · waiting for an admin to set the trade") }],
     };
-  });
+  }).map((t) => withSla(t, d.settings));
   return addTasks({ ...d, seq, mailCount: k + 2 }, nt, " from " + d.settings.mailbox, now);
 }
 
@@ -337,7 +400,7 @@ export interface CheckedRow {
   ok: boolean;
   msg: string;
   /** received: when the request came in (team time), or null to use the upload time. */
-  task: { title: string; trade: string; pr: Priority; fields: Task["fields"]; received: number | null } | null;
+  task: { title: string; trade: string; pr: Priority; ttype: string; fields: Task["fields"]; received: number | null } | null;
 }
 
 /** Validate uploaded rows against the team's task fields. Row numbers match the spreadsheet (header = row 1). */
@@ -356,7 +419,7 @@ export function parseReceived(v: unknown): number | null | "bad" {
   return isNaN(ms) ? "bad" : ms;
 }
 
-export function checkRows(rows: UploadRow[], fields: TaskField[], org: WlOrg, now = Date.now()): CheckedRow[] {
+export function checkRows(rows: UploadRow[], fields: TaskField[], org: WlOrg, now = Date.now(), types: TaskType[] = []): CheckedRow[] {
   const g = (r: UploadRow, l: string) => {
     const k = Object.keys(r).find((x) => lc(x) === lc(l));
     return k ? r[k] : "";
@@ -373,6 +436,9 @@ export function checkRows(rows: UploadRow[], fields: TaskField[], org: WlOrg, no
     const prV = lc(g(r, "Priority")) || "normal";
     // When the request actually came in: the due time counts from here, not from the upload.
     const rec = parseReceived(g(r, "Received"));
+    // Task type by name; blank = found from the title's keywords, else a standard request.
+    const tyV = lc(g(r, "Task type"));
+    const ty = tyV ? types.find((x) => lc(x.name) === tyV) : undefined;
     const out: Task["fields"] = {};
     let err = !title
       ? "Title is missing"
@@ -390,7 +456,9 @@ export function checkRows(rows: UploadRow[], fields: TaskField[], org: WlOrg, no
               ? "Received must be a date and time like 2026-09-24 08:30"
               : rec !== null && rec > now + 5 * M
                 ? "Received is in the future"
-                : "";
+                : tyV && !ty
+                  ? `Task type “${String(g(r, "Task type")).trim()}” isn’t set up`
+                  : "";
     if (!err)
       for (const f of fields) {
         let raw = g(r, f.label);
@@ -403,10 +471,22 @@ export function checkRows(rows: UploadRow[], fields: TaskField[], org: WlOrg, no
       }
     return {
       n: i + 2,
-      summary: title + (tr ? ` · ${tr.sys ? sysName(org, tr.sys) + " › " : ""}${tr.name}` : ""),
+      summary:
+        title +
+        (tr ? ` · ${tr.sys ? sysName(org, tr.sys) + " › " : ""}${tr.name}` : "") +
+        (ty ? ` · ${ty.name}` : ""),
       ok: !err,
       msg: err || "Ready",
-      task: err ? null : { title, trade: tr!.id, pr: prV as Priority, fields: out, received: typeof rec === "number" ? rec : null },
+      task: err
+        ? null
+        : {
+            title,
+            trade: tr!.id,
+            pr: prV as Priority,
+            ttype: ty?.id ?? detectType({ taskTypes: types } as Settings, title, tr!.id),
+            fields: out,
+            received: typeof rec === "number" ? rec : null,
+          },
     };
   });
 }
@@ -417,14 +497,17 @@ export function importRows(d: WorkloadData, checked: CheckedRow[], now: number):
     .filter((c) => c.ok && c.task)
     .map((c) => {
       const { received, ...task } = c.task!;
-      return {
-        ...blankTask("T-" + seq++, now),
-        ...task,
-        received: received ?? now,
-        source: "upload" as const,
-        email: null,
-        history: [{ at: now, text: "Imported from upload" + (received ? ` (received ${fmtT(received)})` : "") }],
-      };
+      return withSla(
+        {
+          ...blankTask("T-" + seq++, now),
+          ...task,
+          received: received ?? now,
+          source: "upload" as const,
+          email: null,
+          history: [{ at: now, text: "Imported from upload" + (received ? ` (received ${fmtT(received)})` : "") }],
+        },
+        d.settings,
+      );
     });
   return addTasks({ ...d, seq }, nt, " from upload", now);
 }
@@ -499,7 +582,7 @@ export function personMetrics(d: WorkloadData, p: Person, now: number): PersonMe
   const handle = done.concat(mine.filter((t) => t.status === "in_progress")).reduce((a, t) => a + taskWorkMs(d, t, until), 0);
   const target = targetOf(p, s);
   const tgt = target * fr;
-  const onTime = done.filter((t) => t.doneAt! <= due(t, s)).length;
+  const onTime = done.filter((t) => t.doneAt! <= due(t, d)).length;
   const out = output(d, done);
   return {
     out,
@@ -688,6 +771,6 @@ export function staleTasks(d: WorkloadData, me: number, admin: boolean, now: num
   const cut = now - days * 24 * H;
   return sortTasks(
     d.tasks.filter((t) => t.status !== "done" && t.received <= cut && (admin || t.assignee === me)),
-    d.settings,
+    d,
   );
 }

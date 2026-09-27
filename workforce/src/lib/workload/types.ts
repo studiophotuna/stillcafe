@@ -106,6 +106,25 @@ export interface Task {
   fields: Record<string, string | number>;
   email: TaskEmail | null;
   history: HistoryEntry[];
+  /** Task type id (Settings.taskTypes); "" or missing = a standard request. */
+  ttype?: string;
+  /**
+   * SLA hours fixed when the task came in (or its type / priority changed), so later
+   * changes to the SLA settings don't move open tasks. Missing on older tasks: current settings apply.
+   */
+  slaH?: number | null;
+}
+
+/** A kind of request with its own SLA (e.g. Doc review 2 h, Booking 4 h). */
+export interface TaskType {
+  id: string;
+  name: string;
+  /** SLA in hours from received (weekends and holidays skipped as the team's settings say). */
+  sla: number;
+  /** Trades it applies to; empty = every trade in the team. */
+  trades: string[];
+  /** Words in an email subject or upload title that mark a task as this type. */
+  keywords: string[];
 }
 
 export interface WorkingTime {
@@ -143,6 +162,10 @@ export interface Settings {
   ticketField?: string;
   /** true: Saturdays and Sundays count toward the SLA / due time. Default false (skipped). */
   slaWeekends?: boolean;
+  /** true: Calendar holidays count toward the SLA / due time. Default false (skipped). */
+  slaHolidays?: boolean;
+  /** Request types with their own SLA. Tasks without a type use the standard SLA (by priority). */
+  taskTypes?: TaskType[];
 }
 
 export interface Toast {

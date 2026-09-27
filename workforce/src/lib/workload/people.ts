@@ -76,6 +76,12 @@ export function peopleFromCalendar(c: Cal, now: number, teamId: string): Person[
     });
 }
 
+/** Calendar holidays that apply to the team: for everyone, or for the team or anything above it. */
+export function holidaysFor(c: Cal, teamId: string): string[] {
+  const up = c.O.anc(teamId);
+  return [...new Set(c.d.holidays.filter((h) => h.scope === "all" || up.includes(h.scope)).map((h) => h.date))].sort();
+}
+
 /** Team admins of the team plus system admins. */
 export function workloadAdmins(c: Cal, teamId: string): number[] {
   // The team's admins and the admins of its tower and department.

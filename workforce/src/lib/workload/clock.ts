@@ -60,19 +60,24 @@ export const dur = (ms: number) => {
 const DAY = 24 * H;
 /** Team-local midnight of the day `ms` falls on. */
 export const dayStart = (ms: number) => Date.parse(dayKey(ms) + "T00:00:00Z") - TZ_OFFSET_H * H;
-const weekend = (ms: number) => {
+export const weekend = (ms: number) => {
   const d = local(ms).getUTCDay();
   return d === 0 || d === 6;
 };
 
-/** `start` plus `hours`; with `skipWeekends`, Saturday and Sunday (team time) don't count. */
-export function addHours(start: number, hours: number, skipWeekends: boolean) {
-  if (!skipWeekends) return start + hours * H;
+/** Days that don't count: `true` = Saturdays and Sundays, or a test for any moment of the day. */
+export type OffDays = boolean | ((ms: number) => boolean);
+const offFn = (skip: OffDays) => (typeof skip === "function" ? skip : skip ? weekend : null);
+
+/** `start` plus `hours`, skipping whole days that are off (team time). */
+export function addHours(start: number, hours: number, skip: OffDays) {
+  const off = offFn(skip);
+  if (!off) return start + hours * H;
   let t = start;
   let left = hours * H;
   for (let guard = 0; guard < 2000; guard++) {
     const end = dayStart(t) + DAY;
-    if (weekend(t)) {
+    if (off(t)) {
       t = end;
       continue;
     }
@@ -83,14 +88,15 @@ export function addHours(start: number, hours: number, skipWeekends: boolean) {
   return t + left;
 }
 
-/** Time between a and b (0 if b ≤ a); with `skipWeekends`, weekend time isn't counted. */
-export function spanMs(a: number, b: number, skipWeekends: boolean) {
+/** Time between a and b (0 if b ≤ a), not counting days that are off. */
+export function spanMs(a: number, b: number, skip: OffDays) {
   if (b <= a) return 0;
-  if (!skipWeekends) return b - a;
+  const off = offFn(skip);
+  if (!off) return b - a;
   let ms = 0;
   for (let t = a, guard = 0; t < b && guard < 2000; guard++) {
     const end = Math.min(b, dayStart(t) + DAY);
-    if (!weekend(t)) ms += end - t;
+    if (!off(t)) ms += end - t;
     t = end;
   }
   return ms;

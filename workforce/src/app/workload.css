@@ -336,3 +336,7 @@ button.org-tog:hover { color: var(--color-text); }
 .sched-member { display: flex; align-items: center; gap: 8px; min-height: 32px; cursor: pointer; }
 .sched-days { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 6px; }
 @media (max-width: 640px) { .sched-days { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
+.check-row { display: flex; gap: 10px; align-items: flex-start; cursor: pointer; }
+.check-row > span { display: flex; flex-direction: column; gap: 2px; font-size: 14px; }
+.check-row strong { font-weight: 500; }
+.tt-tag { display: inline-block; margin-left: 6px; padding: 0 6px; font-size: 11px; line-height: 18px; border: 1px solid var(--color-divider); color: var(--color-neutral-800); white-space: nowrap; }

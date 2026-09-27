@@ -2,7 +2,7 @@
 
 import { fieldOptions } from "./constants";
 import type { UploadRow } from "./engine";
-import type { TaskField, WlOrg } from "./types";
+import type { TaskField, WlOrg, TaskType } from "./types";
 
 const XLSX_MIME = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
 
@@ -17,7 +17,7 @@ const colLetter = (i: number) => {
  * (from the Calendar): required columns get " *", list columns get drop-downs
  * from a hidden Lists sheet, 500 input rows.
  */
-export async function downloadTaskTemplate(fields: TaskField[], org: WlOrg) {
+export async function downloadTaskTemplate(fields: TaskField[], org: WlOrg, types: TaskType[] = []) {
   // System is only needed when a trade name appears under two systems; a team that is
   // its own single unit needs neither column.
   const single = org.trades.length === 1 && org.trades[0].id === org.team.id;
@@ -33,6 +33,7 @@ export async function downloadTaskTemplate(fields: TaskField[], org: WlOrg) {
     ...(single ? [] : org.systems.length ? ([["System", false]] as [string, boolean][]) : []),
     ...(single ? [] : ([["Trade", true]] as [string, boolean][])),
     ["Priority", false],
+    ...(types.length ? ([["Task type", false]] as [string, boolean][]) : []),
     ["Received", false],
     ...fields.map((f): [string, boolean, TaskField] => [f.label, f.required, f]),
   ];
@@ -49,6 +50,7 @@ export async function downloadTaskTemplate(fields: TaskField[], org: WlOrg) {
     ...(org.systems.length && !single ? ([["System", org.systems.map((x) => x.name)]] as [string, string[]][]) : []),
     ...(single ? [] : ([["Trade", tradeNames]] as [string, string[]][])),
     ["Priority", ["High", "Normal", "Low"]],
+    ...(types.length ? ([["Task type", types.map((t) => t.name)]] as [string, string[]][]) : []),
     ...fields.filter((f) => f.type === "select").map((f): [string, string[]] => [f.label, fieldOptions(f)]),
   ];
   lists.forEach(([k, v], ci) => {

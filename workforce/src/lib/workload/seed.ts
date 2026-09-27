@@ -163,6 +163,7 @@ export function initialData(now: number, empty = false): WorkloadData {
     people: empty ? [] : PEOPLE,
     admins: empty ? [] : [23],
     org: DEMO_ORG,
+    holidays: [],
     activities: [],
     approvers: empty ? [] : [23],
     fields: FIELDS0.map((f) => ({ ...f })),

@@ -15,7 +15,7 @@ export function UploadTasks() {
   const { data, run, toast, now } = useWorkload();
   const { org } = data;
   const [upload, setUpload] = useState<{ file: string; rows: UploadRow[] } | null>(null);
-  const chk = upload ? checkRows(upload.rows, data.fields, org, now) : [];
+  const chk = upload ? checkRows(upload.rows, data.fields, org, now, data.settings.taskTypes) : [];
   const okN = chk.filter((c) => c.ok).length;
 
   const onFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -33,14 +33,17 @@ export function UploadTasks() {
     <Blueprint as="section" className="panel">
       <h2 className="h2">Upload tasks</h2>
       <span className="note">
-        The template follows this team’s task fields (Admin › Task fields). Columns marked * can be left blank here but must be filled in before a task is marked done. Received is when the request actually came in (date and time); the due time counts from it, or from the upload if left blank. System, Trade, Priority and list fields have drop-downs.
+        The template follows this team’s task fields (Admin › Task fields). Columns marked * can be left blank here but must be filled in before a task is marked done. Received is when the request actually came in (date and time); the due time counts from it, or from the upload if left blank. System, Trade, Priority and list fields have drop-downs.{" "}
+        {data.settings.taskTypes?.length
+          ? "Task type sets the SLA (Admin › SLA & task types); leave it blank to detect it from the title’s keywords, or to use the standard SLA."
+          : ""}
       </span>
       <div className="row">
         <button
           className="btn btn-secondary btn-40"
           onClick={async () => {
             try {
-              await downloadTaskTemplate(data.fields, org);
+              await downloadTaskTemplate(data.fields, org, data.settings.taskTypes);
               toast("Template downloaded.");
             } catch {
               toast("The template couldn’t be created. Try again.");

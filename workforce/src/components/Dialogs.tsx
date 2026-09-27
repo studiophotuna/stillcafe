@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { fieldOptions, trPathOf } from "@/lib/workload/constants";
 import { nowMs } from "@/lib/workload/clock";
-import { fmtMin, missingRequired, pastShiftMin, type AssistOffer } from "@/lib/workload/engine";
+import { fmtMin, missingRequired, pastShiftMin, type AssistOffer, slaText } from "@/lib/workload/engine";
 import { useWorkload } from "@/lib/workload/store";
 import type { Priority, Task } from "@/lib/workload/types";
 import { assignOptions, taskDetail } from "@/lib/workload/view";
@@ -114,6 +114,24 @@ function TaskDialog({ id }: { id: string }) {
                 <option value="low">Low</option>
               </select>
             </div>
+            {(data.settings.taskTypes?.length || t.ttype) && t.status !== "done" ? (
+              <div className="field">
+                <label htmlFor="dt-tt">Task type (sets the SLA)</label>
+                <select id="dt-tt" className="input" value={t.ttype ?? ""} onChange={(e) => run({ type: "setTaskType", id, ttype: e.target.value })}>
+                  <option value="">Standard request · SLA by priority</option>
+                  {(data.settings.taskTypes ?? []).map((o) => (
+                    <option key={o.id} value={o.id}>
+                      {o.name} · {slaText(o.sla)}
+                    </option>
+                  ))}
+                  {t.ttype && !(data.settings.taskTypes ?? []).some((o) => o.id === t.ttype) && (
+                    <option value={t.ttype} disabled>
+                      Deleted type
+                    </option>
+                  )}
+                </select>
+              </div>
+            ) : null}
             <div className="field">
               <label htmlFor="dt-as">Assign to</label>
               <select

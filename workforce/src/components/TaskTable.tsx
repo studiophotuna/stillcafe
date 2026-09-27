@@ -44,6 +44,7 @@ export function TaskTable({ rows, variant }: { rows: TaskRowVM[]; variant: "mine
                 <span>{r.title}</span>
                 <span>
                   {r.id} · {r.sourceLabel}
+                  {r.typeName && <span className="tt-tag">{r.typeName}</span>}
                 </span>
               </button>
             </td>

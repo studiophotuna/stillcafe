@@ -58,7 +58,10 @@ const task = (p: Partial<Task> = {}): Task => ({
   ...p,
 });
 
+/** SLA context: settings plus Calendar holidays. */
+const sc = (p: Partial<Settings> = {}, holidays: string[] = []) => ({ settings: settings(p), holidays });
 const data = (tasks: Task[], p: Partial<Settings> = {}): WorkloadData => ({
+  holidays: [],
   tasks,
   fields: FIELDS0.map((f) => ({ ...f, required: false })),
   settings: settings(p),
@@ -79,8 +82,8 @@ describe("ordering", () => {
     const b = task({ pr: "high", received: NOW - H });
     const c = task({ pr: "normal", received: NOW - 2 * H });
     const d = task({ pr: "normal", received: NOW - 3 * H });
-    expect(sortTasks([a, b, c, d], settings()).map((t) => t.id)).toEqual([b.id, d.id, c.id, a.id]);
-    expect(sortTasks([a, b, c, d], settings({ order: "received" })).map((t) => t.id)).toEqual([a.id, d.id, c.id, b.id]);
+    expect(sortTasks([a, b, c, d], sc()).map((t) => t.id)).toEqual([b.id, d.id, c.id, a.id]);
+    expect(sortTasks([a, b, c, d], sc({ order: "received" })).map((t) => t.id)).toEqual([a.id, d.id, c.id, b.id]);
   });
 });
 
@@ -439,13 +442,13 @@ describe("on-hold time and weekend SLA", async () => {
     expect(spanMs(fri, mon, true)).toBe(9 * H + 9 * H); // Fri 15→24, Mon 0→9
     const t = task({ received: fri, pr: "normal" });
     // Skipped by default; counted only when the team turns weekends on.
-    expect(due(t, settings({}))).toBe(addHours(fri, 24, true));
-    expect(due(t, settings({ slaWeekends: false }))).toBe(addHours(fri, 24, true));
-    expect(overdueMs(t, settings({}), Date.parse("2026-09-28T17:00:00+08:00"))).toBe(2 * H);
-    expect(due(t, settings({ slaWeekends: true }))).toBe(fri + 24 * H);
+    expect(due(t, sc({}))).toBe(addHours(fri, 24, true));
+    expect(due(t, sc({ slaWeekends: false }))).toBe(addHours(fri, 24, true));
+    expect(overdueMs(t, sc({}), Date.parse("2026-09-28T17:00:00+08:00"))).toBe(2 * H);
+    expect(due(t, sc({ slaWeekends: true }))).toBe(fri + 24 * H);
     // The ticket from the report: Fri 25 Sep 15:59, 48 h SLA, seen Sun 27 Sep 02:07 — not overdue.
     const t2 = task({ received: Date.parse("2026-09-25T15:59:00+08:00"), pr: "normal" });
-    const s48 = settings({ sla: { high: 24, normal: 48, low: 72 } });
+    const s48 = sc({ sla: { high: 24, normal: 48, low: 72 } });
     expect(overdueMs(t2, s48, Date.parse("2026-09-27T02:07:00+08:00"))).toBe(0);
     expect(new Date(due(t2, s48)).toISOString()).toBe("2026-09-29T07:59:00.000Z"); // Tue 15:59
   });
@@ -469,5 +472,86 @@ describe("uploads keep the actual received time", async () => {
     const d = importRows(data([]), chk, NOW).data;
     expect(d.tasks.map((t) => t.received)).toEqual([Date.parse("2026-09-23T08:30:00+08:00"), NOW]);
     expect(d.tasks[0].history[0].text).toMatch(/received/);
+  });
+});
+
+describe("task types with their own SLA, and holidays", async () => {
+  const E = await import("./engine");
+  const { applyAction } = await import("./actions");
+  const { authorizeWl } = await import("./authz");
+  const TYPES = [
+    { id: "doc", name: "Doc review", sla: 2, trades: [], keywords: ["doc review", "documents"] },
+    { id: "bk", name: "Booking", sla: 4, trades: ["eu"], keywords: ["booking"] },
+  ];
+  const mon = Date.parse("2026-09-28T09:00:00+08:00"); // Monday 09:00
+
+  it("a typed task uses its type's SLA; others the standard SLA for their priority", () => {
+    const s = settings({ taskTypes: TYPES });
+    expect(E.slaHoursFor({ ttype: "doc", pr: "normal" }, s)).toBe(2);
+    expect(E.slaHoursFor({ ttype: "", pr: "normal" }, s)).toBe(24);
+    expect(E.slaHoursFor({ ttype: "", pr: "high" }, s)).toBe(4);
+    expect(E.slaHoursFor({ ttype: "gone", pr: "low" }, s)).toBe(72); // deleted type: standard
+    const t = task({ received: mon, ttype: "doc" });
+    expect(E.due(t, sc({ taskTypes: TYPES }))).toBe(mon + 2 * H);
+  });
+
+  it("keeps the SLA a task came in with when the settings change", () => {
+    const t = E.withSla(task({ received: mon, ttype: "doc" }), settings({ taskTypes: TYPES }));
+    expect(t.slaH).toBe(2);
+    const later = sc({ taskTypes: TYPES.map((x) => (x.id === "doc" ? { ...x, sla: 8 } : x)) });
+    expect(E.due(t, later)).toBe(mon + 2 * H);
+    // Older tasks without a fixed SLA follow the current settings.
+    expect(E.due(task({ received: mon, ttype: "doc" }), later)).toBe(mon + 8 * H);
+  });
+
+  it("finds the type from keywords, respecting trades", () => {
+    const s = settings({ taskTypes: TYPES });
+    expect(E.detectType(s, "Please DOC REVIEW for shipment", "lcl")).toBe("doc");
+    expect(E.detectType(s, "New booking request", "eu")).toBe("bk");
+    expect(E.detectType(s, "New booking request", "lcl")).toBe(""); // Booking only covers EU
+    expect(E.detectType(s, "Rate question", "eu")).toBe("");
+  });
+
+  it("uploads take the Task type column, or keywords, and fix the SLA", () => {
+    const d = data([], { taskTypes: TYPES });
+    const rows = [
+      { Title: "Check invoice", Trade: "EU", "Task type": "Booking" },
+      { Title: "documents for vessel", Trade: "LCL" },
+      { Title: "Plain", Trade: "LCL" },
+      { Title: "Bad", Trade: "LCL", "Task type": "Nope" },
+    ];
+    const chk = checkRows(rows, d.fields, d.org, NOW, TYPES);
+    expect(chk.map((c) => c.ok)).toEqual([true, true, true, false]);
+    expect(chk[3].msg).toContain("isn’t set up");
+    const out = E.importRows(d, chk, NOW).data.tasks;
+    expect(out.map((t) => [t.ttype, t.slaH])).toEqual([["bk", 4], ["doc", 2], ["", 24]]);
+  });
+
+  it("admins set the type from the task details; priority re-fixes a standard request's SLA", () => {
+    const d = data([task({ id: "A", received: mon, slaH: 24 })], { taskTypes: TYPES });
+    const r = applyAction(d, { type: "setTaskType", id: "A", ttype: "doc" }, mon + H);
+    expect(r.data.tasks[0]).toMatchObject({ ttype: "doc", slaH: 2 });
+    expect(r.data.tasks[0].history.at(-1)!.text).toContain("Doc review · SLA 2 h");
+    const back = applyAction(r.data, { type: "setTaskType", id: "A", ttype: "" }, mon + H);
+    expect(back.data.tasks[0]).toMatchObject({ ttype: "", slaH: 24 });
+    const hi = applyAction(back.data, { type: "setPriority", id: "A", pr: "high" }, mon + H);
+    expect(hi.data.tasks[0].slaH).toBe(4);
+    const typed = applyAction(r.data, { type: "setPriority", id: "A", pr: "high" }, mon + H);
+    expect(typed.data.tasks[0].slaH).toBe(2); // the type's SLA stays
+    expect(applyAction(d, { type: "setTaskType", id: "A", ttype: "nope" }, mon).data).toBe(d);
+    // Members can't change a task's type (it would change their SLA).
+    expect("error" in authorizeWl({ type: "setTaskType", id: "A", ttype: "" }, { ...d, admins: [23] }, ANA)).toBe(true);
+  });
+
+  it("skips Calendar holidays in SLA time unless the team counts them", () => {
+    const tue = Date.parse("2026-09-29T15:00:00+08:00"); // Tuesday 15:00, Wednesday is a holiday
+    const t = task({ received: tue, pr: "normal" }); // 24 h
+    expect(new Date(E.due(t, sc({}, ["2026-09-30"]))).toISOString()).toBe("2026-10-01T07:00:00.000Z"); // Thu 15:00
+    expect(E.due(t, sc({ slaHolidays: true }, ["2026-09-30"]))).toBe(tue + 24 * H);
+    // Holiday on a Friday plus the weekend: Thu 15:00 + 24 h → Mon 15:00.
+    const thu = Date.parse("2026-10-01T15:00:00+08:00");
+    expect(new Date(E.due(task({ received: thu }), sc({}, ["2026-10-02"]))).toISOString()).toBe("2026-10-05T07:00:00.000Z");
+    // Waiting time doesn't grow on the holiday either.
+    expect(E.waitingMs(t, sc({}, ["2026-09-30"]), Date.parse("2026-10-01T09:00:00+08:00"))).toBe(9 * H + 9 * H);
   });
 });

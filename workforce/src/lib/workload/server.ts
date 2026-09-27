@@ -5,7 +5,7 @@ import { ConflictError, ForbiddenError, db } from "../db";
 import { authorizeWl } from "./authz";
 import { dayKey } from "./clock";
 import { visibleTeams } from "../calendar/authz";
-import { orgFor, peopleFromCalendar, workloadAdmins, workloadApprovers } from "./people";
+import { holidaysFor, orgFor, peopleFromCalendar, workloadAdmins, workloadApprovers } from "./people";
 import { applyAction, type Action } from "./actions";
 import type { WorkloadData } from "./engine";
 import { initialData } from "./seed";
@@ -31,7 +31,7 @@ interface RawSnapshot {
   tasks: RawTask[];
 }
 
-type FromCal = Pick<WorkloadData, "people" | "admins" | "org" | "approvers">;
+type FromCal = Pick<WorkloadData, "people" | "admins" | "org" | "approvers" | "holidays">;
 type RawActivity = Activity & { version: number };
 /** Activity loaded with the team: recent days (reports) plus anything ongoing or pending. */
 const ACTIVITY_DAYS = 35;
@@ -54,6 +54,7 @@ async function teamContext(token: string, me: number, want?: string | null): Pro
       admins: workloadAdmins(c, team),
       approvers: workloadApprovers(c, team),
       org: orgFor(c, team, teams),
+      holidays: holidaysFor(c, team),
     },
   };
 }

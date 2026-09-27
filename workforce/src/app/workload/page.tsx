@@ -42,7 +42,7 @@ export default function MyWorkPage() {
       ]
     : [{ k: "Waiting in queue", v: data.tasks.filter((t) => t.status === "new").length, m: "all trades" }];
 
-  const assignedMine = sortTasks(data.tasks.filter((t) => t.assignee === me.id && (t.status === "assigned" || t.status === "on_hold")), s);
+  const assignedMine = sortTasks(data.tasks.filter((t) => t.assignee === me.id && (t.status === "assigned" || t.status === "on_hold")), data);
   // Members pick: own trades; when those are empty, other trades (same system first, then the team) to help with.
   const own = s.mode === "self" ? ownQueue(data, me) : [];
   const help = s.mode === "self" && !own.length && me.trades.length ? helpQueue(data, me).map((x) => x.t) : [];

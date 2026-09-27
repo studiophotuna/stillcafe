@@ -3,7 +3,7 @@
 import { Blueprint, Kpi, PageHead, pct } from "@/components/ui";
 import { dayKey, dur, fmtT } from "@/lib/workload/clock";
 import { AV, tradeOf, trPathOf } from "@/lib/workload/constants";
-import { awayLabel, basisUnit, doneToday, fmtMin, isOverdue, personMetrics } from "@/lib/workload/engine";
+import { awayLabel, basisUnit, doneToday, due, fmtMin, isOverdue, personMetrics, slaText, taskTypeOf } from "@/lib/workload/engine";
 import { useWorkload } from "@/lib/workload/store";
 import type { Task } from "@/lib/workload/types";
 import { useUnit } from "@/lib/workload/useUnit";
@@ -15,7 +15,7 @@ export default function DashboardPage() {
   const ut = data.tasks.filter(inUnit);
   const q = ut.filter((t) => t.status === "new");
   const doneT = doneToday(ut, now);
-  const od = ut.filter((t) => isOverdue(t, s, now));
+  const od = ut.filter((t) => isOverdue(t, data, now));
   const oldest = (l: Task[]) => (l.length ? dur(now - Math.min(...l.map((t) => t.received))) : "—");
   const avg = (l: Task[]) => (l.length ? dur(l.reduce((a, t) => a + (t.doneAt! - t.startedAt!), 0) / l.length) : "—");
   const sumF = (l: Task[], k: string) => l.reduce((a, t) => a + (Number(t.fields[k]) || 0), 0);
@@ -49,7 +49,7 @@ export default function DashboardPage() {
   const byTrade = unitTrades.map((tr) => {
     const g = ut.filter((t) => t.trade === tr.id);
     const gq = g.filter((t) => t.status === "new");
-    const god = g.filter((t) => isOverdue(t, s, now)).length;
+    const god = g.filter((t) => isOverdue(t, data, now)).length;
     return {
       id: tr.id,
       path: trPathOf(data.org, tr.id),
@@ -62,6 +62,19 @@ export default function DashboardPage() {
       done: doneToday(g, now).length,
     };
   });
+
+  // SLA by task type (standard requests first): open work, overdue, and today's timeliness.
+  const typeRows = (s.taskTypes ?? []).length
+    ? [{ id: "", name: "Standard requests", sla: "By priority" }]
+        .concat((s.taskTypes ?? []).map((x) => ({ id: x.id, name: x.name, sla: slaText(x.sla) })))
+        .map((x) => {
+          const g = ut.filter((t) => (t.ttype ?? "") === x.id || (x.id === "" && !!t.ttype && !taskTypeOf(s, t)));
+          const open = g.filter((t) => t.status !== "done");
+          const d = doneToday(g, now);
+          const ok = d.filter((t) => t.doneAt! <= due(t, data)).length;
+          return { ...x, open: open.length, overdue: open.filter((t) => isOverdue(t, data, now)).length, done: d.length, onTime: d.length ? Math.round((ok / d.length) * 100) + "%" : "—" };
+        })
+    : [];
 
   const rows = people
     .slice()
@@ -127,6 +140,35 @@ export default function DashboardPage() {
           </tbody>
         </table>
       </Blueprint>
+      {typeRows.length > 0 && (
+        <Blueprint as="section" className="panel tight scroll-x">
+          <h2 className="h2">SLA by task type</h2>
+          <table className="table" style={{ minWidth: 620 }}>
+            <thead>
+              <tr>
+                <th>Task type</th>
+                <th>SLA</th>
+                <th>Open</th>
+                <th>Overdue</th>
+                <th>Done today</th>
+                <th>On time today</th>
+              </tr>
+            </thead>
+            <tbody>
+              {typeRows.map((b) => (
+                <tr key={b.id || "std"}>
+                  <td style={{ fontWeight: 500 }}>{b.name}</td>
+                  <td>{b.sla}</td>
+                  <td>{b.open}</td>
+                  <td style={{ color: b.overdue ? "var(--color-accent-800)" : "inherit" }}>{b.overdue}</td>
+                  <td>{b.done}</td>
+                  <td>{b.onTime}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </Blueprint>
+      )}
       <Blueprint as="section" className="panel tight scroll-x">
         <h2 className="h2">People</h2>
         <table className="table" style={{ minWidth: 1200 }}>

@@ -10,7 +10,7 @@ import { periodRange, type PeriodKind } from "@/lib/workload/period";
 import type { Task } from "@/lib/workload/types";
 import { useWorkload } from "@/lib/workload/store";
 import { useUnit } from "@/lib/workload/useUnit";
-import { taskRow } from "@/lib/workload/view";
+import { taskRow, typeNameOf } from "@/lib/workload/view";
 
 const STATUS_OPTS = [
   ["open", "All open"],
@@ -30,7 +30,8 @@ export default function QueuePage() {
   const [pa, setPa] = useState<{ kind: PeriodKind; anchor: number }>({ kind: "all", anchor: now });
   const [pd, setPd] = useState<{ kind: PeriodKind; anchor: number }>({ kind: "day", anchor: now });
   const ql = lc(q);
-  const match = (t: Task) => !ql || lc(t.title + " " + t.id + " " + ticketOf(data, t) + " " + Object.values(t.fields).join(" ")).includes(ql);
+  const match = (t: Task) =>
+    !ql || lc(t.title + " " + t.id + " " + ticketOf(data, t) + " " + typeNameOf(data, t) + " " + Object.values(t.fields).join(" ")).includes(ql);
   const [af, at] = periodRange(pa.kind, pa.anchor);
   const [df, dt] = periodRange(pd.kind, pd.anchor);
   const active = sortTasks(
@@ -43,12 +44,12 @@ export default function QueuePage() {
         t.received < at &&
         match(t),
     ),
-    data.settings,
+    data,
   );
   const done = data.tasks
     .filter((t) => t.status === "done" && t.doneAt !== null && inUnit(t) && t.doneAt >= df && t.doneAt < dt && match(t))
     .sort((a, b) => b.doneAt! - a.doneAt!);
-  const overdue = active.filter((t) => isOverdue(t, data.settings, now)).length;
+  const overdue = active.filter((t) => isOverdue(t, data, now)).length;
   const canDistribute = isAdmin && (data.settings.mode === "rr" || data.settings.mode === "manual");
   const tf = ticketField(data);
 

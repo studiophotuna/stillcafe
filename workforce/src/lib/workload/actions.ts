@@ -18,6 +18,7 @@ import {
   importRows,
   resumeTask,
   setPriority,
+  setTaskType,
   setTrade,
   startTask,
   startWork,
@@ -41,6 +42,7 @@ export type Action =
   | { type: "distribute" }
   | { type: "setTrade"; id: string; trade: string }
   | { type: "setPriority"; id: string; pr: Priority }
+  | { type: "setTaskType"; id: string; ttype: string }
   | { type: "assign"; id: string; pid: number | null }
   | { type: "checkMail" }
   | { type: "importRows"; rows: UploadRow[] }
@@ -48,7 +50,7 @@ export type Action =
   | { type: "setFields"; fields: TaskField[] };
 
 const SETTING_KEYS: (keyof Settings)[] = [
-  "mode", "order", "skipUnavail", "autoFeed", "sla", "mailbox", "mailTrade", "work", "targets", "memberTargets", "prodBasis", "uploaders", "staleDays", "ticketField", "slaWeekends",
+  "mode", "order", "skipUnavail", "autoFeed", "sla", "mailbox", "mailTrade", "work", "targets", "memberTargets", "prodBasis", "uploaders", "staleDays", "ticketField", "slaWeekends", "slaHolidays", "taskTypes",
 ];
 
 export function applyAction(d: WorkloadData, a: Action, now: number): Outcome {
@@ -66,10 +68,11 @@ export function applyAction(d: WorkloadData, a: Action, now: number): Outcome {
     case "distribute": return distribute(d, now);
     case "setTrade": return setTrade(d, a.id, a.trade, now);
     case "setPriority": return setPriority(d, a.id, a.pr, now);
+    case "setTaskType": return setTaskType(d, a.id, a.ttype, now);
     case "assign": return assignTask(d, a.id, a.pid, now);
     case "checkMail": return checkMail(d, now);
     // Rows are re-validated against the stored task fields, not trusted from the client.
-    case "importRows": return importRows(d, checkRows(a.rows, d.fields, d.org, now), now);
+    case "importRows": return importRows(d, checkRows(a.rows, d.fields, d.org, now, d.settings.taskTypes), now);
     case "setSettings": {
       const patch = Object.fromEntries(Object.entries(a.patch).filter(([k]) => SETTING_KEYS.includes(k as keyof Settings)));
       return { data: { ...d, settings: { ...d.settings, ...patch } } };

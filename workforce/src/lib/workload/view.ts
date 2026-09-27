@@ -1,8 +1,8 @@
 /** View models shared by task tables and the task detail screens. */
-import { H, dur, fmtS, fmtT, spanMs } from "./clock";
+import { H, dur, fmtS, fmtT } from "./clock";
 import { AV, PR, ST, trPathOf } from "./constants";
 import type { Action } from "./actions";
-import { canTake, due, holdPeriods, isBusy, overdueMs, personOf, skipsWeekends, taskWorkMs, ticketOf, type WorkloadData } from "./engine";
+import { canTake, due, holdPeriods, isBusy, overdueMs, personOf, slaOf, slaText, taskTypeOf, waitingMs, taskWorkMs, ticketOf, type WorkloadData } from "./engine";
 import type { Task } from "./types";
 
 export interface RowAction {
@@ -21,6 +21,8 @@ export interface TaskRowVM {
   status: string;
   stCls: string;
   sourceLabel: string;
+  /** Task type name, "" for a standard request (teams without types show nothing). */
+  typeName: string;
   receivedShort: string;
   age: string;
   dueShort: string;
@@ -44,7 +46,7 @@ export interface TaskRowVM {
 
 export function taskRow(d: WorkloadData, t: Task, me: number, isAdmin: boolean, now: number): TaskRowVM {
   const s = d.settings;
-  const dueAt = due(t, s);
+  const dueAt = due(t, d);
   const od = t.status !== "done" && now > dueAt;
   const soon = !od && t.status !== "done" && dueAt - now < 2 * H;
   const meP = personOf(d, me) ?? { id: me, name: "", trades: [], avail: "available" as const, shift: "", shiftStart: 8 };
@@ -65,9 +67,10 @@ export function taskRow(d: WorkloadData, t: Task, me: number, isAdmin: boolean, 
     status: ST[t.status][0] + (t.status === "new" && !t.trade ? " · needs trade" : ""),
     stCls: ST[t.status][1],
     sourceLabel: t.source === "outlook" ? "Outlook" : "Upload",
+    typeName: typeNameOf(d, t),
     receivedShort: fmtS(t.received, now),
-    age: t.status === "done" ? "—" : dur(spanMs(t.received, now, skipsWeekends(s))),
-    dueShort: t.status === "done" ? "Done " + fmtS(t.doneAt!, now) : od ? "Overdue " + dur(overdueMs(t, s, now)) : fmtS(dueAt, now),
+    age: t.status === "done" ? "—" : dur(waitingMs(t, d, now)),
+    dueShort: t.status === "done" ? "Done " + fmtS(t.doneAt!, now) : od ? "Overdue " + dur(overdueMs(t, d, now)) : fmtS(dueAt, now),
     dueColor: od ? "var(--color-accent-800)" : soon ? "var(--color-accent-700)" : "var(--color-neutral-800)",
     dueBold: od,
     assignee: p ? p.name : "—",
@@ -90,9 +93,13 @@ export function rowAction(a: RowAction, me: number): Action {
   return a.kind === "resume" ? { type: "resume", id: a.id, pid: me } : { type: "startTask", id: a.id, pid: me };
 }
 
+/** The task's type as shown: its name, "" for a standard request, or a note if the type was deleted. */
+export const typeNameOf = (d: Pick<WorkloadData, "settings">, t: Task) =>
+  !t.ttype ? "" : (taskTypeOf(d.settings, t)?.name ?? "Deleted type");
+
 export function taskDetail(d: WorkloadData, t: Task, now: number) {
   const s = d.settings;
-  const dueAt = due(t, s);
+  const dueAt = due(t, d);
   const od = t.status !== "done" && now > dueAt;
   // Start / finish / worked, e.g. when an admin asks for the times per task.
   const timeRows = t.startedAt
@@ -102,7 +109,10 @@ export function taskDetail(d: WorkloadData, t: Task, now: number) {
         { label: "Time worked", value: dur(taskWorkMs(d, t, now)) + " (time away excluded)" },
       ]
     : [];
-  const fieldRows = [{ label: "System › Trade", value: trPathOf(d.org, t.trade) }]
+  const fieldRows = [
+    { label: "System › Trade", value: trPathOf(d.org, t.trade) },
+    { label: "SLA", value: `${slaText(slaOf(t, s))} · ${typeNameOf(d, t) || "standard request (" + PR[t.pr][0].toLowerCase() + " priority)"}` },
+  ]
     .concat(timeRows)
     .concat(d.fields.map((f) => ({ label: f.label, value: (t.fields[f.key] ?? "") === "" ? "—" : String(t.fields[f.key]) })))
     // Every pending (on hold) period with its date and reason.
@@ -123,7 +133,7 @@ export function taskDetail(d: WorkloadData, t: Task, now: number) {
       t.status === "done"
         ? "Done " + fmtT(t.doneAt!) + (t.startedAt ? " · took " + dur(t.doneAt! - t.startedAt) : "")
         : od
-          ? "Overdue by " + dur(overdueMs(t, s, now))
+          ? "Overdue by " + dur(overdueMs(t, d, now))
           : "Due " + fmtT(dueAt),
     dueColor: od ? "var(--color-accent-800)" : "var(--color-neutral-800)",
     receivedText: fmtT(t.received),
