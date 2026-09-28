@@ -7,6 +7,7 @@ import { H, dayKey, dur, fmtT } from "@/lib/workload/clock";
 import { AV, PR, tradeOf, trPathOf } from "@/lib/workload/constants";
 import { awayLabel, basisUnit, due, fmtMin, isOverdue, slaOf, slaText, taskTypeOf, taskWorkMs, ticketField, ticketOf, typeTargets } from "@/lib/workload/engine";
 import { downloadSheets } from "@/lib/workload/excel";
+import { BarList, ColumnChart, LineChart, VIZ } from "@/components/Charts";
 import { personPeriod, teamPeriod, typeLabel, type PeriodInput, type PersonPeriod } from "@/lib/workload/metrics";
 import { periodBuckets, periodLabel, periodRange, type PeriodKind } from "@/lib/workload/period";
 import { useWorkload } from "@/lib/workload/store";
@@ -97,11 +98,17 @@ export default function DashboardPage() {
       return x.length ? x.reduce((a, t) => a + taskWorkMs(withActs, t, until), 0) / x.length : null;
     };
     const received = (l: Task[]) => l.filter((t) => t.received >= from && t.received < to).length;
-    const buckets = periodBuckets(per.kind, per.anchor).map(([name, a, b]) => {
-      if (a > now) return { name, future: true, received: 0, done: 0, onTime: null as number | null, prod: null as number | null };
+    // A day breaks down by hour (productivity is a daily measure, so none per hour).
+    const hourly = per.kind === "day";
+    const parts: [string, number, number][] = hourly
+      ? Array.from({ length: 24 }, (_, h): [string, number, number] => [`${String(h).padStart(2, "0")}:00`, from + h * H, from + (h + 1) * H])
+      : periodBuckets(per.kind, per.anchor);
+    const buckets = parts.map(([name, a, b]) => {
+      const short = hourly ? name.slice(0, 2) : per.kind === "week" ? name.slice(0, 3) : per.kind === "month" ? name.split(" ")[1] : name;
+      if (a > now) return { name, short, future: true, received: 0, done: 0, onTime: null as number | null, prod: null as number | null };
       const sub = { ...input, from: a, to: b };
       const t2 = teamPeriod(data, rows.map((r) => personPeriod(data, r.p, sub)), ut, sub);
-      return { name, future: false, received: t2.received, done: t2.done, onTime: t2.time, prod: t2.prod };
+      return { name, short, future: false, received: t2.received, done: t2.done, onTime: t2.time, prod: hourly ? null : t2.prod };
     });
     const byTrade = unitTrades.map((tr) => {
       const g = ut.filter((t) => t.trade === tr.id);
@@ -129,7 +136,8 @@ export default function DashboardPage() {
             return { ...x, received: received(g), done: d.length, onTime: onTimePct(d), open: g.filter((t) => t.status !== "done").length };
           })
       : [];
-    return { rows, team, buckets, byTrade, byType, doneTasks: doneIn(ut).sort((a, b) => a.doneAt! - b.doneAt!), until, withActs };
+    const markIdx = parts.findIndex(([, a, b]) => now >= a && now < b);
+    return { rows, team, buckets, markIdx: markIdx < 0 ? undefined : markIdx, byTrade, byType, doneTasks: doneIn(ut).sort((a, b) => a.doneAt! - b.doneAt!), until, withActs };
   }, [input, now, to, from, people, data, ut, unitTrades, types, per.kind, per.anchor, s]);
 
   const q = ut.filter((t) => t.status === "new");
@@ -167,7 +175,7 @@ export default function DashboardPage() {
     ];
     if (view.buckets.length)
       sheets.push({
-        name: per.kind === "year" ? "By month" : "By day",
+        name: per.kind === "day" ? "By hour" : per.kind === "year" ? "By month" : "By day",
         rows: [
           ["Period", "Received", "Done", "Timeliness %", "Productivity %"],
           ...view.buckets.map((b): Row => (b.future ? [b.name, null, null, null, null] : [b.name, b.received, b.done, b.onTime, b.prod])),
@@ -268,13 +276,103 @@ export default function DashboardPage() {
             {live && <Kpi k="Overdue now" v={ut.filter((t) => isOverdue(t, data, now)).length} m="open past their SLA" />}
           </div>
 
+          <div className="chart-grid">
+            <Blueprint as="section" className="panel">
+              <div className="chart-head">
+                <h2 className="h2">Received and done</h2>
+                <span className="small">{per.kind === "day" ? "by hour" : per.kind === "year" ? "by month" : "by day"} · {label}</span>
+              </div>
+              <ColumnChart
+                label={`Tasks received and done ${per.kind === "day" ? "by hour" : per.kind === "year" ? "by month" : "by day"}, ${label}`}
+                labels={view.buckets.map((b) => b.name)}
+                ticks={view.buckets.map((b) => b.short)}
+                series={[
+                  { name: "Received", color: VIZ[0], values: view.buckets.map((b) => (b.future ? null : b.received)) },
+                  { name: "Done", color: VIZ[1], values: view.buckets.map((b) => (b.future ? null : b.done)) },
+                ]}
+                mark={view.markIdx}
+              />
+            </Blueprint>
+            {per.kind !== "day" ? (
+              <Blueprint as="section" className="panel">
+                <div className="chart-head">
+                  <h2 className="h2">Productivity and timeliness</h2>
+                  <span className="small">{per.kind === "year" ? "by month" : "by day"} · target 100%</span>
+                </div>
+                <LineChart
+                  label={`Team productivity and timeliness ${per.kind === "year" ? "by month" : "by day"}, ${label}`}
+                  labels={view.buckets.map((b) => b.name)}
+                  ticks={view.buckets.map((b) => b.short)}
+                  series={[
+                    { name: "Productivity", color: VIZ[0], values: view.buckets.map((b) => (b.future ? null : b.prod)) },
+                    { name: "Timeliness", color: VIZ[1], values: view.buckets.map((b) => (b.future ? null : b.onTime)) },
+                  ]}
+                  reference={{ value: 100, label: "Target 100%" }}
+                  mark={view.markIdx}
+                />
+              </Blueprint>
+            ) : (
+              <Blueprint as="section" className="panel">
+                <div className="chart-head">
+                  <h2 className="h2">Productivity by person</h2>
+                  <span className="small">today so far · target 100%</span>
+                </div>
+                <BarList
+                  rows={view.rows.map((r) => ({ key: String(r.p.id), label: r.p.name, value: r.prod, note: r.mix || undefined }))}
+                  fmt={(n) => `${Math.round(n)}%`}
+                  target={{ value: 100, label: "Target" }}
+                  empty="No one has a target for today yet."
+                />
+              </Blueprint>
+            )}
+          </div>
+
+          <div className="chart-grid">
+            <Blueprint as="section" className="panel">
+              <div className="chart-head">
+                <h2 className="h2">Done by trade</h2>
+                <span className="small">{label}</span>
+              </div>
+              <BarList rows={view.byTrade.map((b) => ({ key: b.id, label: b.path, value: b.done, note: `${b.received} received · timeliness ${pct(b.onTime)}` }))} />
+            </Blueprint>
+            {per.kind !== "day" && (
+              <Blueprint as="section" className="panel">
+                <div className="chart-head">
+                  <h2 className="h2">Productivity by person</h2>
+                  <span className="small">{label} · target 100%</span>
+                </div>
+                <BarList
+                  rows={view.rows.map((r) => ({ key: String(r.p.id), label: r.p.name, value: r.prod, note: r.mix || undefined }))}
+                  fmt={(n) => `${Math.round(n)}%`}
+                  target={{ value: 100, label: "Target" }}
+                  empty="No one worked a scheduled day in this period."
+                />
+              </Blueprint>
+            )}
+            {view.byType.length > 0 && (
+              <Blueprint as="section" className="panel">
+                <div className="chart-head">
+                  <h2 className="h2">Timeliness by task type</h2>
+                  <span className="small">{label} · done within SLA</span>
+                </div>
+                <BarList
+                  rows={view.byType.map((b) => ({ key: b.id || "std", label: `${b.name} · ${b.sla}`, value: b.onTime, note: `${b.done} done` }))}
+                  fmt={(n) => `${Math.round(n)}%`}
+                  max={100}
+                  empty="Nothing done in this period."
+                />
+              </Blueprint>
+            )}
+          </div>
+
           {view.buckets.length > 0 && (
             <Blueprint as="section" className="panel tight scroll-x">
-              <h2 className="h2">{per.kind === "year" ? "By month" : "By day"}</h2>
+              <details className="table-view">
+                <summary>{per.kind === "day" ? "By hour" : per.kind === "year" ? "By month" : "By day"} · show the numbers</summary>
               <table className="table" style={{ minWidth: 560 }}>
                 <thead>
                   <tr>
-                    <th>{per.kind === "year" ? "Month" : "Day"}</th>
+                    <th>{per.kind === "day" ? "Hour" : per.kind === "year" ? "Month" : "Day"}</th>
                     <th>Received</th>
                     <th>Done</th>
                     <th>Timeliness</th>
@@ -295,6 +393,7 @@ export default function DashboardPage() {
                   ))}
                 </tbody>
               </table>
+              </details>
             </Blueprint>
           )}
 
