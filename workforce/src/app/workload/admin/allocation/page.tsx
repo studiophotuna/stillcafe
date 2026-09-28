@@ -1,10 +1,11 @@
 "use client";
 
+import Link from "next/link";
 import { Blueprint, PageHead } from "@/components/ui";
-import { MODES, PR } from "@/lib/workload/constants";
+import { MODES } from "@/lib/workload/constants";
 import { ticketField } from "@/lib/workload/engine";
 import { useWorkload } from "@/lib/workload/store";
-import type { OrderRule, Priority, Settings } from "@/lib/workload/types";
+import type { OrderRule, Settings } from "@/lib/workload/types";
 
 export default function AllocationPage() {
   const { data, run, toast } = useWorkload();
@@ -75,41 +76,12 @@ export default function AllocationPage() {
             <strong style={{ fontWeight: 500 }}>One task in progress at a time</strong>
             <span>Members finish or put a task on hold before starting the next. Tasks are only given to people allocated to the task’s system and trade.</span>
           </div>
-          <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-            <span style={{ fontSize: 12, color: "var(--color-neutral-700)" }}>Timeliness SLA by priority, in hours from received</span>
-            <label style={{ display: "flex", gap: 10, alignItems: "center", cursor: "pointer", fontSize: 14 }}>
-              <input
-                type="checkbox"
-                className="check"
-                checked={s.slaWeekends !== false}
-                onChange={() => set({ slaWeekends: s.slaWeekends === false })}
-              />
-              Count weekends in the due time
-            </label>
-            <span style={{ fontSize: 12, color: "var(--color-neutral-700)" }}>
-              {s.slaWeekends === false
-                ? "Saturdays and Sundays are skipped: a task received Friday afternoon with a 24-hour SLA is due Monday afternoon, and overdue time doesn’t grow over the weekend."
-                : "Due time runs through weekends. Untick to skip Saturdays and Sundays."}
+          <div className="rule-text">
+            <strong style={{ fontWeight: 500 }}>SLA and task types</strong>
+            <span>
+              The standard SLA, task types with their own SLA, and whether weekends and holidays count are set in{" "}
+              <Link href="/workload/admin/sla">Admin › SLA &amp; task types</Link>.
             </span>
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 10 }}>
-              {(["high", "normal", "low"] as Priority[]).map((k) => (
-                <div className="field" key={k}>
-                  <label htmlFor={"sla-" + k}>{PR[k][0]}</label>
-                  <input
-                    id={"sla-" + k}
-                    className="input"
-                    type="number"
-                    min={1}
-                    defaultValue={s.sla[k]}
-                    onBlur={(e) => {
-                      const v = Math.max(1, Number(e.target.value) || 1);
-                      e.target.value = String(v);
-                      set({ sla: { ...s.sla, [k]: v } });
-                    }}
-                  />
-                </div>
-              ))}
-            </div>
           </div>
         </Blueprint>
       </div>

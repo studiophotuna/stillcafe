@@ -5,11 +5,11 @@
 import { fmtT } from "../workload/clock";
 import { ANNUAL, CODES, LEVELS, TYPE_L, first } from "./constants";
 import { addDays, dowOf, fmtY, isWk, MONL } from "./dates";
-import { Cal, logsDecision, logsSubmit } from "./engine";
-import { allocProblem, teamDefaults } from "./org";
+import { Cal, evState, logsDecision, logsSubmit } from "./engine";
+import { allocProblem, hcTeamOf, mkOrg, primaryTeamOf, teamDefaults, withHcChange, type Org } from "./org";
 import { planOrgImport, type OrgRow } from "./orgImport";
 import { applyUpload, checkUpload, type UploadMode, type UploadRow } from "./uploads";
-import type { CalPerson, AppLinks,
+import type { CalPerson, AppLinks, HcTag,
   BcpEvent, BcpStatus, CalendarData, Code, Holiday, LeaveRequest, Level, NodeType, NotifLog, OrgNode, Shift,
 } from "./types";
 import type { ReadyKey } from "./constants";
@@ -39,7 +39,8 @@ export type CalAction =
   | { type: "importOrg"; dept: string; rows: OrgRow[] }
   | { type: "renameNode"; id: string; name: string }
   | { type: "deleteNode"; id: string }
-  | { type: "saveMember"; pid: number; level: Level; shift: string; adminHere: boolean; bid: string; assign: string[]; isNew: boolean; details?: MemberDetails }
+  | { type: "saveMember"; pid: number; level: Level; shift: string; adminHere: boolean; bid: string; assign: string[]; isNew: boolean; details?: MemberDetails; hcFrom?: string }
+  | { type: "setHcHistory"; pid: number; history: HcTag[] }
   | { type: "addPerson"; details: MemberDetails & { name: string; email: string }; level: Level; shift: string; adminHere: boolean; bid: string; assign: string[] }
   | { type: "removeFromTeam"; pid: number; bid: string }
   | { type: "setResign"; pid: number; date: string | null }
@@ -167,7 +168,40 @@ export function createRequest(c: Cal, pid: number, f: RequestForm, adminBid: str
   return { data: pushLogs(next, logsSubmit(new Cal(next, c.today), q, fmtT(now), adminBid)), q };
 }
 
+/**
+ * Apply an action. Afterwards, anyone whose headcount team changed (moved, primary team
+ * changed, removed from a team) gets it recorded from this month (or the month an admin
+ * chose), so earlier months stay with the team they were in.
+ */
 export function applyCalAction(d: CalendarData, a: CalAction, today: string, now: number): CalOutcome {
+  const out = applyInner(d, a, today, now);
+  if (out.error || out.data === d || a.type === "setHcHistory") return out;
+  const month = a.type === "saveMember" && a.hcFrom && /^\d{4}-\d{2}$/.test(a.hcFrom) ? a.hcFrom : today.slice(0, 7);
+  return { ...out, data: recordHcChanges(d, out.data, month) };
+}
+
+const subsIn = (O: Org, p: CalPerson, team: string | undefined) =>
+  team ? [...new Set(p.assign.filter((x) => O.anc(x).includes(team)).map((x) => O.sub(x)).filter(Boolean))].join(", ") : "";
+
+export function recordHcChanges(before: CalendarData, after: CalendarData, month: string): CalendarData {
+  if (before.people === after.people && before.nodes === after.nodes) return after;
+  const Ob = mkOrg(before.nodes);
+  const Oa = after.nodes === before.nodes ? Ob : mkOrg(after.nodes);
+  const prev = new Map(before.people.map((p) => [p.id, p]));
+  let changed = false;
+  const people = after.people.map((p) => {
+    const q = prev.get(p.id);
+    if (!q) return p;
+    const was = primaryTeamOf(Ob, q);
+    const now = primaryTeamOf(Oa, p);
+    if (was === now) return p;
+    changed = true;
+    return withHcChange(p, hcTeamOf(Ob, q, month) ?? was, subsIn(Ob, q, was), now, month);
+  });
+  return changed ? { ...after, people } : after;
+}
+
+function applyInner(d: CalendarData, a: CalAction, today: string, now: number): CalOutcome {
   const c = new Cal(d, today);
   const at = fmtT(now);
   switch (a.type) {
@@ -423,6 +457,22 @@ export function applyCalAction(d: CalendarData, a: CalAction, today: string, now
       if (na.join() !== (b.admins ?? []).join()) next = setNode(next, a.bid, { admins: na });
       return { data: next, message: p.name + (a.isNew ? " added." : " updated.") };
     }
+    case "setHcHistory": {
+      // Admin edits a person's headcount tagging: months must be yyyy-mm, teams real teams (or none).
+      const p = c.people.get(a.pid);
+      if (!p || !Array.isArray(a.history)) return { data: d };
+      const rows = a.history
+        .filter((x) => x && /^(\d{4}-(0[1-9]|1[0-2])|0000-00)$/.test(x.from) && (x.team === "" || c.O.by[x.team]?.type === "branch"))
+        .map((x) => ({ from: x.from, team: x.team, ...(x.sub?.trim() ? { sub: x.sub.trim().slice(0, 80) } : {}) }))
+        .sort((x, y) => x.from.localeCompare(y.from))
+        .filter((x, i, all) => i === all.length - 1 || all[i + 1].from !== x.from);
+      if (!rows.length) return { data: d, error: "Add at least one period." };
+      rows[0] = { ...rows[0], from: "0000-00" };
+      return {
+        data: { ...d, people: d.people.map((x) => (x.id === a.pid ? { ...x, hcHistory: rows } : x)) },
+        message: `Headcount tagging saved for ${p.name}.`,
+      };
+    }
     case "removeFromTeam": {
       const p = c.people.get(a.pid);
       if (!p) return { data: d };
@@ -498,7 +548,7 @@ export function applyCalAction(d: CalendarData, a: CalAction, today: string, now
     }
     case "checkin": {
       const ev = d.bcpEvents.find((e) => e.id === a.evId);
-      if (!ev || ev.status !== "active" || !c.people.has(a.pid)) return { data: d };
+      if (!ev || evState(ev, today) !== "active" || !c.people.has(a.pid)) return { data: d };
       const by = a.actor !== a.pid ? ` (by ${c.person(a.actor).name})` : "";
       return {
         data: {
@@ -510,6 +560,7 @@ export function applyCalAction(d: CalendarData, a: CalAction, today: string, now
     }
     case "startEvent": {
       if (!a.name.trim() || !a.start || !c.O.by[a.scope]) return { data: d };
+      if (a.start < today) return { data: d, error: "Pick today or a later date." };
       const id = "E" + now.toString(36);
       const n = d.people.filter((p) => c.O.inN(p, a.scope) && !(p.resign && p.resign < a.start)).length;
       return {
@@ -518,15 +569,18 @@ export function applyCalAction(d: CalendarData, a: CalAction, today: string, now
           bcpEvents: [{ id, name: a.name.trim(), start: a.start, end: "", scope: a.scope, status: "active", note: a.note } as BcpEvent].concat(d.bcpEvents),
           checkins: { ...d.checkins, [id]: {} },
         },
-        message: `BCP event started. ${n} people will be asked to check in by email.`,
+        message:
+          a.start === today
+            ? `BCP event started for today. ${n} people will be asked to check in by email.`
+            : `BCP event set for ${fmtY(a.start)}. ${n} people will be asked to check in on that day.`,
       };
     }
     case "closeEvent": {
       const ev = d.bcpEvents.find((e) => e.id === a.id);
       if (!ev) return { data: d };
       return {
-        data: { ...d, bcpEvents: d.bcpEvents.map((e) => (e.id === a.id ? { ...e, status: "closed" as const, end: today } : e)) },
-        message: `${ev.name} closed.`,
+        data: { ...d, bcpEvents: d.bcpEvents.map((e) => (e.id === a.id ? { ...e, status: "closed" as const, end: today < e.start ? "" : today } : e)) },
+        message: evState(ev, today) === "scheduled" ? `${ev.name} cancelled.` : `${ev.name} closed.`,
       };
     }
     case "importUpload": {

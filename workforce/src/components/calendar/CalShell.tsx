@@ -5,6 +5,7 @@ import { useEffect } from "react";
 import { AppFrame, SideAction, type NavItem } from "@/components/AppFrame";
 import { Blueprint, Icon } from "@/components/ui";
 import { LEVELS } from "@/lib/calendar/constants";
+import { evState } from "@/lib/calendar/engine";
 import { useCalendar } from "@/lib/calendar/store";
 import { useCalView } from "@/lib/calendar/useCalView";
 import { CalDialogs, IssuedPasswords } from "./CalDialogs";
@@ -75,7 +76,7 @@ export function CalShell({ children }: { children: React.ReactNode }) {
 
   // BCP banner: an active event that covers me and I haven't checked in yet.
   const evs = s.data.bcpEvents.filter((e) => O.by[e.scope] && O.anc(e.scope).includes(v.dept.id));
-  const activeEv = evs.find((e) => e.status === "active" && O.inN(v.meP, e.scope));
+  const activeEv = evs.find((e) => evState(e, s.today) === "active" && O.inN(v.meP, e.scope));
   const needCheckin = !!activeEv && !(s.data.checkins[activeEv.id] || {})[s.me];
 
   const vMgmt = path === "/calendar/management";

@@ -40,7 +40,7 @@ export function PeriodNav({
   kinds?: PeriodKind[];
 }) {
   const now = nowMs();
-  const L: Record<PeriodKind, string> = { day: "Day", week: "Week", month: "Month", all: "All dates" };
+  const L: Record<PeriodKind, string> = { day: "Day", week: "Week", month: "Month", year: "Year", all: "All dates" };
   return (
     <div className="period-nav">
       <select aria-label="Period" className="input" value={kind} onChange={(e) => onChange(e.target.value as PeriodKind, anchor)} style={{ width: "auto" }}>

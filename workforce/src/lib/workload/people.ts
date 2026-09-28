@@ -6,6 +6,7 @@
  */
 import type { Cal } from "../calendar/engine";
 import type { OrgNode } from "../calendar/types";
+import { isLeader } from "../calendar/constants";
 import { dayKey, localHour } from "./clock";
 import type { Availability, Person, Trade, WlOrg } from "./types";
 
@@ -62,6 +63,8 @@ export function peopleFromCalendar(c: Cal, now: number, teamId: string): Person[
       let avail: Availability = "available";
       if (OUT.includes(cell.code) && !cell.pending) avail = "leave";
       else if (!cell.code || !inShift) avail = "offshift";
+      const hol = cell.code === "HOL" || cell.code === "HDY";
+      const onToday = hol ? !!workingOn(c.d.overrides[p.id + "|" + today]) : avail !== "leave" && !!cell.code;
       return {
         id: p.id,
         name: p.name,
@@ -69,11 +72,18 @@ export function peopleFromCalendar(c: Cal, now: number, teamId: string): Person[
         avail,
         shift: sh ? `${sh.name} ${sh.start}–${sh.end}` : "—",
         shiftStart: Math.floor(start),
-        ...(cell.code === "HOL" || cell.code === "HDY"
+        onToday,
+        ...(hol
           ? { holiday: { name: cell.note ?? "Holiday", date: today, working: workingOn(c.d.overrides[p.id + "|" + today]), answered: !!c.d.overrides[p.id + "|" + today] } }
           : {}),
       };
     });
+}
+
+/** Calendar holidays that apply to the team: for everyone, or for the team or anything above it. */
+export function holidaysFor(c: Cal, teamId: string): string[] {
+  const up = c.O.anc(teamId);
+  return [...new Set(c.d.holidays.filter((h) => h.scope === "all" || up.includes(h.scope)).map((h) => h.date))].sort();
 }
 
 /** Team admins of the team plus system admins. */
@@ -92,7 +102,7 @@ export function workloadApprovers(c: Cal, teamId: string): number[] {
   const ids = new Set(workloadAdmins(c, teamId));
   const above = new Set(c.O.anc(teamId));
   c.d.people.forEach((p) => {
-    if (p.level === "member" || !c.alive(p, c.today)) return;
+    if (!isLeader(p.level) || !c.alive(p, c.today)) return;
     if (c.O.inN(p, teamId) || p.assign.some((a) => above.has(a))) ids.add(p.id);
   });
   return [...ids];

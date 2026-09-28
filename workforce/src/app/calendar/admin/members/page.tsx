@@ -2,12 +2,12 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { Blueprint, Icon } from "@/components/ui";
-import { LEVELS } from "@/lib/calendar/constants";
+import { RoleFilter, RoleLegend, RoleTag } from "@/components/calendar/Roles";
 import { fmtY } from "@/lib/calendar/dates";
 import { useCalendar } from "@/lib/calendar/store";
 import { useCalView } from "@/lib/calendar/useCalView";
 import { isNodeAdmin, primaryTeamOf } from "@/lib/calendar/org";
-import type { CalPerson } from "@/lib/calendar/types";
+import type { CalPerson, Level } from "@/lib/calendar/types";
 
 export default function MembersPage() {
   const s = useCalendar();
@@ -15,6 +15,7 @@ export default function MembersPage() {
   const c = s.cal;
   const { O } = c;
   const [q, setQ] = useState("");
+  const [role, setRole] = useState<Level | "all">("all");
   // Sign-in status per person (database only).
   const [logins, setLogins] = useState<Record<number, { mustChange: boolean }> | null>(null);
   const [busy, setBusy] = useState<number | null>(null);
@@ -53,7 +54,7 @@ export default function MembersPage() {
   // Directors and managers allocated to this team's department or tower are listed too.
   const above = (p: CalPerson) => v.unitId === v.bid && !O.inN(p, v.bid) && p.assign.some((a) => O.by[a] && (O.by[a].type === "dept" || O.by[a].type === "tower") && O.anc(v.bid).includes(a));
   const members = s.data.people
-    .filter((p) => (O.inN(p, v.unitId) || above(p)) && (!mq || p.name.toLowerCase().includes(mq)))
+    .filter((p) => (v.inUnit(p) || above(p)) && (!mq || p.name.toLowerCase().includes(mq)) && (role === "all" || p.level === role))
     .sort((a, b) => Number(above(b)) - Number(above(a)) || a.name.localeCompare(b.name));
   // Team admins manage the people in their teams; system admins manage everyone.
   const canManage = (p: CalPerson) =>
@@ -67,6 +68,7 @@ export default function MembersPage() {
         </div>
         <div className="row">
           <input className="input" type="search" aria-label="Find a member" placeholder="Find a member" value={q} onChange={(e) => setQ(e.target.value)} style={{ width: 220 }} />
+          <RoleFilter value={role} onChange={setRole} />
           <button className="btn btn-secondary btn-36" onClick={() => s.setDialog({ kind: "upload", mode: "members" })}>
             <Icon name="upload" size={16} />
             Upload
@@ -77,6 +79,7 @@ export default function MembersPage() {
           </button>
         </div>
       </div>
+      <RoleLegend />
       <Blueprint className="scroll-x">
         <table className="table" style={{ minWidth: logins ? 1180 : 980 }}>
           <thead>
@@ -96,7 +99,7 @@ export default function MembersPage() {
               const sh = shById[p.shift];
               const pool = c.poolOf(p);
               return (
-                <tr key={p.id} style={{ opacity: gone ? 0.6 : 1 }}>
+                <tr key={p.id} className={"role-row lv-" + p.level} style={{ opacity: gone ? 0.6 : 1 }}>
                   <td>
                     <div style={{ display: "flex", flexDirection: "column" }}>
                       <span style={{ fontWeight: 500 }}>{p.name}</span>
@@ -106,7 +109,7 @@ export default function MembersPage() {
                   <td className="nowrap">
                     <div style={{ display: "flex", flexDirection: "column" }}>
                       <span style={{ display: "flex", gap: 6, alignItems: "center" }}>
-                        {LEVELS[p.level]}
+                        <RoleTag level={p.level} />
                         {(v.branch.admins ?? []).includes(p.id) && (
                           <span className="tag tag-accent" style={{ padding: "0 6px", fontSize: 10.5 }}>
                             Admin
@@ -191,7 +194,7 @@ export default function MembersPage() {
             })}
           </tbody>
         </table>
-        {!members.length && <div style={{ padding: "24px 14px", color: "var(--color-neutral-700)" }}>No members here yet.</div>}
+        {!members.length && <div style={{ padding: "24px 14px", color: "var(--color-neutral-700)" }}>{role === "all" && !mq ? "No members here yet." : "No members match."}</div>}
       </Blueprint>
     </>
   );

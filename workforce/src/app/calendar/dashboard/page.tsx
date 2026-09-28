@@ -2,6 +2,7 @@
 
 import { Chip } from "@/components/calendar/bits";
 import { MonthNav } from "@/components/calendar/CalendarGrid";
+import { BarList, ColumnChart, VIZ, VIZ_OTHER } from "@/components/Charts";
 import { Blueprint } from "@/components/ui";
 import { ANNUAL, BSTY, BUCKETS, CODES, OOO, PEND, TYPE_L } from "@/lib/calendar/constants";
 import { addDays, dayOf, daysInMonth, fmt, fmtY, isWk, isoOf, rng2 } from "@/lib/calendar/dates";
@@ -18,7 +19,7 @@ export default function CalDashboardPage() {
   const { bid, unitId, unitLabel } = v;
   const mStart = isoOf(s.y, s.m, 1);
   const dates = Array.from({ length: daysInMonth(s.y, s.m) }, (_, i) => isoOf(s.y, s.m, i + 1));
-  const act = s.data.people.filter((p) => O.inN(p, unitId) && c.alive(p, mStart));
+  const act = s.data.people.filter((p) => v.inUnit(p) && c.alive(p, mStart));
   const wdays = dates.filter((d) => !isWk(d));
   const inMonth = s.today.slice(0, 7) === mStart.slice(0, 7);
   const ref = inMonth ? s.today : wdays.find((d) => !c.hols[d]) || wdays[0];
@@ -47,7 +48,6 @@ export default function CalDashboardPage() {
     peak = Math.max(peak, r + w + l + o);
     return { d, r, w, l, o };
   });
-  const pct = (n: number) => ((n / peak) * 100).toFixed(1) + "%";
   const rate = (cells: Cell[], code: Code) => {
     const tot = cells.filter((x) => !x.gone && x.code !== "HOL").length;
     return tot ? Math.round((cells.filter((x) => x.code === code && !x.pending).length / tot) * 100) : 0;
@@ -98,31 +98,48 @@ export default function CalDashboardPage() {
         ))}
       </div>
       <Blueprint as="section" className="panel">
-        <div style={{ display: "flex", flexWrap: "wrap", justifyContent: "space-between", gap: 10, alignItems: "center" }}>
+        <div className="chart-head">
           <h2 className="h2">Daily attendance · working days</h2>
-          <div className="legend" style={{ gap: 14, fontSize: 12.5 }}>
-            <div><i className="swatch" style={{ background: "var(--color-accent-700)" }} />In office</div>
-            <div><i className="swatch" style={{ background: "var(--color-accent-300)" }} />Work from home</div>
-            <div><i className="swatch" style={{ background: "var(--color-neutral-800)" }} />On leave</div>
-            <div><i className="swatch" style={{ background: "var(--color-neutral-300)" }} />Trip, rest day, holiday</div>
-          </div>
+          <span className="small">{unitLabel}</span>
         </div>
-        <div className="scroll-x">
-          <div className="bars" role="img" aria-label={`Daily attendance for ${unitLabel}`}>
-            {bars.map((b) => (
-              <div key={b.d} title={`${fmt(b.d)} · ${b.r} in office, ${b.w} WFH, ${b.l} on leave${b.o ? `, ${b.o} other` : ""}`}>
-                <div>
-                  <div style={{ height: pct(b.r), background: "var(--color-accent-700)" }} />
-                  <div style={{ height: pct(b.w), background: "var(--color-accent-300)" }} />
-                  <div style={{ height: pct(b.l), background: "var(--color-neutral-800)" }} />
-                  <div style={{ height: pct(b.o), background: "var(--color-neutral-300)" }} />
-                </div>
-                <span style={{ color: b.d === ref ? "var(--color-accent-700)" : "var(--color-neutral-700)", fontWeight: b.d === ref ? 700 : 400 }}>{dayOf(b.d)}</span>
-              </div>
-            ))}
+        <ColumnChart
+          stacked
+          label={`Daily attendance for ${unitLabel}`}
+          labels={bars.map((b) => fmt(b.d))}
+          ticks={bars.map((b) => String(dayOf(b.d)))}
+          mark={bars.findIndex((b) => b.d === ref)}
+          series={[
+            { name: "In office", color: VIZ[0], values: bars.map((b) => b.r) },
+            { name: "Work from home", color: VIZ[1], values: bars.map((b) => b.w) },
+            { name: "On leave", color: VIZ[2], values: bars.map((b) => b.l) },
+            { name: "Trip, rest day, holiday", color: VIZ_OTHER, values: bars.map((b) => b.o) },
+          ]}
+        />
+        <details className="table-view">
+          <summary>Show the numbers</summary>
+          <div className="scroll-x">
+            <table className="table">
+              <thead>
+                <tr><th>Day</th><th>In office</th><th>Work from home</th><th>On leave</th><th>Trip, rest day, holiday</th></tr>
+              </thead>
+              <tbody>
+                {bars.map((b) => (
+                  <tr key={b.d}><td className="nowrap">{fmt(b.d)}</td><td>{b.r}</td><td>{b.w}</td><td>{b.l}</td><td>{b.o}</td></tr>
+                ))}
+              </tbody>
+            </table>
           </div>
-        </div>
+        </details>
       </Blueprint>
+      {brk.length > 0 && (
+        <Blueprint as="section" className="panel">
+          <div className="chart-head">
+            <h2 className="h2">Office rate by {u.type === "branch" ? "system and trade" : "trade"}</h2>
+            <span className="small">in-office share of working days this month</span>
+          </div>
+          <BarList rows={brk.map((r) => ({ key: r.id, label: r.name, value: Number.parseInt(r.office), note: `${r.head} people · WFH ${r.wfh}` }))} fmt={(n) => `${n}%`} max={100} />
+        </Blueprint>
+      )}
       <div className="grid-2">
         {brk.length > 0 && (
           <Blueprint as="section" className="panel tight scroll-x">

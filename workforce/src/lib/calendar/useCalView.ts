@@ -2,8 +2,9 @@
 
 import { useMemo } from "react";
 import { isNodeAdmin } from "./org";
+import { isLeader as isLeaderLevel } from "./constants";
 import { useCalendar } from "./store";
-import type { OrgNode } from "./types";
+import type { CalPerson, OrgNode } from "./types";
 
 /**
  * Who is viewing and what is selected: the person's teams, the selected
@@ -38,13 +39,25 @@ export function useCalView() {
     const sys = !!meP.sysAdmin;
     const isAdmin = sys || isNodeAdmin(O, branch.id, me);
     const anyAdmin = sys || data.nodes.some((n) => (n.admins ?? []).includes(me) && O.anc(n.id).includes(dept.id));
-    const isLeader = meP.level !== "member";
+    const isLeader = isLeaderLevel(meP.level);
     const systems = O.kids(bid, "system");
     const system = systems.some((x) => x.id === sel.system) ? sel.system : "all";
-    const trades = system !== "all" ? O.kids(system, "trade") : O.desc(bid, "trade");
-    const trade = trades.some((x) => x.id === sel.trade) ? sel.trade : "all";
-    const unitId = trade !== "all" ? trade : system !== "all" ? system : bid;
-    const unitLabel = [branch.name, system !== "all" ? O.by[system].name : "", trade !== "all" ? O.by[trade].name : ""]
+    // With all systems, a trade name used under several systems (e.g. EU under GPM and RCM)
+    // is listed once and covers each of them.
+    const allTrades = system !== "all" ? O.kids(system, "trade") : O.desc(bid, "trade");
+    const tkey = (n: OrgNode) => n.name.trim().toLowerCase();
+    const trades = allTrades.filter((t, i) => allTrades.findIndex((x) => tkey(x) === tkey(t)) === i);
+    const selT = allTrades.find((x) => x.id === sel.trade);
+    const trade = selT ? trades.find((x) => tkey(x) === tkey(selT))!.id : "all";
+    const tradeIds = selT ? allTrades.filter((x) => tkey(x) === tkey(selT)).map((x) => x.id) : [];
+    const unitIds = tradeIds.length ? tradeIds : [system !== "all" ? system : bid];
+    const unitId = unitIds[0];
+    const inUnit = (p: CalPerson) => unitIds.some((u) => O.inN(p, u));
+    const unitLabel = [
+      branch.name,
+      system !== "all" ? O.by[system].name : "",
+      trade !== "all" ? O.by[trade].name + (tradeIds.length > 1 ? " (all systems)" : "") : "",
+    ]
       .filter(Boolean)
       .join(" › ");
     const deptList: OrgNode[] = [];
@@ -63,7 +76,7 @@ export function useCalView() {
     const pendingCount = data.requests.filter((q) => q.approvals[bid] === "pending").length;
     return {
       meP, myBranches, viewBranches, mTowers, mTower, branch, dept, tower, bid, isAdmin, anyAdmin, isLeader, systems, system, trades, trade,
-      unitId, unitLabel, deptList, towerOpts, deptShort: dept.name.split(" (")[0], pendingCount,
+      unitId, unitIds, inUnit, unitLabel, deptList, towerOpts, deptShort: dept.name.split(" (")[0], pendingCount,
       branchOpts: viewBranches.filter((b) => O.up(b.id, "tower")!.id === tower.id),
     };
   }, [cal, me, sel, data]);

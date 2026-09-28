@@ -3,9 +3,12 @@ import { Cal } from "../calendar/engine";
 import { getCalendar } from "../calendar/server";
 import { ConflictError, ForbiddenError, db } from "../db";
 import { authorizeWl } from "./authz";
+import { WORKING } from "../calendar/constants";
+import { addDays } from "../calendar/dates";
+import type { Code } from "../calendar/types";
 import { dayKey } from "./clock";
 import { visibleTeams } from "../calendar/authz";
-import { orgFor, peopleFromCalendar, workloadAdmins, workloadApprovers } from "./people";
+import { holidaysFor, orgFor, peopleFromCalendar, workloadAdmins, workloadApprovers } from "./people";
 import { applyAction, type Action } from "./actions";
 import type { WorkloadData } from "./engine";
 import { initialData } from "./seed";
@@ -31,7 +34,7 @@ interface RawSnapshot {
   tasks: RawTask[];
 }
 
-type FromCal = Pick<WorkloadData, "people" | "admins" | "org" | "approvers">;
+type FromCal = Pick<WorkloadData, "people" | "admins" | "org" | "approvers" | "holidays">;
 type RawActivity = Activity & { version: number };
 /** Activity loaded with the team: recent days (reports) plus anything ongoing or pending. */
 const ACTIVITY_DAYS = 35;
@@ -40,7 +43,7 @@ const ACTIVITY_DAYS = 35;
  * Which team this request is for, and that team's org, people and admins from the
  * Calendar. `want` must be a team the person can open; without it, their first team.
  */
-async function teamContext(token: string, me: number, want?: string | null): Promise<{ team: string; ctx: FromCal }> {
+async function teamContext(token: string, me: number, want?: string | null): Promise<{ team: string; ctx: FromCal; c: Cal }> {
   const c = new Cal(await getCalendar(token), dayKey(Date.now()));
   const teams = visibleTeams(c, me);
   if (want && !teams.some((t) => t.id === want)) throw new ForbiddenError("You can’t open that team.");
@@ -49,11 +52,13 @@ async function teamContext(token: string, me: number, want?: string | null): Pro
   if (!team) throw new ForbiddenError("You aren’t in a team yet. Ask your admin to allocate you in Calendar › Members.");
   return {
     team,
+    c,
     ctx: {
       people: peopleFromCalendar(c, Date.now(), team),
       admins: workloadAdmins(c, team),
       approvers: workloadApprovers(c, team),
       org: orgFor(c, team, teams),
+      holidays: holidaysFor(c, team),
     },
   };
 }
@@ -181,4 +186,32 @@ export async function getOvertime(token: string, me: number, want: string | null
   return ((data ?? []) as RawActivity[])
     .filter((a) => a.kind === "end" && a.otMin > 0 && a.start >= from && a.start < to)
     .map(({ version: _v, ...a }) => a);
+}
+
+/**
+ * Dashboard data for a period: the days each team member was scheduled to work (Calendar:
+ * in office, from home or holiday duty) and their time away and overtime in the period.
+ * Workload admins and the team's leads only.
+ */
+export async function getPeriod(token: string, me: number, want: string | null, from: number, to: number) {
+  const { team, ctx, c } = await teamContext(token, me, want);
+  if (!ctx.admins.includes(me) && !ctx.approvers.includes(me)) throw new ForbiddenError("Only Workload admins and leads can see the dashboard.");
+  const today = dayKey(Date.now());
+  const last = [dayKey(to - 1), today].sort()[0];
+  const workDays: Record<number, string[]> = {};
+  for (const p of ctx.people) {
+    const cp = c.people.get(p.id);
+    if (!cp) continue;
+    const days: string[] = [];
+    for (let k = dayKey(from), g = 0; k <= last && g < 400; k = addDays(k, 1), g++) {
+      if (cp.hire && k < cp.hire) continue;
+      const x = c.raw(cp, k, team);
+      if (WORKING.includes(x.code as Code) && !x.pending) days.push(k);
+    }
+    workDays[p.id] = days;
+  }
+  const { data, error } = await db().rpc("workforce_activities", { p_token: token, p_team: team, p_since: from });
+  if (error) throw new Error(error.message);
+  const activities = ((data ?? []) as RawActivity[]).filter((a) => a.start < to).map(({ version: _v, ...a }) => a);
+  return { workDays, activities };
 }

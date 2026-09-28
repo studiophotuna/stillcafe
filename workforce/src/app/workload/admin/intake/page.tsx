@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { UploadTasks } from "@/components/UploadTasks";
 import { Blueprint, PageHead } from "@/components/ui";
 import { trPathOf } from "@/lib/workload/constants";
@@ -42,6 +43,10 @@ export default function IntakePage() {
             </select>
           </div>
           <span className="small">If left blank, new emails wait in the queue as “Needs trade” until an admin sets it from the task details.</span>
+          <span className="small">
+            The task type (and so the SLA) comes from keywords in the subject, set in <Link href="/workload/admin/sla">SLA &amp; task types</Link>; emails without a match
+            get the standard SLA.
+          </span>
           <div className="row">
             {mode === "demo" ? (
               <>

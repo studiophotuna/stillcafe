@@ -4,12 +4,12 @@ import { useMemo, useState } from "react";
 import { Modal } from "@/components/Dialogs";
 import { Blueprint, Icon } from "@/components/ui";
 import {
-  ANNUAL, APPR_WORD, BCP_ST, BUCKETS, CI_DESC, CODES, HTYPE, LEVELS, OOO, POOL, REQ_TYPES, TYPE_L, first,
+  ANNUAL, APPR_WORD, BCP_ST, BUCKETS, CI_DESC, CODES, HTYPE, LEVELS, LEVEL_RANK, OOO, POOL, REQ_TYPES, TYPE_L, first,
 } from "@/lib/calendar/constants";
 import { DOW, addDays, daysInMonth, dowOf, fmt, fmtY, MONL, rng2 } from "@/lib/calendar/dates";
 import { downloadMembersTemplate, downloadScheduleTemplate, readCalendarUpload } from "@/lib/calendar/excel";
 import { useCalendar, type Issued } from "@/lib/calendar/store";
-import { ALLOC_MIN, allocNeeds, allocProblem } from "@/lib/calendar/org";
+import { ALLOC_MIN, allocNeeds, allocProblem, primaryTeamOf } from "@/lib/calendar/org";
 import { parseOrgText, planOrgImport } from "@/lib/calendar/orgImport";
 import { checkUpload, type UploadRow } from "@/lib/calendar/uploads";
 import { useCalView } from "@/lib/calendar/useCalView";
@@ -575,10 +575,11 @@ function MemberDialog({ pid: pid0 }: { pid: number | null }) {
   const [f, setF] = useState(() => detailsOf(init));
   const [wfh, setWfh] = useState<number[]>(() => wfhOf(init));
   const [primary, setPrimary] = useState(init?.primaryTeam ?? "");
+  const [hcFrom, setHcFrom] = useState(s.today.slice(0, 7));
   const [level, setLevel] = useState<Level>(init?.level ?? "member");
   const [shift, setShift] = useState(init?.shift ?? (s.data.shifts.some((x) => x.id === "D") ? "D" : s.data.shifts[0]?.id ?? "D"));
   const [adminHere, setAdminHere] = useState(init ? (v.branch.admins ?? []).includes(init.id) : false);
-  const hereRow: AllocRow = { dept: v.dept.id, tower: v.tower.id, branch: v.bid, system: v.system !== "all" ? v.system : "", trade: v.trade !== "all" ? v.trade : "" };
+  const hereRow: AllocRow = { dept: v.dept.id, tower: v.tower.id, branch: v.bid, system: v.system !== "all" ? v.system : "", trade: v.trade !== "all" && v.unitIds.length === 1 ? v.trade : "" };
   const [alloc, setAlloc] = useState<AllocRow[]>(init ? init.assign.map(allocOf) : [hereRow]);
   const close = () => s.setDialog(null);
   const setA = (i: number, k: keyof AllocRow, val: string) =>
@@ -652,7 +653,7 @@ function MemberDialog({ pid: pid0 }: { pid: number | null }) {
       primaryTeam: primary,
     };
     if (isNew && !existing) s.run({ type: "addPerson", details, level, shift, adminHere, bid: v.bid, assign });
-    else s.run({ type: "saveMember", pid: pid!, level, shift, adminHere, bid: v.bid, assign, isNew, details });
+    else s.run({ type: "saveMember", pid: pid!, level, shift, adminHere, bid: v.bid, assign, isNew, details, hcFrom });
     close();
   };
   const opts = (l: { id: string; name: string }[]) =>
@@ -853,6 +854,23 @@ function MemberDialog({ pid: pid0 }: { pid: number | null }) {
                 </select>
                 <span className="small" style={{ fontSize: 12 }}>
                   They appear on every team’s calendar, but are counted as 1 FTE only in this team on the headcount report.
+                </span>
+              </div>
+            );
+          })()}
+          {(() => {
+            // Moving teams: from which month the new team counts on the headcount report.
+            if (!init || isNew) return null;
+            const teams = [...new Set(alloc.map((r) => r.branch).filter(Boolean))];
+            const next = teams.length > 1 ? (teams.includes(primary) ? primary : teams[0]) : teams[0];
+            const was = primaryTeamOf(O, init);
+            if (!next || next === was) return null;
+            return (
+              <div className="field" style={{ maxWidth: 420 }}>
+                <label htmlFor="mem-hcfrom">Counts in {O.by[next]?.name}’s headcount from</label>
+                <input id="mem-hcfrom" className="input" type="month" value={hcFrom} onChange={(e) => e.target.value && setHcFrom(e.target.value)} />
+                <span className="small" style={{ fontSize: 12 }}>
+                  Earlier months stay with {was ? O.by[was]?.name : "no team"} on the headcount report. Change the tagging later from the person’s name on Headcount.
                 </span>
               </div>
             );
@@ -1202,7 +1220,7 @@ function UploadDialog({ mode: mode0 }: { mode: "members" | "schedule" }) {
               try {
                 const name =
                   mode === "schedule"
-                    ? await downloadScheduleTemplate(s.cal, v.unitId, v.unitLabel, v.bid, month)
+                    ? await downloadScheduleTemplate(s.cal, v.unitIds, v.unitLabel, v.bid, month)
                     : await downloadMembersTemplate(s.cal, v.dept, v.tower, v.branch);
                 s.toast(name + " downloaded.");
               } catch {
@@ -1360,8 +1378,8 @@ function EventDialog() {
         </div>
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
           <div className="field">
-            <label htmlFor="ev-s">Start date</label>
-            <input id="ev-s" className="input" type="date" value={r.start} onChange={(e) => setR({ ...r, start: e.target.value })} />
+            <label htmlFor="ev-s">Active date</label>
+            <input id="ev-s" className="input" type="date" value={r.start} min={s.today} onChange={(e) => setR({ ...r, start: e.target.value })} />
           </div>
           <div className="field">
             <label htmlFor="ev-sc">Who needs to check in</label>
@@ -1378,13 +1396,15 @@ function EventDialog() {
           <label htmlFor="ev-note">Message to staff</label>
           <textarea id="ev-note" className="input" value={r.note} placeholder="e.g. Office is closed. Work from home if it is safe to do so." onChange={(e) => setR({ ...r, note: e.target.value })} style={{ minHeight: 70 }} />
         </div>
-        <span className="small" style={{ fontSize: 13 }}>Everyone in scope sees a check-in banner in Workforce Management and gets an email.</span>
+        <span className="small" style={{ fontSize: 13 }}>
+          The event is active on this date only: everyone in scope sees a check-in banner in Workforce Management and gets an email, and check-ins close at the end of the day.
+        </span>
         <div className="dialog-actions" style={{ gap: 10 }}>
           <button className="btn btn-secondary btn-40" onClick={close}>
             Cancel
           </button>
           <PrimaryBtn
-            disabled={!r.name.trim() || !r.start}
+            disabled={!r.name.trim() || !r.start || r.start < s.today}
             onClick={() => {
               s.run({ type: "startEvent", ...r });
               close();
@@ -1503,10 +1523,9 @@ function NodeAdminsDialog({ id }: { id: string }) {
   const admins = n.admins ?? [];
   const close = () => s.setDialog(null);
   // Suggest people allocated here (directors and managers first), then everyone else.
-  const rank: Record<string, number> = { director: 0, manager: 1, lead: 2, member: 3 };
   const cands = s.data.people
     .filter((p) => !admins.includes(p.id) && !(p.resign && p.resign < s.today))
-    .sort((a, b) => Number(O.inN(b, id)) - Number(O.inN(a, id)) || rank[a.level] - rank[b.level] || a.name.localeCompare(b.name));
+    .sort((a, b) => Number(O.inN(b, id)) - Number(O.inN(a, id)) || LEVEL_RANK[a.level] - LEVEL_RANK[b.level] || a.name.localeCompare(b.name));
   const kind = n.type === "dept" ? "department" : "tower";
   return (
     <Modal onClose={close} width={560}>

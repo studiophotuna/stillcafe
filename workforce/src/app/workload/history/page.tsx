@@ -6,10 +6,10 @@ import { Blueprint, PageHead } from "@/components/ui";
 import { PeriodNav } from "@/components/WorkloadBits";
 import { dur } from "@/lib/workload/clock";
 import { lc, trPathOf } from "@/lib/workload/constants";
-import { due, holdPeriods, personOf, taskWorkMs, ticketField, ticketOf } from "@/lib/workload/engine";
+import { due, holdPeriods, personOf, slaOf, taskWorkMs, ticketField, ticketOf } from "@/lib/workload/engine";
 import { periodLabel, periodRange, type PeriodKind } from "@/lib/workload/period";
 import { useWorkload } from "@/lib/workload/store";
-import { taskRow } from "@/lib/workload/view";
+import { taskRow, typeNameOf } from "@/lib/workload/view";
 
 /**
  * Completed tasks by day, week or month: a member's own, or the team's for admins and
@@ -24,6 +24,8 @@ export default function HistoryPage() {
   const [trade, setTrade] = useState("all");
   const [who, setWho] = useState("all");
   const [timely, setTimely] = useState<"all" | "ontime" | "late">("all");
+  const [ttype, setTtype] = useState("all");
+  const types = data.settings.taskTypes ?? [];
   const [q, setQ] = useState("");
   const ql = lc(q);
   const [from, to] = periodRange(p.kind, p.anchor);
@@ -38,12 +40,13 @@ export default function HistoryPage() {
         t.doneAt < to &&
         (scope === "team" && lead ? who === "all" || String(t.assignee) === who : t.assignee === me.id) &&
         (trade === "all" || t.trade === trade) &&
-        (timely === "all" || (timely === "late") === t.doneAt > due(t, s)) &&
-        (!ql || lc(t.title + " " + t.id + " " + ticketOf(data, t) + " " + Object.values(t.fields).join(" ")).includes(ql)),
+        (ttype === "all" || (t.ttype ?? "") === ttype) &&
+        (timely === "all" || (timely === "late") === t.doneAt > due(t, data)) &&
+        (!ql || lc(t.title + " " + t.id + " " + ticketOf(data, t) + " " + typeNameOf(data, t) + " " + Object.values(t.fields).join(" ")).includes(ql)),
     )
     .sort((a, b) => b.doneAt! - a.doneAt!);
   const worked = list.reduce((a, t) => a + taskWorkMs(data, t, now), 0);
-  const late = list.filter((t) => t.doneAt! > due(t, s)).length;
+  const late = list.filter((t) => t.doneAt! > due(t, data)).length;
   const people = [...new Set(data.tasks.filter((t) => t.status === "done" && t.assignee !== null).map((t) => t.assignee!))]
     .map((id) => ({ id, name: personOf(data, id)?.name ?? `#${id}` }))
     .sort((a, b) => a.name.localeCompare(b.name));
@@ -51,7 +54,7 @@ export default function HistoryPage() {
   const csv = () => {
     const iso = (ms: number | null) => (ms ? new Date(ms).toISOString() : "");
     const q2 = (x: unknown) => `"${String(x ?? "").replace(/"/g, '""')}"`;
-    const head = ["Task ID", ...(tf ? [tf.label] : []), "Title", "System › Trade", "Done by", "Received", "Started", "Finished", "Worked (min)", "On time", "On hold (min)", "On hold dates", "On hold reasons"].concat(
+    const head = ["Task ID", ...(tf ? [tf.label] : []), "Title", "System › Trade", "Task type", "SLA (h)", "Due", "Done by", "Received", "Started", "Finished", "Worked (min)", "On time", "On hold (min)", "On hold dates", "On hold reasons"].concat(
       data.fields.filter((f) => f !== tf).map((f) => f.label),
     );
     const rows = list.map((t) =>
@@ -60,12 +63,15 @@ export default function HistoryPage() {
         ...(tf ? [ticketOf(data, t)] : []),
         t.title,
         trPathOf(data.org, t.trade),
+        typeNameOf(data, t) || "Standard",
+        slaOf(t, data.settings),
+        iso(due(t, data)),
         personOf(data, t.assignee)?.name ?? "",
         iso(t.received),
         iso(t.startedAt),
         iso(t.doneAt),
         Math.round(taskWorkMs(data, t, now) / 60000),
-        t.doneAt! <= due(t, s) ? "Yes" : "No",
+        t.doneAt! <= due(t, data) ? "Yes" : "No",
         Math.round(holdPeriods(t, now).reduce((a, p) => a + ((p.to ?? now) - p.from), 0) / 60000),
         holdPeriods(t, now).map((p) => `${iso(p.from)} to ${iso(p.to)}`).join("; "),
         holdPeriods(t, now).map((p) => p.reason).join("; "),
@@ -118,6 +124,20 @@ export default function HistoryPage() {
                 {data.org.trades.map((t) => (
                   <option key={t.id} value={t.id}>
                     {trPathOf(data.org, t.id)}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
+          {types.length > 0 && (
+            <div className="field">
+              <label htmlFor="h-tt">Task type</label>
+              <select id="h-tt" className="input" value={ttype} onChange={(e) => setTtype(e.target.value)} style={{ width: "auto", minWidth: 140 }}>
+                <option value="all">All types</option>
+                <option value="">Standard requests</option>
+                {types.map((t) => (
+                  <option key={t.id} value={t.id}>
+                    {t.name}
                   </option>
                 ))}
               </select>

@@ -14,6 +14,8 @@ import {
   sortTasks,
   startTask,
   startWork,
+  endWork,
+  undoEndWork,
   type WorkloadData,
 } from "./engine";
 import { seedTasks } from "./seed";
@@ -58,7 +60,10 @@ const task = (p: Partial<Task> = {}): Task => ({
   ...p,
 });
 
+/** SLA context: settings plus Calendar holidays. */
+const sc = (p: Partial<Settings> = {}, holidays: string[] = []) => ({ settings: settings(p), holidays });
 const data = (tasks: Task[], p: Partial<Settings> = {}): WorkloadData => ({
+  holidays: [],
   tasks,
   fields: FIELDS0.map((f) => ({ ...f, required: false })),
   settings: settings(p),
@@ -79,8 +84,8 @@ describe("ordering", () => {
     const b = task({ pr: "high", received: NOW - H });
     const c = task({ pr: "normal", received: NOW - 2 * H });
     const d = task({ pr: "normal", received: NOW - 3 * H });
-    expect(sortTasks([a, b, c, d], settings()).map((t) => t.id)).toEqual([b.id, d.id, c.id, a.id]);
-    expect(sortTasks([a, b, c, d], settings({ order: "received" })).map((t) => t.id)).toEqual([a.id, d.id, c.id, b.id]);
+    expect(sortTasks([a, b, c, d], sc()).map((t) => t.id)).toEqual([b.id, d.id, c.id, a.id]);
+    expect(sortTasks([a, b, c, d], sc({ order: "received" })).map((t) => t.id)).toEqual([a.id, d.id, c.id, b.id]);
   });
 });
 
@@ -112,6 +117,35 @@ describe("start work (FIFO)", () => {
     const t = task({ trade: "eu" });
     expect(get(startWork(data([t]), ELI, NOW).data, t.id).status).toBe("new");
     expect(get(startWork(data([t], { skipUnavail: false }), ELI, NOW).data, t.id).status).toBe("in_progress");
+  });
+
+  it("lets people scheduled today carry on after their shift (overtime) until they end work, also after Undo End work", () => {
+    const after = (d: WorkloadData): WorkloadData => ({ ...d, people: d.people.map((p) => (p.id === ANA ? { ...p, avail: "offshift", onToday: true } : p)) });
+    const t = task();
+    // Off shift and not scheduled today: skipped.
+    const off = { ...data([t]), people: PEOPLE.map((p) => (p.id === ANA ? { ...p, avail: "offshift" as const } : p)) };
+    expect(get(startWork(off, ANA, NOW).data, t.id).status).toBe("new");
+    // Scheduled today, after the shift: can start.
+    expect(get(startWork(after(data([t])), ANA, NOW).data, t.id).status).toBe("in_progress");
+    // Ended work: blocked; after Undo End work: can start again.
+    const ended = endWork(after(data([t])), ANA, 0, NOW).data;
+    expect(get(startWork(ended, ANA, NOW + M).data, t.id).status).toBe("new");
+    const back = undoEndWork(ended, ANA, NOW + M).data;
+    expect(get(startWork(back, ANA, NOW + 2 * M).data, t.id).status).toBe("in_progress");
+  });
+
+  it("round-robin gives new tasks after the shift only to people working overtime", () => {
+    const off = (d: WorkloadData): WorkloadData => ({
+      ...d,
+      people: d.people.map((p) => (p.trades.includes("lcl") ? { ...p, avail: p.id === ANA ? "offshift" : "leave", onToday: p.id === ANA } : p)),
+    });
+    const t = task();
+    // Not working now: stays in the queue.
+    expect(get(addTasks(off(data([], { mode: "rr" })), [t], "", NOW).data, t.id).status).toBe("new");
+    // Working a task after the shift: gets it.
+    const cur = task({ status: "in_progress", assignee: ANA, startedAt: NOW - M });
+    const o = addTasks(off(data([cur], { mode: "rr" })), [t], "", NOW).data;
+    expect(get(o, t.id).assignee).toBe(ANA);
   });
 
   it("does not pull from the queue in admin-assigns mode", () => {
@@ -438,8 +472,16 @@ describe("on-hold time and weekend SLA", async () => {
     const mon = Date.parse("2026-09-28T09:00:00+08:00");
     expect(spanMs(fri, mon, true)).toBe(9 * H + 9 * H); // Fri 15→24, Mon 0→9
     const t = task({ received: fri, pr: "normal" });
-    expect(due(t, settings({ slaWeekends: false }))).toBe(addHours(fri, 24, true));
-    expect(overdueMs(t, settings({ slaWeekends: false }), Date.parse("2026-09-28T17:00:00+08:00"))).toBe(2 * H);
+    // Skipped by default; counted only when the team turns weekends on.
+    expect(due(t, sc({}))).toBe(addHours(fri, 24, true));
+    expect(due(t, sc({ slaWeekends: false }))).toBe(addHours(fri, 24, true));
+    expect(overdueMs(t, sc({}), Date.parse("2026-09-28T17:00:00+08:00"))).toBe(2 * H);
+    expect(due(t, sc({ slaWeekends: true }))).toBe(fri + 24 * H);
+    // The ticket from the report: Fri 25 Sep 15:59, 48 h SLA, seen Sun 27 Sep 02:07 — not overdue.
+    const t2 = task({ received: Date.parse("2026-09-25T15:59:00+08:00"), pr: "normal" });
+    const s48 = sc({ sla: { high: 24, normal: 48, low: 72 } });
+    expect(overdueMs(t2, s48, Date.parse("2026-09-27T02:07:00+08:00"))).toBe(0);
+    expect(new Date(due(t2, s48)).toISOString()).toBe("2026-09-29T07:59:00.000Z"); // Tue 15:59
   });
 });
 
@@ -461,5 +503,305 @@ describe("uploads keep the actual received time", async () => {
     const d = importRows(data([]), chk, NOW).data;
     expect(d.tasks.map((t) => t.received)).toEqual([Date.parse("2026-09-23T08:30:00+08:00"), NOW]);
     expect(d.tasks[0].history[0].text).toMatch(/received/);
+  });
+});
+
+describe("task types with their own SLA, and holidays", async () => {
+  const E = await import("./engine");
+  const { applyAction } = await import("./actions");
+  const { authorizeWl } = await import("./authz");
+  const TYPES = [
+    { id: "doc", name: "Doc review", sla: 2, trades: [], keywords: ["doc review", "documents"] },
+    { id: "bk", name: "Booking", sla: 4, trades: ["eu"], keywords: ["booking"] },
+  ];
+  const mon = Date.parse("2026-09-28T09:00:00+08:00"); // Monday 09:00
+
+  it("a typed task uses its type's SLA; others the standard SLA for their priority", () => {
+    const s = settings({ taskTypes: TYPES });
+    expect(E.slaHoursFor({ ttype: "doc", pr: "normal" }, s)).toBe(2);
+    expect(E.slaHoursFor({ ttype: "", pr: "normal" }, s)).toBe(24);
+    expect(E.slaHoursFor({ ttype: "", pr: "high" }, s)).toBe(4);
+    expect(E.slaHoursFor({ ttype: "gone", pr: "low" }, s)).toBe(72); // deleted type: standard
+    const t = task({ received: mon, ttype: "doc" });
+    expect(E.due(t, sc({ taskTypes: TYPES }))).toBe(mon + 2 * H);
+  });
+
+  it("keeps the SLA a task came in with when the settings change", () => {
+    const t = E.withSla(task({ received: mon, ttype: "doc" }), settings({ taskTypes: TYPES }));
+    expect(t.slaH).toBe(2);
+    const later = sc({ taskTypes: TYPES.map((x) => (x.id === "doc" ? { ...x, sla: 8 } : x)) });
+    expect(E.due(t, later)).toBe(mon + 2 * H);
+    // Older tasks without a fixed SLA follow the current settings.
+    expect(E.due(task({ received: mon, ttype: "doc" }), later)).toBe(mon + 8 * H);
+  });
+
+  it("finds the type from keywords, respecting trades", () => {
+    const s = settings({ taskTypes: TYPES });
+    expect(E.detectType(s, "Please DOC REVIEW for shipment", "lcl")).toBe("doc");
+    expect(E.detectType(s, "New booking request", "eu")).toBe("bk");
+    expect(E.detectType(s, "New booking request", "lcl")).toBe(""); // Booking only covers EU
+    expect(E.detectType(s, "Rate question", "eu")).toBe("");
+  });
+
+  it("uploads take the Task type column, or keywords, and fix the SLA", () => {
+    const d = data([], { taskTypes: TYPES });
+    const rows = [
+      { Title: "Check invoice", Trade: "EU", "Task type": "Booking" },
+      { Title: "documents for vessel", Trade: "LCL" },
+      { Title: "Plain", Trade: "LCL" },
+      { Title: "Bad", Trade: "LCL", "Task type": "Nope" },
+    ];
+    const chk = checkRows(rows, d.fields, d.org, NOW, TYPES);
+    expect(chk.map((c) => c.ok)).toEqual([true, true, true, false]);
+    expect(chk[3].msg).toContain("isn’t set up");
+    const out = E.importRows(d, chk, NOW).data.tasks;
+    expect(out.map((t) => [t.ttype, t.slaH])).toEqual([["bk", 4], ["doc", 2], ["", 24]]);
+  });
+
+  it("admins set the type from the task details; priority re-fixes a standard request's SLA", () => {
+    const d = data([task({ id: "A", received: mon, slaH: 24 })], { taskTypes: TYPES });
+    const r = applyAction(d, { type: "setTaskType", id: "A", ttype: "doc" }, mon + H);
+    expect(r.data.tasks[0]).toMatchObject({ ttype: "doc", slaH: 2 });
+    expect(r.data.tasks[0].history.at(-1)!.text).toContain("Doc review · SLA 2 h");
+    const back = applyAction(r.data, { type: "setTaskType", id: "A", ttype: "" }, mon + H);
+    expect(back.data.tasks[0]).toMatchObject({ ttype: "", slaH: 24 });
+    const hi = applyAction(back.data, { type: "setPriority", id: "A", pr: "high" }, mon + H);
+    expect(hi.data.tasks[0].slaH).toBe(4);
+    const typed = applyAction(r.data, { type: "setPriority", id: "A", pr: "high" }, mon + H);
+    expect(typed.data.tasks[0].slaH).toBe(2); // the type's SLA stays
+    expect(applyAction(d, { type: "setTaskType", id: "A", ttype: "nope" }, mon).data).toBe(d);
+    // Members can't change a task's type (it would change their SLA).
+    expect("error" in authorizeWl({ type: "setTaskType", id: "A", ttype: "" }, { ...d, admins: [23] }, ANA)).toBe(true);
+  });
+
+  it("skips Calendar holidays in SLA time unless the team counts them", () => {
+    const tue = Date.parse("2026-09-29T15:00:00+08:00"); // Tuesday 15:00, Wednesday is a holiday
+    const t = task({ received: tue, pr: "normal" }); // 24 h
+    expect(new Date(E.due(t, sc({}, ["2026-09-30"]))).toISOString()).toBe("2026-10-01T07:00:00.000Z"); // Thu 15:00
+    expect(E.due(t, sc({ slaHolidays: true }, ["2026-09-30"]))).toBe(tue + 24 * H);
+    // Holiday on a Friday plus the weekend: Thu 15:00 + 24 h → Mon 15:00.
+    const thu = Date.parse("2026-10-01T15:00:00+08:00");
+    expect(new Date(E.due(task({ received: thu }), sc({}, ["2026-10-02"]))).toISOString()).toBe("2026-10-05T07:00:00.000Z");
+    // Waiting time doesn't grow on the holiday either.
+    expect(E.waitingMs(t, sc({}, ["2026-09-30"]), Date.parse("2026-10-01T09:00:00+08:00"))).toBe(9 * H + 9 * H);
+  });
+});
+
+describe("task type targets weight productivity", async () => {
+  const E = await import("./engine");
+  const TYPES = [
+    { id: "doc", name: "Doc review", sla: 2, target: 4, trades: [], keywords: [] },
+    { id: "bk", name: "Booking", sla: 4, target: 2, trades: [], keywords: [] },
+    { id: "misc", name: "Misc", sla: 8, trades: [], keywords: [] },
+  ];
+  it("3 Doc reviews (of 4) and 1 Booking (of 2) make 125% of the day", () => {
+    const d = data([], { taskTypes: TYPES });
+    const done = [...Array(3)].map(() => task({ ttype: "doc", status: "done" })).concat(task({ ttype: "bk", status: "done" }));
+    const r = E.dayShare(d, done, 8);
+    expect(r.share).toBeCloseTo(1.25);
+    expect(r.mix).toBe("3 Doc review of 4 · 1 Booking of 2");
+    expect(E.typeTargets(d)).toBe(true);
+  });
+  it("tasks without a type target count against the member's target", () => {
+    const d = data([], { taskTypes: TYPES });
+    const r = E.dayShare(d, [task({ ttype: "misc" }), task({}), task({ ttype: "doc" })], 8);
+    expect(r.share).toBeCloseTo(2 / 8 + 1 / 4);
+    expect(r.mix).toBe("2 standard of 8 · 1 Doc review of 4");
+  });
+  it("personMetrics: full shift, weighted productivity", () => {
+    const at = Date.parse("2026-09-24T18:00:00+08:00"); // after a 09:00 shift
+    const ana = person(ANA)!;
+    const mk = (ttype: string, i: number) =>
+      task({ ttype, status: "done", assignee: ANA, startedAt: at - (i + 2) * H, doneAt: at - (i + 1) * H, received: at - 10 * H });
+    const d = data([mk("doc", 0), mk("doc", 1), mk("doc", 2), mk("bk", 3)], { taskTypes: TYPES });
+    const m = E.personMetrics(d, { ...ana, shiftStart: 8 }, at);
+    expect(m.prod).toBe(125);
+    // Without task types, the same tasks count 1 each against the member's target (8 for LCL).
+    const plain = E.personMetrics(data(d.tasks), { ...ana, shiftStart: 8 }, at);
+    expect(plain.prod).toBe(50);
+  });
+});
+
+describe("upload keeps the Received date and time from the file", async () => {
+  const E = await import("./engine");
+  const { rowsToObjects } = await import("./excel");
+  const at = (s: string) => Date.parse(s + "+08:00");
+  it("an Excel date-and-time cell survives the trip to the server", () => {
+    // ExcelJS reads a cell showing 25/09/2026 12:26 as a Date with those numbers in UTC.
+    const rows = rowsToObjects([["Title *", "Trade *", "Received"], ["Rate check", "LCL", new Date(Date.UTC(2026, 8, 25, 12, 26))]]);
+    const sent = JSON.parse(JSON.stringify(rows));
+    expect(sent[0].Received).toBe("2026-09-25 12:26:00");
+    const d = data([]);
+    const [c] = checkRows(sent, d.fields, d.org, at("2026-09-28T14:00:00"));
+    expect(c.ok).toBe(true);
+    expect(c.task!.received).toBe(at("2026-09-25T12:26:00"));
+    expect(E.importRows(d, [c], at("2026-09-28T14:00:00")).data.tasks[0].received).toBe(at("2026-09-25T12:26:00"));
+  });
+  it("reads the common ways people write it", () => {
+    const P = E.parseReceived;
+    expect(P("2026-09-25 12:26")).toBe(at("2026-09-25T12:26:00"));
+    expect(P("2026-09-25T12:26:30")).toBe(at("2026-09-25T12:26:30"));
+    expect(P("2026-09-25 12:26 PM")).toBe(at("2026-09-25T12:26:00"));
+    expect(P("2026-09-25 1:05 pm")).toBe(at("2026-09-25T13:05:00"));
+    expect(P("25/09/2026 12:26")).toBe(at("2026-09-25T12:26:00")); // day first
+    expect(P("09/25/2026 12:26 AM")).toBe(at("2026-09-25T00:26:00")); // month first
+    expect(P("05/09/2026 08:00")).toBe("ambiguous"); // 5 Sep or 9 May?
+    expect(P(46290.5180556)).toBe(at("2026-09-25T12:26:00")); // Excel serial
+    expect(P("2026-02-30")).toBe("bad");
+    expect(P("yesterday")).toBe("bad");
+    expect(P("")).toBe(null);
+  });
+  it("admins can correct a task's received time", async () => {
+    const { applyAction } = await import("./actions");
+    const d = data([task({ id: "A", received: at("2026-09-28T00:00:00") })]);
+    const r = applyAction(d, { type: "setReceived", id: "A", received: at("2026-09-25T12:26:00") }, at("2026-09-28T14:00:00"));
+    expect(r.data.tasks[0].received).toBe(at("2026-09-25T12:26:00"));
+    expect(r.data.tasks[0].history.at(-1)!.text).toContain("Received changed");
+    expect(applyAction(d, { type: "setReceived", id: "A", received: at("2026-10-05T00:00:00") }, at("2026-09-28T14:00:00")).data).toBe(d);
+  });
+});
+
+describe("dashboard metrics for any period", async () => {
+  const E = await import("./engine");
+  const { personPeriod, teamPeriod } = await import("./metrics");
+  const { periodRange, periodBuckets, periodLabel } = await import("./period");
+  const at = (s: string) => Date.parse(s + "+08:00");
+  const ana = { ...person(ANA)!, shiftStart: 8 };
+  const done = (day: string, i: number, p: Partial<Task> = {}) =>
+    task({ assignee: ANA, status: "done", received: at(`${day}T08:00:00`), startedAt: at(`${day}T09:00:00`) + i * H, doneAt: at(`${day}T09:30:00`) + i * H, ...p });
+
+  it("weeks, months and years, with day or month breakdowns", () => {
+    const now = at("2026-09-24T10:30:00");
+    const [f, t] = periodRange("year", now);
+    expect([new Date(f).toISOString(), new Date(t).toISOString()]).toEqual(["2025-12-31T16:00:00.000Z", "2026-12-31T16:00:00.000Z"]);
+    expect(periodLabel("year", now, now)).toBe("2026");
+    expect(periodBuckets("year", now).map((b) => b[0])).toEqual(["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]);
+    expect(periodBuckets("week", now).map((b) => b[0])).toEqual(["Mon 21 Sep", "Tue 22 Sep", "Wed 23 Sep", "Thu 24 Sep", "Fri 25 Sep", "Sat 26 Sep", "Sun 27 Sep"]);
+    expect(periodBuckets("month", now)).toHaveLength(30);
+  });
+
+  it("a week: productivity over the days worked, utilization, timeliness, overtime", () => {
+    const now = at("2026-09-26T12:00:00"); // Saturday, the week so far
+    const tasks = [done("2026-09-21", 0), done("2026-09-21", 1), done("2026-09-22", 0), done("2026-09-23", 0, { received: at("2026-09-18T08:00:00") })];
+    const d = data(tasks);
+    const [from, to] = periodRange("week", now);
+    const activities = [
+      { id: "b", pid: ANA, kind: "break" as const, start: at("2026-09-21T12:00:00"), end: at("2026-09-21T13:00:00"), otMin: 0, otStatus: null, decidedBy: null, decidedAt: null },
+      { id: "e", pid: ANA, kind: "end" as const, start: at("2026-09-22T18:00:00"), end: at("2026-09-22T18:00:00"), otMin: 45, otStatus: "approved" as const, decidedBy: 1, decidedAt: 0 },
+    ];
+    const x = { from, to, now, workDays: { [ANA]: ["2026-09-21", "2026-09-22", "2026-09-23", "2026-09-24", "2026-09-25"] }, activities };
+    const r = personPeriod(d, ana, x);
+    expect(r.days).toBe(5);
+    expect(r.done).toHaveLength(4);
+    expect(r.prod).toBe(Math.round((4 / 8 / 5) * 100)); // 4 tasks, target 8 a day, 5 days
+    expect(r.onTime).toBe(3); // the one received the week before was late (24 h SLA)
+    expect(r.otMin).toBe(45);
+    expect(r.awayMin).toBe(60);
+    expect(r.handle).toBe(4 * 30 * 60000);
+    const team = teamPeriod(d, [r], tasks, x);
+    expect(team).toMatchObject({ done: 4, onTime: 3, received: 3, time: 75 });
+  });
+
+  it("today matches the live daily figures", () => {
+    const now = at("2026-09-24T14:00:00");
+    const tasks = [done("2026-09-24", 0), done("2026-09-24", 1)];
+    const d = data(tasks);
+    const [from, to] = periodRange("day", now);
+    const r = personPeriod(d, ana, { from, to, now, workDays: { [ANA]: ["2026-09-24"] }, activities: [] });
+    expect(r.prod).toBe(E.personMetrics(d, ana, now).prod);
+  });
+});
+
+describe("overtime broken down by process", async () => {
+  const E = await import("./engine");
+  const at = (hm: string) => Date.parse(`2026-09-24T${hm}:00+08:00`);
+  // A member on two processes (GPM › FEWB and RCM › LCL), day shift 08:00–17:00.
+  const two = { ...PEOPLE.find((p) => p.id === ANA)!, trades: ["fewb", "lcl"], shiftStart: 8 };
+  const withTwo = (tasks: Task[] = [], p: Partial<Settings> = {}) => ({ ...data(tasks, p), people: data([]).people.map((x) => (x.id === ANA ? two : x)) });
+
+  it("suggests the split from the tasks worked after the shift", () => {
+    const d = withTwo([
+      task({ assignee: ANA, trade: "fewb", status: "done", startedAt: at("16:30"), doneAt: at("17:40") }), // 40 min after 17:00
+      task({ assignee: ANA, trade: "lcl", status: "done", startedAt: at("17:40"), doneAt: at("19:00") }), // 80 min
+    ]);
+    expect(E.suggestOtSplit(d, two, 120, at("19:00"))).toEqual([{ trade: "lcl", min: 80 }, { trade: "fewb", min: 40 }]);
+    expect(E.suggestOtSplit(withTwo(), two, 90, at("18:30"))).toEqual([{ trade: "fewb", min: 90 }]); // no tasks: first process
+    expect(E.otProcesses(d, two).map((o) => o.id)).toEqual(["fewb", "lcl"]);
+  });
+
+  it("saves the breakdown when it adds up; refuses it otherwise", () => {
+    const d = withTwo();
+    const ok = E.endWork(d, ANA, 300, at("22:00"), [{ trade: "fewb", min: 120 }, { trade: "lcl", min: 180 }]).data.activities[0];
+    expect(ok).toMatchObject({ otMin: 300, otStatus: "pending", otSplit: [{ trade: "fewb", min: 120 }, { trade: "lcl", min: 180 }] });
+    expect(E.endWork(d, ANA, 300, at("22:00"), [{ trade: "fewb", min: 100 }]).message).toMatch(/add up to 5 h/);
+    expect(E.endWork(d, ANA, 60, at("18:00"), [{ trade: "nope", min: 60 }]).message).toMatch(/Choose a process/);
+    // Two lines for the same process become one; task types are kept per line.
+    const types = [{ id: "doc", name: "Doc review", sla: 2, trades: [], keywords: [] }];
+    const m = E.endWork(withTwo([], { taskTypes: types }), ANA, 90, at("18:30"), [
+      { trade: "lcl", min: 30 },
+      { trade: "lcl", min: 30 },
+      { trade: "lcl", ttype: "doc", min: 30 },
+    ]).data.activities[0];
+    expect(m.otSplit).toEqual([{ trade: "lcl", min: 60 }, { trade: "lcl", ttype: "doc", min: 30 }]);
+    // Without a breakdown, nothing is stored for it.
+    expect(E.endWork(d, ANA, 60, at("18:00")).data.activities[0].otSplit).toBeNull();
+  });
+});
+
+describe("overtime: processes worked, task types per process, and the target", async () => {
+  const E = await import("./engine");
+  const at = (hm: string) => Date.parse(`2026-09-24T${hm}:00+08:00`);
+  // One process (RCM › LCL), day shift 08:00–17:00, target 4 a day in 6.8 productive hours.
+  const one = { ...PEOPLE.find((p) => p.id === ANA)!, trades: ["lcl"], shiftStart: 8 };
+  const mk = (tasks: Task[] = [], p: Partial<Settings> = {}) => ({
+    ...data(tasks, { memberTargets: { [ANA]: "4" }, ...p }),
+    people: data([]).people.map((x) => (x.id === ANA ? one : x)),
+  });
+
+  it("offers other trades only when the member worked tasks in them after the shift", () => {
+    expect(E.otProcesses(mk(), one, 120, at("19:00")).map((o) => o.id)).toEqual(["lcl"]);
+    expect(E.asksOtSplit(mk().settings, E.otProcesses(mk(), one, 120, at("19:00")))).toBe(false);
+    const helped = mk([task({ assignee: ANA, trade: "eu", status: "done", startedAt: at("17:30"), doneAt: at("18:10") })]);
+    const procs = E.otProcesses(helped, one, 120, at("19:00")).map((o) => o.id);
+    expect(procs.sort()).toEqual(["eu", "lcl"]);
+    // A task in another trade before the shift ended doesn't count.
+    const earlier = mk([task({ assignee: ANA, trade: "eu", status: "done", startedAt: at("15:00"), doneAt: at("16:00") })]);
+    expect(E.otProcesses(earlier, one, 120, at("19:00")).map((o) => o.id)).toEqual(["lcl"]);
+    // End work accepts the other trade, and with one process records it without asking.
+    const ok = E.endWork(helped, ANA, 120, at("19:00"), [{ trade: "eu", min: 40 }, { trade: "lcl", min: 80 }]).data.activities[0];
+    expect(ok.otSplit).toEqual([{ trade: "eu", min: 40 }, { trade: "lcl", min: 80 }]);
+    expect(E.endWork(mk(), ANA, 120, at("19:00")).data.activities[0].otSplit).toEqual([{ trade: "lcl", min: 120 }]);
+  });
+
+  it("shows only the task types a process has", () => {
+    const types = [
+      { id: "doc", name: "Doc review", sla: 2, trades: ["eu"], keywords: [] },
+      { id: "all", name: "Any trade", sla: 4, trades: [], keywords: [] },
+    ];
+    const s = mk([], { taskTypes: types }).settings;
+    expect(E.typesFor(s, "lcl").map((t) => t.id)).toEqual(["all"]);
+    expect(E.typesFor(s, "eu").map((t) => t.id)).toEqual(["doc", "all"]);
+    expect(E.asksOtSplit(s, [{ id: "lcl" }])).toBe(true); // one process, but it has a type
+    expect(E.asksOtSplit(mk([], { taskTypes: [types[0]] }).settings, [{ id: "lcl" }])).toBe(false);
+    // A type that isn't for the process is refused.
+    const d = mk([], { taskTypes: types });
+    expect(E.endWork(d, ANA, 60, at("18:00"), [{ trade: "lcl", ttype: "doc", min: 60 }]).message).toMatch(/Choose a process/);
+  });
+
+  it("adds the whole tasks that fit in the overtime to the target", () => {
+    const s = mk().settings;
+    expect(E.otDays(s, 4, 180)).toBe(0.25); // 4 in 6.8 h: 3 h adds 1 task
+    expect(E.otDays(s, 4, 60)).toBe(0); // not a whole task
+    expect(E.otDays(s, 4, 6.8 * 60)).toBe(1);
+    // Ended with 3 h overtime: 4 + 1 target; 5 done = 100%.
+    const done = [0, 1, 2, 3, 4].map((i) => task({ assignee: ANA, status: "done", startedAt: at("09:00") + i * H, doneAt: at("09:30") + i * H }));
+    const ended = E.endWork(mk(done), ANA, 180, at("20:00")).data;
+    const m = E.personMetrics(ended, one, at("20:05"));
+    expect(m.otTarget).toBe(1);
+    expect(m.prod).toBe(100);
+    // Declined overtime doesn't raise it.
+    const id = ended.activities[0].id;
+    const no = { ...ended, activities: ended.activities.map((a) => (a.id === id ? { ...a, otStatus: "declined" as const } : a)) };
+    expect(E.personMetrics(no, one, at("20:05")).prod).toBe(125);
   });
 });

@@ -2,7 +2,7 @@
 
 import { fieldOptions } from "./constants";
 import type { UploadRow } from "./engine";
-import type { TaskField, WlOrg } from "./types";
+import type { TaskField, WlOrg, TaskType } from "./types";
 
 const XLSX_MIME = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
 
@@ -17,7 +17,7 @@ const colLetter = (i: number) => {
  * (from the Calendar): required columns get " *", list columns get drop-downs
  * from a hidden Lists sheet, 500 input rows.
  */
-export async function downloadTaskTemplate(fields: TaskField[], org: WlOrg) {
+export async function downloadTaskTemplate(fields: TaskField[], org: WlOrg, types: TaskType[] = []) {
   // System is only needed when a trade name appears under two systems; a team that is
   // its own single unit needs neither column.
   const single = org.trades.length === 1 && org.trades[0].id === org.team.id;
@@ -33,6 +33,7 @@ export async function downloadTaskTemplate(fields: TaskField[], org: WlOrg) {
     ...(single ? [] : org.systems.length ? ([["System", false]] as [string, boolean][]) : []),
     ...(single ? [] : ([["Trade", true]] as [string, boolean][])),
     ["Priority", false],
+    ...(types.length ? ([["Task type", false]] as [string, boolean][]) : []),
     ["Received", false],
     ...fields.map((f): [string, boolean, TaskField] => [f.label, f.required, f]),
   ];
@@ -49,6 +50,7 @@ export async function downloadTaskTemplate(fields: TaskField[], org: WlOrg) {
     ...(org.systems.length && !single ? ([["System", org.systems.map((x) => x.name)]] as [string, string[]][]) : []),
     ...(single ? [] : ([["Trade", tradeNames]] as [string, string[]][])),
     ["Priority", ["High", "Normal", "Low"]],
+    ...(types.length ? ([["Task type", types.map((t) => t.name)]] as [string, string[]][]) : []),
     ...fields.filter((f) => f.type === "select").map((f): [string, string[]] => [f.label, fieldOptions(f)]),
   ];
   lists.forEach(([k, v], ci) => {
@@ -120,6 +122,13 @@ export function parseCsv(text: string): string[][] {
 }
 
 /** Header row → objects; strips the " *" required marker and drops empty rows. */
+/** An Excel date cell as text: "2026-09-25 12:26:00", or "2026-09-25" when it has no time. */
+export const excelDateText = (v: Date) => {
+  if (isNaN(v.getTime())) return "";
+  const s = v.toISOString();
+  return s.slice(11, 19) === "00:00:00" ? s.slice(0, 10) : s.slice(0, 10) + " " + s.slice(11, 19);
+};
+
 export function rowsToObjects(table: unknown[][]): UploadRow[] {
   const [head = [], ...body] = table;
   const keys = head.map((h) => String(h ?? "").replace(/\s*\*$/, "").trim());
@@ -128,8 +137,9 @@ export function rowsToObjects(table: unknown[][]): UploadRow[] {
       Object.fromEntries(
         keys.map((k, i) => {
           const v = r[i] ?? "";
-          // Dates as yyyy-mm-dd so rows survive the trip to the server as JSON.
-          return [k, v instanceof Date ? v.toISOString().slice(0, 10) : v];
+          // Dates as text so rows survive the trip to the server as JSON: "yyyy-mm-dd hh:mm:ss"
+          // (Excel shows team time; ExcelJS gives it in the UTC fields), or just the date at midnight.
+          return [k, v instanceof Date ? excelDateText(v) : v];
         }),
       ),
     )
@@ -159,4 +169,30 @@ export async function readTaskFile(file: File): Promise<UploadRow[]> {
     table.push(vals);
   });
   return rowsToObjects(table);
+}
+
+/** A workbook of simple tables (first row = header), downloaded as .xlsx. */
+export async function downloadSheets(fileName: string, sheets: { name: string; rows: (string | number | null)[][] }[]) {
+  const { default: ExcelJS } = await import("exceljs");
+  const wb = new ExcelJS.Workbook();
+  wb.creator = "Workforce Management";
+  for (const sh of sheets) {
+    const ws = wb.addWorksheet(sh.name.slice(0, 31), { views: [{ state: "frozen", ySplit: 1 }] });
+    sh.rows.forEach((r) => ws.addRow(r.map((v) => (v === null ? "" : v))));
+    const head = ws.getRow(1);
+    head.font = { bold: true, color: { argb: "FFFFFFFF" } };
+    head.eachCell((c) => (c.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FF416180" } }));
+    ws.columns.forEach((col, i) => {
+      const w = Math.max(...sh.rows.map((r) => String(r[i] ?? "").length), 6);
+      col.width = Math.min(48, w + 2);
+    });
+  }
+  const buf = await wb.xlsx.writeBuffer();
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(new Blob([buf], { type: XLSX_MIME }));
+  a.download = fileName;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(a.href), 1000);
 }

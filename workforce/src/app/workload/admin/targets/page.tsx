@@ -92,11 +92,14 @@ export default function TargetsPage() {
           </div>
           <span style={{ fontSize: 13, color: "var(--color-neutral-700)", maxWidth: "70ch", paddingBottom: 8 }}>
             {!basisField(data)
-              ? "Each completed task counts as 1."
+              ? (s.taskTypes ?? []).some((t) => t.target)
+                ? "Each completed task counts 1 ÷ its daily target: task types with their own target (SLA & task types) use that, other tasks the member’s target below."
+                : "Each completed task counts as 1."
               : basisField(data)!.type === "number"
                 ? `The ${basisField(data)!.label} entered on completed tasks is added up.`
                 : `Completed tasks are counted once per distinct ${basisField(data)!.label} (e.g. several tasks on one ticket count once).`}{" "}
             Targets below are in {basisUnit(data)} per day. Fields come from Task fields.
+            {basisField(data) && (s.taskTypes ?? []).some((t) => t.target) ? " Task type targets apply only when counting completed tasks." : ""}
           </span>
         </div>
       </Blueprint>

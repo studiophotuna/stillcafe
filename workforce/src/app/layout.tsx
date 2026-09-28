@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import "./industry.css";
 import "./workload.css";
+import "./theme.css";
 
 export const metadata: Metadata = {
   title: "Workforce Management",

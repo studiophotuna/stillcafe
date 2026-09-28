@@ -5,7 +5,7 @@ import { TaskTable } from "@/components/TaskTable";
 import { Blueprint, Icon, Kpi, PageHead, pct } from "@/components/ui";
 import { dur } from "@/lib/workload/clock";
 import { AV, trPathOf } from "@/lib/workload/constants";
-import { AWAY, awayLabel, basisUnit, canWork, currentAway, doneToday, endedToday, fmtMin, helpQueue, missingRequired, ownQueue, personMetrics, sortTasks } from "@/lib/workload/engine";
+import { AWAY, awayLabel, basisUnit, typeTargets, canWork, currentAway, doneToday, endedToday, fmtMin, helpQueue, missingRequired, ownQueue, personMetrics, sortTasks } from "@/lib/workload/engine";
 import { fmtT } from "@/lib/workload/clock";
 import { TaskTimer } from "@/components/WorkloadBits";
 import { useWorkload } from "@/lib/workload/store";
@@ -24,7 +24,13 @@ export default function MyWorkPage() {
 
   const kpis = me.trades.length
     ? [
-        { k: "Productivity", v: pct(mm.prod), m: `${mm.out} ${basisUnit(data)} of ${mm.target} target (so far ${mm.tgt.toFixed(1)})` },
+        {
+          k: "Productivity",
+          v: pct(mm.prod),
+          m: typeTargets(data)
+            ? `${Math.round(mm.share * 100)}% of a day’s target done${mm.mix ? ` · ${mm.mix}` : ""} (so far ${Math.round(mm.exp * 100)}%${mm.otDays ? `, incl. ${Math.round(mm.otDays * 100)}% for overtime` : ""})`
+            : `${mm.out} ${basisUnit(data)} of ${mm.target}${mm.otTarget ? ` + ${mm.otTarget} for overtime` : ""} target (so far ${mm.tgt.toFixed(1)})`,
+        },
         { k: "Utilization", v: pct(mm.util), m: `${dur(mm.handle)} on tasks of ${dur(mm.avail)} available (shift so far minus time away)` },
         {
           k: "Time away",
@@ -42,7 +48,7 @@ export default function MyWorkPage() {
       ]
     : [{ k: "Waiting in queue", v: data.tasks.filter((t) => t.status === "new").length, m: "all trades" }];
 
-  const assignedMine = sortTasks(data.tasks.filter((t) => t.assignee === me.id && (t.status === "assigned" || t.status === "on_hold")), s);
+  const assignedMine = sortTasks(data.tasks.filter((t) => t.assignee === me.id && (t.status === "assigned" || t.status === "on_hold")), data);
   // Members pick: own trades; when those are empty, other trades (same system first, then the team) to help with.
   const own = s.mode === "self" ? ownQueue(data, me) : [];
   const help = s.mode === "self" && !own.length && me.trades.length ? helpQueue(data, me).map((x) => x.t) : [];
@@ -151,7 +157,11 @@ export default function MyWorkPage() {
             </>
           ) : (
             <>
-              <span className="small">Away from tasks? Log it so utilization stays accurate.</span>
+              <span className="small">
+                {me.avail === "offshift" && me.onToday
+                  ? "Your shift is over. You can keep taking tasks as overtime and report it at End work."
+                  : "Away from tasks? Log it so utilization stays accurate."}
+              </span>
               <div className="row" style={{ gap: 6 }}>
                 {AWAY.map(([k, l]) => (
                   <button key={k} className="btn btn-secondary btn-36" onClick={() => run({ type: "away", kind: k, pid: me.id })}>

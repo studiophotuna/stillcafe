@@ -36,6 +36,15 @@ export interface Activity {
   otStatus: OtStatus | null;
   decidedBy: number | null;
   decidedAt: number | null;
+  /** Where the overtime went (End work): minutes per process (trade) and task type; adds up to otMin. */
+  otSplit?: OtPart[] | null;
+}
+
+/** Part of a day's overtime: a process (trade id) and optionally a task type. */
+export interface OtPart {
+  trade: string;
+  ttype?: string;
+  min: number;
 }
 
 /** The team's structure, from the Calendar organization. */
@@ -59,6 +68,8 @@ export interface Person {
   shift: string;
   /** Shift start hour in team-local time (0–23). */
   shiftStart: number;
+  /** Scheduled to work today (not on leave or rest day), so outside the shift they can carry on as overtime until they end work. */
+  onToday?: boolean;
   /** Today is a holiday for this person: its name, and where they work if they're on holiday duty. */
   holiday?: { name: string; date: string; working: "RTO" | "WFH" | null; answered: boolean };
 }
@@ -106,6 +117,31 @@ export interface Task {
   fields: Record<string, string | number>;
   email: TaskEmail | null;
   history: HistoryEntry[];
+  /** Task type id (Settings.taskTypes); "" or missing = a standard request. */
+  ttype?: string;
+  /**
+   * SLA hours fixed when the task came in (or its type / priority changed), so later
+   * changes to the SLA settings don't move open tasks. Missing on older tasks: current settings apply.
+   */
+  slaH?: number | null;
+}
+
+/** A kind of request with its own SLA (e.g. Doc review 2 h, Booking 4 h). */
+export interface TaskType {
+  id: string;
+  name: string;
+  /** SLA in hours from received (weekends and holidays skipped as the team's settings say). */
+  sla: number;
+  /**
+   * Tasks of this type one person is expected to finish in a day (e.g. 4). Each one done
+   * counts 1/target of a day's work toward productivity. Missing or 0: it counts like a
+   * standard task against the member's own target.
+   */
+  target?: number;
+  /** Trades it applies to; empty = every trade in the team. */
+  trades: string[];
+  /** Words in an email subject or upload title that mark a task as this type. */
+  keywords: string[];
 }
 
 export interface WorkingTime {
@@ -141,8 +177,12 @@ export interface Settings {
   staleDays?: number;
   /** Task field holding the ticket number (Queue column and search). Default: a "ticket" field. */
   ticketField?: string;
-  /** false: Saturdays and Sundays don't count toward the SLA / due time. Default true. */
+  /** true: Saturdays and Sundays count toward the SLA / due time. Default false (skipped). */
   slaWeekends?: boolean;
+  /** true: Calendar holidays count toward the SLA / due time. Default false (skipped). */
+  slaHolidays?: boolean;
+  /** Request types with their own SLA. Tasks without a type use the standard SLA (by priority). */
+  taskTypes?: TaskType[];
 }
 
 export interface Toast {

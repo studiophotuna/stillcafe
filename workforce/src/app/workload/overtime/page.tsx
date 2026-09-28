@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { Blueprint, PageHead } from "@/components/ui";
 import { H, TZ_OFFSET_H, dayKey, fmtT } from "@/lib/workload/clock";
 import { fmtMin, personOf } from "@/lib/workload/engine";
+import { trPathOf } from "@/lib/workload/constants";
 import { useWorkload } from "@/lib/workload/store";
 import type { Activity } from "@/lib/workload/types";
 
@@ -27,6 +28,10 @@ export default function OvertimePage() {
   const [rows0, setRows0] = useState<Activity[] | null>(null);
   const name = (pid: number | null) => (pid === null ? "—" : (personOf(data, pid)?.name ?? `#${pid}`));
   const ends = data.activities.filter((a) => a.kind === "end" && a.otMin > 0);
+  const typeName = (id?: string) => (id ? ((data.settings.taskTypes ?? []).find((t) => t.id === id)?.name ?? "Deleted type") : "");
+  const partName = (x: { trade: string; ttype?: string }) => trPathOf(data.org, x.trade) + (x.ttype ? ` · ${typeName(x.ttype)}` : "");
+  /** The entry's breakdown, or the whole overtime as one unassigned part. */
+  const partsOf = (a: Activity) => (a.otSplit?.length ? a.otSplit : [{ trade: "", min: a.otMin }]);
   const pending = ends.filter((a) => a.otStatus === "pending").sort((a, b) => a.start - b.start);
 
   // Report period: this month, last month, or any From–To dates (inclusive).
@@ -72,11 +77,32 @@ export default function OvertimePage() {
     byPerson.set(a.pid, r);
   });
   const rows = [...byPerson.entries()].sort((a, b) => b[1].approved - a[1].approved);
+  // Approved overtime per process (and task type).
+  const byProc = new Map<string, { name: string; min: number; people: Set<number> }>();
+  decided
+    .filter((a) => a.otStatus === "approved")
+    .forEach((a) =>
+      partsOf(a).forEach((x) => {
+        const k = x.trade + "|" + ((x as { ttype?: string }).ttype ?? "");
+        const r = byProc.get(k) ?? { name: x.trade ? partName(x) : "Not split by process", min: 0, people: new Set<number>() };
+        r.min += x.min;
+        r.people.add(a.pid);
+        byProc.set(k, r);
+      }),
+    );
+  const procRows = [...byProc.values()].sort((a, b) => b.min - a.min);
 
   const csv = () => {
     const q = (x: string | number) => `"${String(x).replace(/"/g, '""')}"`;
-    const body = [["Name", "Date", "Ended at", "Overtime (min)", "Status", "Decided by"].map(q).join(",")]
-      .concat(decided.map((a) => [name(a.pid), dayKey(a.start), fmtT(a.start), a.otMin, a.otStatus ?? "", name(a.decidedBy)].map(q).join(",")))
+    // One line per process the overtime was for.
+    const body = [["Name", "Date", "Ended at", "Process", "Task type", "Overtime (min)", "Total that day (min)", "Status", "Decided by"].map(q).join(",")]
+      .concat(
+        decided.flatMap((a) =>
+          partsOf(a).map((x) =>
+            [name(a.pid), dayKey(a.start), fmtT(a.start), x.trade ? trPathOf(data.org, x.trade) : "", typeName((x as { ttype?: string }).ttype), x.min, a.otMin, a.otStatus ?? "", name(a.decidedBy)].map(q).join(","),
+          ),
+        ),
+      )
       .join("\n");
     const el = document.createElement("a");
     el.href = URL.createObjectURL(new Blob([body], { type: "text/csv" }));
@@ -111,7 +137,12 @@ export default function OvertimePage() {
                     <div className="small">{personOf(data, a.pid)?.shift ?? ""}</div>
                   </td>
                   <td>{fmtT(a.start)}</td>
-                  <td style={{ fontWeight: 600 }}>{fmtMin(a.otMin)}</td>
+                  <td>
+                    <span style={{ fontWeight: 600 }}>{fmtMin(a.otMin)}</span>
+                    {a.otSplit?.length ? (
+                      <div className="small">{a.otSplit.map((x) => `${partName(x)} ${fmtMin(x.min)}`).join(" · ")}</div>
+                    ) : null}
+                  </td>
                   <td>
                     <div style={{ display: "flex", gap: 6, justifyContent: "flex-end" }}>
                       {a.pid === me.id ? (
@@ -181,6 +212,31 @@ export default function OvertimePage() {
           </table>
         ) : (
           <span className="small">No overtime decided in this period.</span>
+        )}
+        {procRows.length > 0 && (
+          <>
+            <h2 className="h2" style={{ marginTop: 10 }}>
+              Approved overtime by process
+            </h2>
+            <table className="table">
+              <thead>
+                <tr>
+                  <th>Process</th>
+                  <th>Approved</th>
+                  <th>People</th>
+                </tr>
+              </thead>
+              <tbody>
+                {procRows.map((r) => (
+                  <tr key={r.name}>
+                    <td style={{ fontWeight: 500 }}>{r.name}</td>
+                    <td style={{ fontWeight: 600 }}>{fmtMin(r.min)}</td>
+                    <td>{r.people.size}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </>
         )}
       </Blueprint>
     </>

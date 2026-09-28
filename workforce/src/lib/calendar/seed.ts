@@ -31,7 +31,7 @@ const ASSIGN: Record<number, string[]> = {
   8: ["rm"], 18: ["rm"], 28: ["rm"], 23: ["rm"], 24: ["gpm"], 14: ["rcm"], 15: ["lcl"], 16: ["lcl"], 19: ["lcl"],
   20: ["lcl"], 22: ["lcl"], 25: ["us"], 26: ["rm", "cs"], 27: ["cs"], 29: ["asla"], 30: ["asla"], 31: ["cs"],
 };
-const LEVEL0: Record<number, Level> = { 23: "manager", 26: "director", 27: "manager", 24: "lead", 21: "lead", 14: "lead" };
+const LEVEL0: Record<number, Level> = { 23: "manager", 26: "director", 27: "manager", 24: "lead", 21: "lead", 14: "lead", 1: "senior", 5: "senior", 2: "specialist", 7: "specialist", 10: "specialist" };
 const HOL0: [string, string, "regular" | "special" | "company", string?][] = [
   ["2026-08-21", "Ninoy Aquino Day", "special"],
   ["2026-08-31", "National Heroes Day", "regular"],
@@ -145,7 +145,7 @@ export function initialCalendar(today: string): CalendarData {
     };
   }
   const bcpEvents = [
-    { id: "E2", name: "Typhoon Helen – Signal No. 3 (NCR)", start: "2026-09-24", end: "", scope: "bss", status: "active" as const, note: "Office closes at 12:00. Work from home if it is safe to do so, and check in below." },
+    { id: "E2", name: "Typhoon Helen – Signal No. 3 (NCR)", start: today, end: "", scope: "bss", status: "active" as const, note: "Office closes at 12:00. Work from home if it is safe to do so, and check in below." },
     { id: "E1", name: "Power interruption – Ortigas", start: "2026-08-12", end: "2026-08-12", scope: "bss", status: "closed" as const, note: "" },
   ];
   const stK = ["wfh", "wfh", "wfh", "wfh", "office", "aff_ok", "aff_no", "wfh", "leave"] as const;

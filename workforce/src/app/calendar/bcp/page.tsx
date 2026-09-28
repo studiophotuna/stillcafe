@@ -4,6 +4,7 @@ import { useState } from "react";
 import { Blueprint, Icon } from "@/components/ui";
 import { BCP_CLS, BCP_KEYS, BCP_ST, RD_CLS, RD_L, READY_F } from "@/lib/calendar/constants";
 import { fmtY } from "@/lib/calendar/dates";
+import { evState } from "@/lib/calendar/engine";
 import { isNodeAdmin } from "@/lib/calendar/org";
 import { useCalendar } from "@/lib/calendar/store";
 import { useCalView } from "@/lib/calendar/useCalView";
@@ -18,14 +19,21 @@ export default function BcpPage() {
   const [filter, setFilter] = useState<BcpStatus | "all">("all");
   const byName = (a: CalPerson, b: CalPerson) => a.name.localeCompare(b.name);
   const evs = s.data.bcpEvents.filter((e) => O.by[e.scope] && O.anc(e.scope).includes(v.dept.id));
-  const ev = evs.find((e) => e.id === evSel) || evs[0];
+  // Default: today's event, else the next scheduled one, else the latest.
+  const stOfEv = (e: (typeof evs)[number]) => evState(e, s.today);
+  const ev =
+    evs.find((e) => e.id === evSel) ||
+    evs.find((e) => stOfEv(e) === "active") ||
+    evs.filter((e) => stOfEv(e) === "scheduled").sort((a, b) => a.start.localeCompare(b.start))[0] ||
+    evs[0];
+  const evSt = ev ? stOfEv(ev) : "closed";
   const inScope = (p: CalPerson) => !!ev && O.inN(p, ev.scope) && !(p.resign && p.resign < ev.start);
   const ci = ev ? s.data.checkins[ev.id] || {} : {};
   const stOf = (p: CalPerson): BcpStatus => ci[p.id]?.status || "none";
   const scoped = s.data.people.filter(inScope).sort(byName);
   const canSee = v.isLeader || v.anyAdmin;
   const canEditP = (p: CalPerson) => !!v.meP.sysAdmin || O.branchesOf(p).some((b) => isNodeAdmin(O, b.id, s.me));
-  const myIn = !!ev && ev.status === "active" && inScope(v.meP);
+  const myIn = !!ev && evSt === "active" && inScope(v.meP);
   const myCi = ci[s.me];
   const rdOf = (p: CalPerson) => {
     const r = s.data.bcpReady[p.id];
@@ -50,9 +58,9 @@ export default function BcpPage() {
           <span style={{ maxWidth: "80ch" }}>During an event, everyone in scope checks in with their status. Readiness records show who is set up to work from home before anything happens.</span>
         </div>
         <div className="row">
-          {v.anyAdmin && ev?.status === "active" && (
+          {v.anyAdmin && ev && evSt !== "closed" && (
             <button className="btn btn-secondary btn-36" onClick={() => s.run({ type: "closeEvent", id: ev.id })}>
-              Close event
+              {evSt === "scheduled" ? "Cancel event" : "Close event"}
             </button>
           )}
           {v.anyAdmin && (
@@ -71,18 +79,23 @@ export default function BcpPage() {
               <select id="bcp-ev" className="input" value={ev.id} onChange={(e) => setEvSel(e.target.value)}>
                 {evs.map((e) => (
                   <option key={e.id} value={e.id}>
-                    {e.name + (e.status === "active" ? " (active)" : "")}
+                    {e.name} · {fmtY(e.start)}
+                    {stOfEv(e) === "active" ? " (active today)" : stOfEv(e) === "scheduled" ? " (scheduled)" : ""}
                   </option>
                 ))}
               </select>
             </div>
             <div style={{ display: "flex", flexDirection: "column", gap: 4, flex: 1, minWidth: 240 }}>
               <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-                <span className={"tag " + (ev.status === "active" ? "tag-accent" : "tag-neutral")}>{ev.status === "active" ? "Active" : "Closed"}</span>
+                <span className={"tag " + (evSt === "active" ? "tag-accent" : evSt === "scheduled" ? "tag-outline" : "tag-neutral")}>
+                  {evSt === "active" ? "Active today" : evSt === "scheduled" ? "Scheduled" : ev.status === "closed" && !ev.end ? "Cancelled" : "Closed"}
+                </span>
                 <span className="small" style={{ fontSize: 13 }}>
-                  {(ev.status === "active"
-                    ? "Active since " + fmtY(ev.start)
-                    : "Closed · " + (!ev.end || ev.start === ev.end ? fmtY(ev.start) : `${fmtY(ev.start)} – ${fmtY(ev.end)}`)) + " · Scope: " + O.by[ev.scope].name}
+                  {(evSt === "active"
+                    ? "Active date " + fmtY(ev.start) + " · check-ins close at midnight"
+                    : evSt === "scheduled"
+                      ? "Active date " + fmtY(ev.start) + " · check-ins open on that day"
+                      : "Active date " + fmtY(ev.start)) + " · Scope: " + O.by[ev.scope].name}
                 </span>
               </div>
               {ev.note && <span style={{ fontSize: 14 }}>{ev.note}</span>}
@@ -155,7 +168,7 @@ export default function BcpPage() {
                         <td style={{ fontSize: 13 }}>{ci[p.id]?.note ?? ""}</td>
                         <td className="nowrap muted" style={{ fontSize: 13 }}>{ci[p.id]?.at ?? "—"}</td>
                         <td>
-                          {ev.status === "active" && canEditP(p) && (
+                          {evSt === "active" && canEditP(p) && (
                             <button className="btn btn-ghost" onClick={() => s.setDialog({ kind: "checkin", pid: p.id, evId: ev.id })}>
                               Update
                             </button>

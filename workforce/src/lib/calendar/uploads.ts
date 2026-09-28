@@ -1,5 +1,5 @@
 /** Members and schedule uploads: row checks and import (pure; shared by browser and server). */
-import { ANNUAL, CODES, LEVELS, WORKING, lc } from "./constants";
+import { ANNUAL, CODES, LEVELS, LEVEL_ALIAS, WORKING, lc } from "./constants";
 import { fmt, toIso } from "./dates";
 import type { Cal } from "./engine";
 import { ALLOC_MIN } from "./org";
@@ -55,7 +55,7 @@ export function checkUpload(c: Cal, mode: UploadMode, rows: UploadRow[], bid: st
       const name = String(col(r, "name", "employee name") ?? "").trim();
       const email = lc(col(r, "email"));
       const lvRaw = lc(col(r, "role", "level"));
-      const lv = (Object.keys(LEVELS) as Level[]).find((k) => lc(LEVELS[k]) === lvRaw) || (lvRaw ? null : "member");
+      const lv = (Object.keys(LEVELS) as Level[]).find((k) => lc(LEVELS[k]) === lvRaw) || LEVEL_ALIAS[lvRaw.replace(/\./g, "")] || (lvRaw ? null : "member");
       // Directors need only a department, managers a tower; everyone else a team.
       const need = lv ? ALLOC_MIN[lv] : "branch";
       const twv = col(r, "tower");

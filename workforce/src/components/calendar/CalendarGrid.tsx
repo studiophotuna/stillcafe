@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { Blueprint, Icon } from "@/components/ui";
-import { ANNUAL, BSTY, CODES, CODE_KEYS, LEVELS, PEND, WORKING, type Chip as ChipStyle } from "@/lib/calendar/constants";
+import { ANNUAL, BSTY, CODES, CODE_KEYS, LEVELS, isLeader, PEND, WORKING, type Chip as ChipStyle } from "@/lib/calendar/constants";
 import { DOW, MONL, dayOf, daysInMonth, dowOf, fmt, fmtY, isWk, isoOf } from "@/lib/calendar/dates";
 import type { Cell } from "@/lib/calendar/engine";
 import { useCalendar } from "@/lib/calendar/store";
@@ -73,7 +73,7 @@ export function CalendarGrid({ mgmt }: { mgmt?: boolean }) {
   if (mgmt) {
     // A tower shows its leaders plus those allocated to the whole department.
     const inScope = (p: CalPerson) => O.inN(p, v.dept.id) && (v.mTower === "all" || O.inN(p, v.mTower) || p.assign.includes(v.dept.id));
-    active = s.data.people.filter((p) => inScope(p) && p.level !== "member" && c.alive(p, mStart));
+    active = s.data.people.filter((p) => inScope(p) && isLeader(p.level) && c.alive(p, mStart));
     shown = active.filter((p) => !ql || p.name.toLowerCase().includes(ql));
     (["director", "manager", "lead"] as const).forEach((lv) => {
       const g = shown.filter((p) => p.level === lv).sort(byName);
@@ -82,7 +82,7 @@ export function CalendarGrid({ mgmt }: { mgmt?: boolean }) {
       g.forEach((p) => rows.push({ p, cells: dates.map((d) => c.raw(p, d, null)) }));
     });
   } else {
-    active = s.data.people.filter((p) => O.inN(p, v.unitId) && c.alive(p, mStart)).sort(byName);
+    active = s.data.people.filter((p) => v.inUnit(p) && c.alive(p, mStart)).sort(byName);
     active.forEach((p) => rawMap.set(p.id, dates.map((d) => c.raw(p, d, bid))));
     shown = scope === "me" ? active.filter((p) => p.id === s.me) : active;
     if (ql) shown = shown.filter((p) => p.name.toLowerCase().includes(ql));

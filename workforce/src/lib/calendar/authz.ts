@@ -69,6 +69,7 @@ export function authorizeCal(a: CalAction, c: Cal, me: number): { action: CalAct
     }
     case "holidayWork":
       return ok(a.pid === me || r.adminOf(a.pid), { ...a, actor: me });
+    case "setHcHistory":
     case "setOverride":
     case "setShiftDay":
     case "setResign":
