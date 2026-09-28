@@ -27,7 +27,7 @@ import {
   type UploadRow,
   type WorkloadData,
 } from "./engine";
-import type { ActivityKind, Priority, Settings, Task, TaskField } from "./types";
+import type { ActivityKind, OtPart, Priority, Settings, Task, TaskField } from "./types";
 
 export type Action =
   | { type: "startWork"; pid: number; assist?: boolean }
@@ -37,7 +37,7 @@ export type Action =
   | { type: "complete"; id: string; vals: Task["fields"]; pid: number }
   | { type: "away"; kind: ActivityKind; pid: number }
   | { type: "back"; pid: number }
-  | { type: "endWork"; otMin: number; pid: number }
+  | { type: "endWork"; otMin: number; pid: number; split?: OtPart[] | null }
   | { type: "undoEnd"; pid: number }
   | { type: "decideOt"; id: string; st: "approved" | "declined"; by: number }
   | { type: "distribute" }
@@ -64,7 +64,7 @@ export function applyAction(d: WorkloadData, a: Action, now: number): Outcome {
     case "complete": return completeTask(d, a.id, a.vals, a.pid, now);
     case "away": return startAway(d, a.pid, a.kind, now);
     case "back": return backToWork(d, a.pid, now);
-    case "endWork": return endWork(d, a.pid, a.otMin, now);
+    case "endWork": return endWork(d, a.pid, a.otMin, now, a.split);
     case "undoEnd": return undoEndWork(d, a.pid, now);
     case "decideOt": return decideOt(d, a.id, a.st, a.by, now);
     case "distribute": return distribute(d, now);

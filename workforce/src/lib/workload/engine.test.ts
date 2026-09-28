@@ -680,3 +680,39 @@ describe("dashboard metrics for any period", async () => {
     expect(r.prod).toBe(E.personMetrics(d, ana, now).prod);
   });
 });
+
+describe("overtime broken down by process", async () => {
+  const E = await import("./engine");
+  const at = (hm: string) => Date.parse(`2026-09-24T${hm}:00+08:00`);
+  // A member on two processes (GPM › FEWB and RCM › LCL), day shift 08:00–17:00.
+  const two = { ...PEOPLE.find((p) => p.id === ANA)!, trades: ["fewb", "lcl"], shiftStart: 8 };
+  const withTwo = (tasks: Task[] = [], p: Partial<Settings> = {}) => ({ ...data(tasks, p), people: data([]).people.map((x) => (x.id === ANA ? two : x)) });
+
+  it("suggests the split from the tasks worked after the shift", () => {
+    const d = withTwo([
+      task({ assignee: ANA, trade: "fewb", status: "done", startedAt: at("16:30"), doneAt: at("17:40") }), // 40 min after 17:00
+      task({ assignee: ANA, trade: "lcl", status: "done", startedAt: at("17:40"), doneAt: at("19:00") }), // 80 min
+    ]);
+    expect(E.suggestOtSplit(d, two, 120, at("19:00"))).toEqual([{ trade: "lcl", min: 80 }, { trade: "fewb", min: 40 }]);
+    expect(E.suggestOtSplit(withTwo(), two, 90, at("18:30"))).toEqual([{ trade: "fewb", min: 90 }]); // no tasks: first process
+    expect(E.otProcesses(d, two).map((o) => o.id)).toEqual(["fewb", "lcl"]);
+  });
+
+  it("saves the breakdown when it adds up; refuses it otherwise", () => {
+    const d = withTwo();
+    const ok = E.endWork(d, ANA, 300, at("22:00"), [{ trade: "fewb", min: 120 }, { trade: "lcl", min: 180 }]).data.activities[0];
+    expect(ok).toMatchObject({ otMin: 300, otStatus: "pending", otSplit: [{ trade: "fewb", min: 120 }, { trade: "lcl", min: 180 }] });
+    expect(E.endWork(d, ANA, 300, at("22:00"), [{ trade: "fewb", min: 100 }]).message).toMatch(/add up to 5 h/);
+    expect(E.endWork(d, ANA, 60, at("18:00"), [{ trade: "nope", min: 60 }]).message).toMatch(/Choose a process/);
+    // Two lines for the same process become one; task types are kept per line.
+    const types = [{ id: "doc", name: "Doc review", sla: 2, trades: [], keywords: [] }];
+    const m = E.endWork(withTwo([], { taskTypes: types }), ANA, 90, at("18:30"), [
+      { trade: "lcl", min: 30 },
+      { trade: "lcl", min: 30 },
+      { trade: "lcl", ttype: "doc", min: 30 },
+    ]).data.activities[0];
+    expect(m.otSplit).toEqual([{ trade: "lcl", min: 60 }, { trade: "lcl", ttype: "doc", min: 30 }]);
+    // Without a breakdown, nothing is stored for it.
+    expect(E.endWork(d, ANA, 60, at("18:00")).data.activities[0].otSplit).toBeNull();
+  });
+});

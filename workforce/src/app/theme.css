@@ -159,3 +159,12 @@ details.table-view[open] > summary { margin-bottom: 8px; }
    stretching to match the taller neighbour. */
 .grid-2, .chart-grid { align-items: start; }
 .grid-2 > *, .chart-grid > * { min-width: 0; }
+
+/* End work: overtime breakdown by process */
+.ot-split { display: flex; flex-direction: column; gap: 8px; padding: 12px; border: 1px solid var(--color-divider); border-radius: var(--radius-card); }
+.ot-line { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.ot-line { flex-wrap: nowrap; }
+.ot-line select { flex: 1 1 0; min-width: 0; width: auto; }
+.ot-line input { width: 54px; flex: none; padding-inline: 8px; }
+.ot-line .btn-ghost { flex: none; }
+@media (max-width: 560px) { .ot-line { flex-wrap: wrap; } }

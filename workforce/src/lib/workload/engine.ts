@@ -6,7 +6,7 @@
 import { H, M, TZ_OFFSET_H, addHours, dayKey, fmtT, localHour, spanMs, weekend } from "./clock";
 import { CARRIERS, PR, fieldOptions, lc, sysName, trPathOf } from "./constants";
 import { SAMPLE_MAIL } from "./seed";
-import type { Activity, ActivityKind, Person, Priority, Settings, Task, TaskField, TaskType, WlOrg } from "./types";
+import type { Activity, ActivityKind, OtPart, Person, Priority, Settings, Task, TaskField, TaskType, WlOrg } from "./types";
 
 export interface WorkloadData {
   tasks: Task[];
@@ -747,16 +747,68 @@ export function pastShiftMin(p: Person, s: Settings, now: number) {
  * End the working day. The member reports overtime only when they end after their
  * shift (at most the time past it); it waits for approval by an admin or lead.
  */
-export function endWork(d: WorkloadData, pid: number, otMin: number, now: number): Outcome {
+export function endWork(d: WorkloadData, pid: number, otMin: number, now: number, split?: OtPart[] | null): Outcome {
   const me = personOf(d, pid);
   if (!me || endedToday(d, pid, now)) return { data: d };
   if (isBusy(d.tasks, pid)) return { data: d, message: "Finish your task or put it on hold before you end work." };
   const ot = Math.max(0, Math.min(Math.round(Number(otMin) || 0), pastShiftMin(me, d.settings, now)));
-  const end = newActivity(pid, "end", now, { otMin: ot, otStatus: ot ? "pending" : null });
+  // The breakdown must use this team's processes and task types and add up to the overtime.
+  let parts: OtPart[] | null = null;
+  if (ot && split?.length) {
+    const types = d.settings.taskTypes ?? [];
+    const clean = split
+      .map((x) => ({ trade: String(x.trade ?? ""), ttype: x.ttype ? String(x.ttype) : "", min: Math.round(Number(x.min) || 0) }))
+      .filter((x) => x.min > 0);
+    if (clean.some((x) => !d.org.trades.some((t) => t.id === x.trade) || (x.ttype && !types.some((t) => t.id === x.ttype))))
+      return { data: d, message: "Choose a process for each line of overtime." };
+    if (clean.reduce((a, x) => a + x.min, 0) !== ot) return { data: d, message: `The breakdown must add up to ${fmtMin(ot)}.` };
+    // Same process and type on two lines: one line.
+    const merged = new Map<string, OtPart>();
+    for (const x of clean) {
+      const k = x.trade + "|" + x.ttype;
+      const m = merged.get(k);
+      merged.set(k, m ? { ...m, min: m.min + x.min } : { trade: x.trade, ...(x.ttype ? { ttype: x.ttype } : {}), min: x.min });
+    }
+    parts = [...merged.values()];
+  }
+  const end = newActivity(pid, "end", now, { otMin: ot, otStatus: ot ? "pending" : null, otSplit: parts });
   return {
     data: { ...d, activities: closeAway(d.activities, pid, now).concat(end) },
     message: ot ? `Work ended. ${fmtMin(ot)} overtime sent for approval.` : "Work ended. See you next shift.",
   };
+}
+
+/** Processes a member can put overtime against: their own trades, else the team's. */
+export const otProcesses = (d: Pick<WorkloadData, "org">, me: Person) => {
+  const mine = d.org.trades.filter((t) => me.trades.includes(t.id));
+  return (mine.length ? mine : d.org.trades).map((t) => ({ id: t.id, name: trPathOf(d.org, t.id) }));
+};
+
+/**
+ * A starting breakdown for End work: the overtime shared by the time the member worked
+ * on tasks after their shift ended today, per process and task type (whole minutes that
+ * add up); otherwise all on their first process.
+ */
+export function suggestOtSplit(d: WorkloadData, me: Person, otMin: number, now: number): OtPart[] {
+  const opts = otProcesses(d, me);
+  if (!otMin || !opts.length) return [];
+  const since = now - otMin * M;
+  const w = new Map<string, { trade: string; ttype: string; ms: number }>();
+  for (const t of d.tasks) {
+    if (t.assignee !== me.id || !t.startedAt || !t.trade) continue;
+    const ms = Math.min(t.doneAt ?? now, now) - Math.max(t.startedAt, since);
+    if (ms <= 0) continue;
+    const k = t.trade + "|" + (t.ttype ?? "");
+    const x = w.get(k) ?? { trade: t.trade, ttype: t.ttype ?? "", ms: 0 };
+    x.ms += ms;
+    w.set(k, x);
+  }
+  const rows = [...w.values()].filter((x) => opts.some((o) => o.id === x.trade)).sort((a, b) => b.ms - a.ms);
+  if (!rows.length) return [{ trade: opts[0].id, min: otMin }];
+  const total = rows.reduce((a, x) => a + x.ms, 0);
+  const parts = rows.map((x) => ({ trade: x.trade, ...(x.ttype ? { ttype: x.ttype } : {}), min: Math.floor((otMin * x.ms) / total) }));
+  parts[0].min += otMin - parts.reduce((a, x) => a + x.min, 0);
+  return parts.filter((x) => x.min > 0);
 }
 
 /** Take back today's end of work (e.g. pressed by mistake), unless its overtime was already decided. */

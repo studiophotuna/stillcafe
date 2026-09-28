@@ -3,9 +3,9 @@
 import { useEffect, useState } from "react";
 import { fieldOptions, trPathOf } from "@/lib/workload/constants";
 import { nowMs } from "@/lib/workload/clock";
-import { fmtMin, missingRequired, pastShiftMin, type AssistOffer, slaText } from "@/lib/workload/engine";
+import { fmtMin, missingRequired, pastShiftMin, type AssistOffer, slaText, otProcesses, suggestOtSplit } from "@/lib/workload/engine";
 import { useWorkload } from "@/lib/workload/store";
-import type { Priority, Task } from "@/lib/workload/types";
+import type { Priority, Task, OtPart } from "@/lib/workload/types";
 import { assignOptions, taskDetail } from "@/lib/workload/view";
 import { Blueprint, Icon } from "./ui";
 
@@ -375,6 +375,19 @@ function EndWorkDialog() {
   const close = () => setDialog(null);
   const otMin = past ? Math.max(0, (Number(h) || 0) * 60 + (Number(m) || 0)) : 0;
   const tooMuch = otMin > past;
+  // Breakdown by process (and task type) when there's more than one to choose from.
+  const procs = otProcesses(data, me);
+  const types = data.settings.taskTypes ?? [];
+  const askSplit = otMin > 0 && (procs.length > 1 || types.length > 0);
+  type Line = { trade: string; ttype: string; h: string; m: string };
+  const toLines = (ps: OtPart[]): Line[] => ps.map((x) => ({ trade: x.trade, ttype: x.ttype ?? "", h: String(Math.floor(x.min / 60)), m: String(x.min % 60) }));
+  const [lines, setLines] = useState<Line[]>(() => toLines(suggestOtSplit(data, me, past, nowAt)));
+  const lineMin = (l: Line) => Math.max(0, (Number(l.h) || 0) * 60 + (Number(l.m) || 0));
+  // One line follows the total; with several, the member makes them add up.
+  const shown = lines.length === 1 ? [{ ...lines[0], h: String(Math.floor(otMin / 60)), m: String(otMin % 60) }] : lines;
+  const splitSum = shown.reduce((a, l) => a + lineMin(l), 0);
+  const splitBad = askSplit && (splitSum !== otMin || shown.some((l) => !l.trade || !lineMin(l)));
+  const setLine = (i: number, patch: Partial<Line>) => setLines(shown.map((l, j) => (j === i ? { ...l, ...patch } : l)));
   return (
     <Modal onClose={close} width={500}>
       <div className="dialog-scroll" style={{ gap: 12, padding: 20 }}>
@@ -395,7 +408,56 @@ function EndWorkDialog() {
             </div>
             {tooMuch && <span style={{ fontSize: 12.5, color: "var(--color-accent-800)" }}>That’s more than the {fmtMin(past)} since your shift ended.</span>}
           </div>
-        ) : (
+        ) : null}
+        {past > 0 && askSplit ? (
+          <div className="ot-split">
+            <strong>Which process was the overtime for?</strong>
+            <span className="small">Filled in from the tasks you worked after your shift. Split it across processes if you worked on more than one.</span>
+            {shown.map((l, i) => (
+              <div key={i} className="ot-line">
+                <select aria-label="Process" className="input" value={l.trade} onChange={(e) => setLine(i, { trade: e.target.value })}>
+                  <option value="">Choose a process</option>
+                  {procs.map((o) => (
+                    <option key={o.id} value={o.id}>
+                      {o.name}
+                    </option>
+                  ))}
+                </select>
+                {types.length > 0 && (
+                  <select aria-label="Task type" className="input" value={l.ttype} onChange={(e) => setLine(i, { ttype: e.target.value })}>
+                    <option value="">Any task type</option>
+                    {types.map((t) => (
+                      <option key={t.id} value={t.id}>
+                        {t.name}
+                      </option>
+                    ))}
+                  </select>
+                )}
+                <input aria-label="Hours" className="input" type="number" min={0} value={l.h} disabled={shown.length === 1} onChange={(e) => setLine(i, { h: e.target.value })} />
+                <span>h</span>
+                <input aria-label="Minutes" className="input" type="number" min={0} max={59} value={l.m} disabled={shown.length === 1} onChange={(e) => setLine(i, { m: e.target.value })} />
+                <span>min</span>
+                {shown.length > 1 && (
+                  <button className="btn btn-ghost" aria-label="Remove line" onClick={() => setLines(shown.filter((_, j) => j !== i))}>
+                    Remove
+                  </button>
+                )}
+              </div>
+            ))}
+            <div className="row" style={{ justifyContent: "space-between" }}>
+              <button
+                className="btn btn-secondary btn-36"
+                onClick={() => setLines(shown.concat({ trade: procs.find((o) => !shown.some((l) => l.trade === o.id))?.id ?? "", ttype: "", h: "0", m: "0" }))}
+              >
+                Split across another process
+              </button>
+              <span className="small" style={{ color: splitBad ? "var(--color-accent-800)" : undefined }}>
+                {fmtMin(splitSum)} of {fmtMin(otMin)} assigned
+              </span>
+            </div>
+          </div>
+        ) : null}
+        {past > 0 ? null : (
           <span>Your day will be marked as ended. You can undo this from My work if you pressed it by mistake.</span>
         )}
         <div className="dialog-actions" style={{ gap: 10 }}>
@@ -406,10 +468,15 @@ function EndWorkDialog() {
             as="button"
             className="btn btn-primary btn-40"
             style={{ padding: "0 18px" }}
-            disabled={tooMuch}
+            disabled={tooMuch || splitBad}
             onClick={() => {
               close();
-              run({ type: "endWork", otMin, pid: me.id });
+              run({
+                type: "endWork",
+                otMin,
+                pid: me.id,
+                split: askSplit ? shown.map((l) => ({ trade: l.trade, ...(l.ttype ? { ttype: l.ttype } : {}), min: lineMin(l) })) : null,
+              });
             }}
           >
             {otMin ? "End work and send overtime" : "End work"}

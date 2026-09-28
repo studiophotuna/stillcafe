@@ -36,6 +36,15 @@ export interface Activity {
   otStatus: OtStatus | null;
   decidedBy: number | null;
   decidedAt: number | null;
+  /** Where the overtime went (End work): minutes per process (trade) and task type; adds up to otMin. */
+  otSplit?: OtPart[] | null;
+}
+
+/** Part of a day's overtime: a process (trade id) and optionally a task type. */
+export interface OtPart {
+  trade: string;
+  ttype?: string;
+  min: number;
 }
 
 /** The team's structure, from the Calendar organization. */
