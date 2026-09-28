@@ -646,7 +646,11 @@ export interface PersonMetrics {
   away: Record<string, number>;
   done: number;
   target: number;
-  /** Target so far (target × elapsed fraction). */
+  /** Tasks added to today's target for overtime. */
+  otTarget: number;
+  /** Days of target added for overtime (e.g. 0.25 = a quarter of the day's target). */
+  otDays: number;
+  /** Target so far (target × elapsed fraction, plus overtime). */
   tgt: number;
   /** Productive time so far, ms. */
   avail: number;
@@ -676,8 +680,12 @@ export function personMetrics(d: WorkloadData, p: Person, now: number): PersonMe
   const onTime = done.filter((t) => t.doneAt! <= due(t, d)).length;
   const out = output(d, done);
   const { share, mix, any } = dayShare(d, done, target);
-  const exp = target > 0 || any ? fr : 0;
+  // Overtime raises the day's target by the tasks that fit in it.
+  const ot = otDays(s, target, otMinFor(d, p, now));
+  const exp = target > 0 || any ? fr + ot : 0;
   return {
+    otTarget: Math.round(ot * target * 100) / 100,
+    otDays: ot,
     out,
     share,
     exp,
@@ -687,7 +695,7 @@ export function personMetrics(d: WorkloadData, p: Person, now: number): PersonMe
     away: act.away,
     done: done.length,
     target,
-    tgt,
+    tgt: tgt + ot * target,
     avail,
     handle,
     onTime,
@@ -767,12 +775,13 @@ export function endWork(d: WorkloadData, pid: number, otMin: number, now: number
   const ot = Math.max(0, Math.min(Math.round(Number(otMin) || 0), pastShiftMin(me, d.settings, now)));
   // The breakdown must use this team's processes and task types and add up to the overtime.
   let parts: OtPart[] | null = null;
-  if (ot && split?.length) {
-    const types = d.settings.taskTypes ?? [];
+  // Processes: the member's own, plus other trades they worked tasks in after the shift.
+  const procs = otProcesses(d, me, pastShiftMin(me, d.settings, now), now);
+  if (ot && split?.length && asksOtSplit(d.settings, procs)) {
     const clean = split
       .map((x) => ({ trade: String(x.trade ?? ""), ttype: x.ttype ? String(x.ttype) : "", min: Math.round(Number(x.min) || 0) }))
       .filter((x) => x.min > 0);
-    if (clean.some((x) => !d.org.trades.some((t) => t.id === x.trade) || (x.ttype && !types.some((t) => t.id === x.ttype))))
+    if (clean.some((x) => !procs.some((t) => t.id === x.trade) || (x.ttype && !typesFor(d.settings, x.trade).some((t) => t.id === x.ttype))))
       return { data: d, message: "Choose a process for each line of overtime." };
     if (clean.reduce((a, x) => a + x.min, 0) !== ot) return { data: d, message: `The breakdown must add up to ${fmtMin(ot)}.` };
     // Same process and type on two lines: one line.
@@ -783,7 +792,7 @@ export function endWork(d: WorkloadData, pid: number, otMin: number, now: number
       merged.set(k, m ? { ...m, min: m.min + x.min } : { trade: x.trade, ...(x.ttype ? { ttype: x.ttype } : {}), min: x.min });
     }
     parts = [...merged.values()];
-  }
+  } else if (ot && procs.length === 1 && !asksOtSplit(d.settings, procs)) parts = [{ trade: procs[0].id, min: ot }];
   const end = newActivity(pid, "end", now, { otMin: ot, otStatus: ot ? "pending" : null, otSplit: parts });
   return {
     data: { ...d, activities: closeAway(d.activities, pid, now).concat(end) },
@@ -791,11 +800,53 @@ export function endWork(d: WorkloadData, pid: number, otMin: number, now: number
   };
 }
 
-/** Processes a member can put overtime against: their own trades, else the team's. */
-export const otProcesses = (d: Pick<WorkloadData, "org">, me: Person) => {
-  const mine = d.org.trades.filter((t) => me.trades.includes(t.id));
+/** Task types that apply to a process (trade): those for every trade, or naming it. */
+export const typesFor = (s: Settings, trade: string) => (s.taskTypes ?? []).filter((t) => !t.trades.length || t.trades.includes(trade));
+
+/** Trades of the tasks the member worked on in the last `min` minutes. */
+const workedTrades = (d: Pick<WorkloadData, "tasks">, pid: number, min: number, now: number) =>
+  new Set(
+    min > 0
+      ? d.tasks.filter((t) => t.assignee === pid && t.trade && t.startedAt && t.startedAt < now && (t.doneAt ?? now) > now - min * M).map((t) => t.trade)
+      : [],
+  );
+
+/**
+ * Processes a member can put overtime against: their own trades plus any other trade they
+ * worked tasks in during the overtime (e.g. helping out); with no trades, the team's.
+ */
+export const otProcesses = (d: Pick<WorkloadData, "org" | "tasks">, me: Person, otMin = 0, now = 0) => {
+  const worked = workedTrades(d, me.id, otMin, now);
+  const mine = d.org.trades.filter((t) => me.trades.includes(t.id) || worked.has(t.id));
   return (mine.length ? mine : d.org.trades).map((t) => ({ id: t.id, name: trPathOf(d.org, t.id) }));
 };
+
+/** Whether End work asks what the overtime was for: more than one process, or task types for one. */
+export const asksOtSplit = (s: Settings, procs: { id: string }[]) => procs.length > 1 || procs.some((p) => typesFor(s, p.id).length > 0);
+
+/**
+ * Extra days of target for overtime: the tasks that fit in it at the member's daily pace,
+ * whole tasks only (4 a day in 6.8 productive hours: 3 h of overtime adds 1). Without a
+ * member target (task type targets only), the overtime's share of the productive day.
+ */
+export function otDays(s: Settings, target: number, otMin: number) {
+  const prod = s.work.prod > 0 ? s.work.prod : s.work.shift;
+  if (!(otMin > 0) || !(prod > 0)) return 0;
+  const f = otMin / 60 / prod;
+  return target > 0 ? Math.floor(f * target + 1e-9) / target : f;
+}
+
+/**
+ * Overtime minutes that raise a day's target: the overtime reported at End work (unless
+ * declined), or before then, the time past the shift while still working on tasks.
+ */
+export function otMinFor(d: WorkloadData, p: Person, now: number) {
+  const e = endedToday(d, p.id, now);
+  if (e) return e.otStatus === "declined" ? 0 : e.otMin;
+  const past = pastShiftMin(p, d.settings, now);
+  const working = d.tasks.some((t) => t.assignee === p.id && (t.status === "in_progress" || (t.doneAt !== null && t.doneAt > now - past * M)));
+  return past && working ? past : 0;
+}
 
 /**
  * A starting breakdown for End work: the overtime shared by the time the member worked
@@ -803,7 +854,7 @@ export const otProcesses = (d: Pick<WorkloadData, "org">, me: Person) => {
  * add up); otherwise all on their first process.
  */
 export function suggestOtSplit(d: WorkloadData, me: Person, otMin: number, now: number): OtPart[] {
-  const opts = otProcesses(d, me);
+  const opts = otProcesses(d, me, otMin, now);
   if (!otMin || !opts.length) return [];
   const since = now - otMin * M;
   const w = new Map<string, { trade: string; ttype: string; ms: number }>();
@@ -811,8 +862,9 @@ export function suggestOtSplit(d: WorkloadData, me: Person, otMin: number, now: 
     if (t.assignee !== me.id || !t.startedAt || !t.trade) continue;
     const ms = Math.min(t.doneAt ?? now, now) - Math.max(t.startedAt, since);
     if (ms <= 0) continue;
-    const k = t.trade + "|" + (t.ttype ?? "");
-    const x = w.get(k) ?? { trade: t.trade, ttype: t.ttype ?? "", ms: 0 };
+    const tt = t.ttype && typesFor(d.settings, t.trade).some((x) => x.id === t.ttype) ? t.ttype : "";
+    const k = t.trade + "|" + tt;
+    const x = w.get(k) ?? { trade: t.trade, ttype: tt, ms: 0 };
     x.ms += ms;
     w.set(k, x);
   }

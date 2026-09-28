@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { fieldOptions, trPathOf } from "@/lib/workload/constants";
 import { nowMs } from "@/lib/workload/clock";
-import { fmtMin, missingRequired, pastShiftMin, type AssistOffer, slaText, otProcesses, suggestOtSplit } from "@/lib/workload/engine";
+import { fmtMin, missingRequired, pastShiftMin, type AssistOffer, slaText, otProcesses, suggestOtSplit, asksOtSplit, typesFor } from "@/lib/workload/engine";
 import { useWorkload } from "@/lib/workload/store";
 import type { Priority, Task, OtPart } from "@/lib/workload/types";
 import { assignOptions, taskDetail } from "@/lib/workload/view";
@@ -375,10 +375,10 @@ function EndWorkDialog() {
   const close = () => setDialog(null);
   const otMin = past ? Math.max(0, (Number(h) || 0) * 60 + (Number(m) || 0)) : 0;
   const tooMuch = otMin > past;
-  // Breakdown by process (and task type) when there's more than one to choose from.
-  const procs = otProcesses(data, me);
-  const types = data.settings.taskTypes ?? [];
-  const askSplit = otMin > 0 && (procs.length > 1 || types.length > 0);
+  // Breakdown by process (and task type) when there's more than one to choose from: the
+  // member's processes plus any other trade they worked tasks in after the shift.
+  const procs = otProcesses(data, me, past, nowAt);
+  const askSplit = otMin > 0 && asksOtSplit(data.settings, procs);
   type Line = { trade: string; ttype: string; h: string; m: string };
   const toLines = (ps: OtPart[]): Line[] => ps.map((x) => ({ trade: x.trade, ttype: x.ttype ?? "", h: String(Math.floor(x.min / 60)), m: String(x.min % 60) }));
   const [lines, setLines] = useState<Line[]>(() => toLines(suggestOtSplit(data, me, past, nowAt)));
@@ -412,10 +412,15 @@ function EndWorkDialog() {
         {past > 0 && askSplit ? (
           <div className="ot-split">
             <strong>Which process was the overtime for?</strong>
-            <span className="small">Filled in from the tasks you worked after your shift. Split it across processes if you worked on more than one.</span>
+            <span className="small">Filled in from the tasks you worked after your shift, including other trades you helped with. Split it if you worked on more than one.</span>
             {shown.map((l, i) => (
               <div key={i} className="ot-line">
-                <select aria-label="Process" className="input" value={l.trade} onChange={(e) => setLine(i, { trade: e.target.value })}>
+                <select
+                  aria-label="Process"
+                  className="input"
+                  value={l.trade}
+                  onChange={(e) => setLine(i, { trade: e.target.value, ttype: typesFor(data.settings, e.target.value).some((t) => t.id === l.ttype) ? l.ttype : "" })}
+                >
                   <option value="">Choose a process</option>
                   {procs.map((o) => (
                     <option key={o.id} value={o.id}>
@@ -423,10 +428,10 @@ function EndWorkDialog() {
                     </option>
                   ))}
                 </select>
-                {types.length > 0 && (
+                {typesFor(data.settings, l.trade).length > 0 && (
                   <select aria-label="Task type" className="input" value={l.ttype} onChange={(e) => setLine(i, { ttype: e.target.value })}>
                     <option value="">Any task type</option>
-                    {types.map((t) => (
+                    {typesFor(data.settings, l.trade).map((t) => (
                       <option key={t.id} value={t.id}>
                         {t.name}
                       </option>
@@ -449,7 +454,7 @@ function EndWorkDialog() {
                 className="btn btn-secondary btn-36"
                 onClick={() => setLines(shown.concat({ trade: procs.find((o) => !shown.some((l) => l.trade === o.id))?.id ?? "", ttype: "", h: "0", m: "0" }))}
               >
-                Split across another process
+                {procs.length > 1 ? "Split across another process" : "Split across task types"}
               </button>
               <span className="small" style={{ color: splitBad ? "var(--color-accent-800)" : undefined }}>
                 {fmtMin(splitSum)} of {fmtMin(otMin)} assigned

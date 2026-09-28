@@ -9,7 +9,7 @@
  * - Timeliness = tasks finished within SLA ÷ tasks finished.
  */
 import { H, M, dayKey } from "./clock";
-import { dayShare, due, elapsedFrac, output, targetOf, taskTypeOf, taskWorkMs, type WorkloadData } from "./engine";
+import { dayShare, due, elapsedFrac, otDays, otMinFor, output, targetOf, taskTypeOf, taskWorkMs, type WorkloadData } from "./engine";
 import type { Activity, Person, Task } from "./types";
 
 export interface PeriodInput {
@@ -26,6 +26,8 @@ export interface PersonPeriod {
   p: Person;
   /** Working days in the period so far (today as the part of the shift that has passed). */
   days: number;
+  /** Days of target added for overtime (the tasks that fit in it). */
+  otDays: number;
   done: Task[];
   out: number;
   share: number;
@@ -63,11 +65,13 @@ export function personPeriod(d: WorkloadData, p: Person, x: PeriodInput): Person
   let awayMs = 0;
   let otMin = 0;
   let otPending = 0;
+  let otD = 0;
   for (const a of acts) {
     if (a.kind === "end") {
       if (a.start >= x.from && a.start < x.to) {
         if (a.otStatus === "approved") otMin += a.otMin;
         if (a.otStatus === "pending") otPending += a.otMin;
+        if (a.otStatus !== "declined" && dayKey(a.start) !== today) otD += otDays(s, target, a.otMin);
       }
       continue;
     }
@@ -77,6 +81,8 @@ export function personPeriod(d: WorkloadData, p: Person, x: PeriodInput): Person
     awayMs += ms;
   }
   const withActs = { ...d, activities: x.activities };
+  // Today: overtime so far (or as reported at End work).
+  if (x.now >= x.from && x.now < x.to) otD += otDays(s, target, otMinFor(withActs, p, x.now));
   const working = x.now >= x.from && x.now < x.to ? d.tasks.filter((t) => t.assignee === p.id && t.status === "in_progress") : [];
   // Time on the tasks finished in the period (and the one in progress now).
   const handle = done.concat(working).reduce((a, t) => a + taskWorkMs(withActs, t, until), 0);
@@ -91,7 +97,8 @@ export function personPeriod(d: WorkloadData, p: Person, x: PeriodInput): Person
     share,
     mix,
     target,
-    prod: days && (target > 0 || share > 0) ? Math.round((share / days) * 100) : null,
+    otDays: otD,
+    prod: days && (target > 0 || share > 0) ? Math.round((share / (days + otD)) * 100) : null,
     handle,
     avail,
     util: avail ? Math.round((handle / avail) * 100) : null,
@@ -120,7 +127,7 @@ export interface TeamPeriod {
 /** Team totals: each person weighted by their own days and targets. */
 export function teamPeriod(d: WorkloadData, rows: PersonPeriod[], tasks: Task[], x: Pick<PeriodInput, "from" | "to" | "now">): TeamPeriod {
   const sum = (f: (r: PersonPeriod) => number) => rows.reduce((a, r) => a + f(r), 0);
-  const days = sum((r) => (r.target > 0 || r.share > 0 ? r.days : 0));
+  const days = sum((r) => (r.target > 0 || r.share > 0 ? r.days + r.otDays : 0));
   const done = tasks.filter((t) => t.status === "done" && t.doneAt !== null && t.doneAt >= x.from && t.doneAt < Math.min(x.now, x.to));
   const onTime = done.filter((t) => t.doneAt! <= due(t, d)).length;
   const timed = rows.flatMap((r) => (r.avgMs !== null ? [[r.avgMs, r.done.filter((t) => t.startedAt).length]] : []));

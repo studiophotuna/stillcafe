@@ -246,7 +246,7 @@ export default function DashboardPage() {
       <PageHead
         title={`Dashboard · ${unitLabel}`}
         style={{ maxWidth: "95ch" }}
-        sub="Productivity = work done ÷ target for the days worked (days scheduled in the Calendar since the team started using Workload; today so far). Utilization = time on tasks ÷ available time. Timeliness = tasks done within SLA ÷ tasks done. Targets and working time are set in Admin › Targets."
+        sub="Productivity = work done ÷ target for the days worked (days scheduled in the Calendar since the team started using Workload; today so far), plus the tasks that fit in any overtime (whole tasks at the daily pace, e.g. 4 a day in 6.8 productive hours: 3 h adds 1). Utilization = time on tasks ÷ available time. Timeliness = tasks done within SLA ÷ tasks done. Targets and working time are set in Admin › Targets."
       />
       <div className="row" style={{ justifyContent: "space-between", alignItems: "center" }}>
         <PeriodNav kind={per.kind} anchor={per.anchor} onChange={(kind, anchor) => setPer({ kind, anchor })} kinds={KINDS} />

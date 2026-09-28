@@ -747,3 +747,61 @@ describe("overtime broken down by process", async () => {
     expect(E.endWork(d, ANA, 60, at("18:00")).data.activities[0].otSplit).toBeNull();
   });
 });
+
+describe("overtime: processes worked, task types per process, and the target", async () => {
+  const E = await import("./engine");
+  const at = (hm: string) => Date.parse(`2026-09-24T${hm}:00+08:00`);
+  // One process (RCM › LCL), day shift 08:00–17:00, target 4 a day in 6.8 productive hours.
+  const one = { ...PEOPLE.find((p) => p.id === ANA)!, trades: ["lcl"], shiftStart: 8 };
+  const mk = (tasks: Task[] = [], p: Partial<Settings> = {}) => ({
+    ...data(tasks, { memberTargets: { [ANA]: "4" }, ...p }),
+    people: data([]).people.map((x) => (x.id === ANA ? one : x)),
+  });
+
+  it("offers other trades only when the member worked tasks in them after the shift", () => {
+    expect(E.otProcesses(mk(), one, 120, at("19:00")).map((o) => o.id)).toEqual(["lcl"]);
+    expect(E.asksOtSplit(mk().settings, E.otProcesses(mk(), one, 120, at("19:00")))).toBe(false);
+    const helped = mk([task({ assignee: ANA, trade: "eu", status: "done", startedAt: at("17:30"), doneAt: at("18:10") })]);
+    const procs = E.otProcesses(helped, one, 120, at("19:00")).map((o) => o.id);
+    expect(procs.sort()).toEqual(["eu", "lcl"]);
+    // A task in another trade before the shift ended doesn't count.
+    const earlier = mk([task({ assignee: ANA, trade: "eu", status: "done", startedAt: at("15:00"), doneAt: at("16:00") })]);
+    expect(E.otProcesses(earlier, one, 120, at("19:00")).map((o) => o.id)).toEqual(["lcl"]);
+    // End work accepts the other trade, and with one process records it without asking.
+    const ok = E.endWork(helped, ANA, 120, at("19:00"), [{ trade: "eu", min: 40 }, { trade: "lcl", min: 80 }]).data.activities[0];
+    expect(ok.otSplit).toEqual([{ trade: "eu", min: 40 }, { trade: "lcl", min: 80 }]);
+    expect(E.endWork(mk(), ANA, 120, at("19:00")).data.activities[0].otSplit).toEqual([{ trade: "lcl", min: 120 }]);
+  });
+
+  it("shows only the task types a process has", () => {
+    const types = [
+      { id: "doc", name: "Doc review", sla: 2, trades: ["eu"], keywords: [] },
+      { id: "all", name: "Any trade", sla: 4, trades: [], keywords: [] },
+    ];
+    const s = mk([], { taskTypes: types }).settings;
+    expect(E.typesFor(s, "lcl").map((t) => t.id)).toEqual(["all"]);
+    expect(E.typesFor(s, "eu").map((t) => t.id)).toEqual(["doc", "all"]);
+    expect(E.asksOtSplit(s, [{ id: "lcl" }])).toBe(true); // one process, but it has a type
+    expect(E.asksOtSplit(mk([], { taskTypes: [types[0]] }).settings, [{ id: "lcl" }])).toBe(false);
+    // A type that isn't for the process is refused.
+    const d = mk([], { taskTypes: types });
+    expect(E.endWork(d, ANA, 60, at("18:00"), [{ trade: "lcl", ttype: "doc", min: 60 }]).message).toMatch(/Choose a process/);
+  });
+
+  it("adds the whole tasks that fit in the overtime to the target", () => {
+    const s = mk().settings;
+    expect(E.otDays(s, 4, 180)).toBe(0.25); // 4 in 6.8 h: 3 h adds 1 task
+    expect(E.otDays(s, 4, 60)).toBe(0); // not a whole task
+    expect(E.otDays(s, 4, 6.8 * 60)).toBe(1);
+    // Ended with 3 h overtime: 4 + 1 target; 5 done = 100%.
+    const done = [0, 1, 2, 3, 4].map((i) => task({ assignee: ANA, status: "done", startedAt: at("09:00") + i * H, doneAt: at("09:30") + i * H }));
+    const ended = E.endWork(mk(done), ANA, 180, at("20:00")).data;
+    const m = E.personMetrics(ended, one, at("20:05"));
+    expect(m.otTarget).toBe(1);
+    expect(m.prod).toBe(100);
+    // Declined overtime doesn't raise it.
+    const id = ended.activities[0].id;
+    const no = { ...ended, activities: ended.activities.map((a) => (a.id === id ? { ...a, otStatus: "declined" as const } : a)) };
+    expect(E.personMetrics(no, one, at("20:05")).prod).toBe(125);
+  });
+});
