@@ -154,3 +154,8 @@ h1, .page-head h1 { color: var(--color-accent-800); letter-spacing: -0.01em; }
 details.table-view > summary { cursor: pointer; font-size: 12.5px; color: var(--color-accent-700); width: max-content; }
 details.table-view[open] > summary { margin-bottom: 8px; }
 @media (max-width: 640px) { .viz-bars { --viz-label: 120px; --viz-val: 56px; } }
+
+/* Each card keeps its own height: side-by-side cards line up at the top instead of
+   stretching to match the taller neighbour. */
+.grid-2, .chart-grid { align-items: start; }
+.grid-2 > *, .chart-grid > * { min-width: 0; }
