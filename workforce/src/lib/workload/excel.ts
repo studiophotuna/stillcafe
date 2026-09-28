@@ -122,6 +122,13 @@ export function parseCsv(text: string): string[][] {
 }
 
 /** Header row → objects; strips the " *" required marker and drops empty rows. */
+/** An Excel date cell as text: "2026-09-25 12:26:00", or "2026-09-25" when it has no time. */
+export const excelDateText = (v: Date) => {
+  if (isNaN(v.getTime())) return "";
+  const s = v.toISOString();
+  return s.slice(11, 19) === "00:00:00" ? s.slice(0, 10) : s.slice(0, 10) + " " + s.slice(11, 19);
+};
+
 export function rowsToObjects(table: unknown[][]): UploadRow[] {
   const [head = [], ...body] = table;
   const keys = head.map((h) => String(h ?? "").replace(/\s*\*$/, "").trim());
@@ -130,8 +137,9 @@ export function rowsToObjects(table: unknown[][]): UploadRow[] {
       Object.fromEntries(
         keys.map((k, i) => {
           const v = r[i] ?? "";
-          // Dates as yyyy-mm-dd so rows survive the trip to the server as JSON.
-          return [k, v instanceof Date ? v.toISOString().slice(0, 10) : v];
+          // Dates as text so rows survive the trip to the server as JSON: "yyyy-mm-dd hh:mm:ss"
+          // (Excel shows team time; ExcelJS gives it in the UTC fields), or just the date at midnight.
+          return [k, v instanceof Date ? excelDateText(v) : v];
         }),
       ),
     )

@@ -324,6 +324,18 @@ export function setPriority(d: WorkloadData, id: string, pr: Priority, now: numb
   };
 }
 
+/** Correct when a task was received (admins); its due time follows. */
+export function setReceived(d: WorkloadData, id: string, received: number, now: number): Outcome {
+  const t = d.tasks.find((x) => x.id === id);
+  if (!t || !Number.isFinite(received)) return { data: d };
+  if (received > now + 5 * M) return { data: d, message: "Received can’t be in the future." };
+  if (received < now - 400 * 24 * H) return { data: d, message: "That date is too far back." };
+  return {
+    data: patch(d, id, (x) => ({ ...x, received, history: hist(x, now, `Received changed from ${fmtT(x.received)} to ${fmtT(received)}`) })),
+    message: `${id}: received ${fmtT(received)}.`,
+  };
+}
+
 /** Set a task's type ("" = standard request); its SLA is fixed again from the settings. */
 export function setTaskType(d: WorkloadData, id: string, ttype: string, now: number): Outcome {
   const ty = ttype ? (d.settings.taskTypes ?? []).find((x) => x.id === ttype) : undefined;
@@ -408,15 +420,44 @@ export interface CheckedRow {
  * The Received date and time of an uploaded row, in team time. Excel date cells (shown as
  * team-local time) or text like "2026-09-24 08:30"; blank = null (use the upload time).
  */
-export function parseReceived(v: unknown): number | null | "bad" {
+export function parseReceived(v: unknown): number | null | "bad" | "ambiguous" {
   if (v === null || v === undefined || v === "") return null;
   if (v instanceof Date) return isNaN(v.getTime()) ? "bad" : v.getTime() - TZ_OFFSET_H * H;
-  const s = String(v).trim();
-  const m = s.match(/^(\d{4})-(\d{1,2})-(\d{1,2})(?:[ T](\d{1,2}):(\d{2})(?::(\d{2}))?)?$/);
-  if (!m) return "bad";
-  const [, y, mo, d, hh = "0", mm = "0", ss = "0"] = m;
-  const ms = Date.UTC(+y, +mo - 1, +d, +hh, +mm, +ss) - TZ_OFFSET_H * H;
-  return isNaN(ms) ? "bad" : ms;
+  // An Excel date serial (a date cell read as a plain number): days since 1899-12-30, team time.
+  if (typeof v === "number" || /^\d{5}(\.\d+)?$/.test(String(v).trim())) {
+    const n = Number(v);
+    if (!(n > 30000 && n < 80000)) return "bad";
+    return Math.round((n - 25569) * 86_400) * 1000 - TZ_OFFSET_H * H;
+  }
+  const s = String(v).trim().replace(/\s+/g, " ");
+  const at = (y: number, mo: number, d: number, time: string | undefined) => {
+    let hh = 0, mm = 0, ss = 0;
+    if (time) {
+      const t = time.match(/^(\d{1,2}):(\d{2})(?::(\d{2}))?(?:\.\d+)?\s*([AaPp][Mm])?$/);
+      if (!t) return "bad" as const;
+      hh = +t[1]; mm = +t[2]; ss = +(t[3] ?? 0);
+      if (t[4]) {
+        if (hh < 1 || hh > 12) return "bad" as const;
+        hh = (hh % 12) + (/p/i.test(t[4]) ? 12 : 0);
+      }
+    }
+    if (mo < 1 || mo > 12 || d < 1 || d > 31 || hh > 23 || mm > 59 || ss > 59) return "bad" as const;
+    const ms = Date.UTC(y, mo - 1, d, hh, mm, ss);
+    if (new Date(ms).getUTCDate() !== d) return "bad" as const;
+    return ms - TZ_OFFSET_H * H;
+  };
+  // 2026-09-25, 2026-09-25 12:26, 2026-09-25T12:26:00
+  let m = s.match(/^(\d{4})-(\d{1,2})-(\d{1,2})(?:[ T](.+))?$/);
+  if (m) return at(+m[1], +m[2], +m[3], m[4]);
+  // 25/09/2026 12:26 or 09/25/2026 12:26 PM: only when day and month can't be mixed up.
+  m = s.match(/^(\d{1,2})[/.-](\d{1,2})[/.-](\d{4})(?: (.+))?$/);
+  if (m) {
+    const a = +m[1], b = +m[2];
+    if (a > 12 && b <= 12) return at(+m[3], b, a, m[4]);
+    if (b > 12 && a <= 12) return at(+m[3], a, b, m[4]);
+    return a === b ? at(+m[3], a, b, m[4]) : "ambiguous";
+  }
+  return "bad";
 }
 
 export function checkRows(rows: UploadRow[], fields: TaskField[], org: WlOrg, now = Date.now(), types: TaskType[] = []): CheckedRow[] {
@@ -452,9 +493,11 @@ export function checkRows(rows: UploadRow[], fields: TaskField[], org: WlOrg, no
               : "Trade not found"
           : !(prV in PR)
             ? "Priority must be High, Normal or Low"
-            : rec === "bad"
+            : rec === "ambiguous"
+              ? "Received: write it as 2026-09-24 08:30 (day and month could be mixed up)"
+              : rec === "bad"
               ? "Received must be a date and time like 2026-09-24 08:30"
-              : rec !== null && rec > now + 5 * M
+              : typeof rec === "number" && rec > now + 5 * M
                 ? "Received is in the future"
                 : tyV && !ty
                   ? `Task type “${String(g(r, "Task type")).trim()}” isn’t set up`
@@ -463,7 +506,8 @@ export function checkRows(rows: UploadRow[], fields: TaskField[], org: WlOrg, no
       for (const f of fields) {
         let raw = g(r, f.label);
         if (raw instanceof Date) raw = raw.toISOString().slice(0, 10);
-        const v = String(raw ?? "").trim();
+        let v = String(raw ?? "").trim();
+        if (f.type === "date" && /^\d{4}-\d{2}-\d{2}[ T]/.test(v)) v = v.slice(0, 10);
         // Required fields may be blank in an upload; they're needed before the task is marked done.
         if (v && f.type === "number" && isNaN(Number(v))) { err = `${f.label} must be a number`; break; }
         if (v && f.type === "select" && !fieldOptions(f).map(lc).includes(lc(v))) { err = `${f.label} “${v}” isn’t in the list`; break; }

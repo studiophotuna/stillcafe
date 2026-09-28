@@ -4,6 +4,7 @@ import { useState } from "react";
 import { Blueprint, Icon } from "@/components/ui";
 import { checkRows, type UploadRow } from "@/lib/workload/engine";
 import { downloadTaskTemplate, readTaskFile } from "@/lib/workload/excel";
+import { fmtT } from "@/lib/workload/clock";
 import { useWorkload } from "@/lib/workload/store";
 
 /**
@@ -70,6 +71,7 @@ export function UploadTasks() {
                 <tr>
                   <th>Row</th>
                   <th>Task</th>
+                  <th>Received</th>
                   <th>Status</th>
                   <th>Note</th>
                 </tr>
@@ -79,6 +81,7 @@ export function UploadTasks() {
                   <tr key={u.n}>
                     <td className="muted">{u.n}</td>
                     <td>{u.summary}</td>
+                    <td className="nowrap">{u.task ? (u.task.received !== null ? fmtT(u.task.received) : <span className="muted">Upload time</span>) : ""}</td>
                     <td>
                       <span className={"tag " + (u.ok ? "tag-accent" : "tag-neutral")}>{u.ok ? "Ready" : "Error"}</span>
                     </td>

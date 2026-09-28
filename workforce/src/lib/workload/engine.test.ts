@@ -590,3 +590,42 @@ describe("task type targets weight productivity", async () => {
     expect(plain.prod).toBe(50);
   });
 });
+
+describe("upload keeps the Received date and time from the file", async () => {
+  const E = await import("./engine");
+  const { rowsToObjects } = await import("./excel");
+  const at = (s: string) => Date.parse(s + "+08:00");
+  it("an Excel date-and-time cell survives the trip to the server", () => {
+    // ExcelJS reads a cell showing 25/09/2026 12:26 as a Date with those numbers in UTC.
+    const rows = rowsToObjects([["Title *", "Trade *", "Received"], ["Rate check", "LCL", new Date(Date.UTC(2026, 8, 25, 12, 26))]]);
+    const sent = JSON.parse(JSON.stringify(rows));
+    expect(sent[0].Received).toBe("2026-09-25 12:26:00");
+    const d = data([]);
+    const [c] = checkRows(sent, d.fields, d.org, at("2026-09-28T14:00:00"));
+    expect(c.ok).toBe(true);
+    expect(c.task!.received).toBe(at("2026-09-25T12:26:00"));
+    expect(E.importRows(d, [c], at("2026-09-28T14:00:00")).data.tasks[0].received).toBe(at("2026-09-25T12:26:00"));
+  });
+  it("reads the common ways people write it", () => {
+    const P = E.parseReceived;
+    expect(P("2026-09-25 12:26")).toBe(at("2026-09-25T12:26:00"));
+    expect(P("2026-09-25T12:26:30")).toBe(at("2026-09-25T12:26:30"));
+    expect(P("2026-09-25 12:26 PM")).toBe(at("2026-09-25T12:26:00"));
+    expect(P("2026-09-25 1:05 pm")).toBe(at("2026-09-25T13:05:00"));
+    expect(P("25/09/2026 12:26")).toBe(at("2026-09-25T12:26:00")); // day first
+    expect(P("09/25/2026 12:26 AM")).toBe(at("2026-09-25T00:26:00")); // month first
+    expect(P("05/09/2026 08:00")).toBe("ambiguous"); // 5 Sep or 9 May?
+    expect(P(46290.5180556)).toBe(at("2026-09-25T12:26:00")); // Excel serial
+    expect(P("2026-02-30")).toBe("bad");
+    expect(P("yesterday")).toBe("bad");
+    expect(P("")).toBe(null);
+  });
+  it("admins can correct a task's received time", async () => {
+    const { applyAction } = await import("./actions");
+    const d = data([task({ id: "A", received: at("2026-09-28T00:00:00") })]);
+    const r = applyAction(d, { type: "setReceived", id: "A", received: at("2026-09-25T12:26:00") }, at("2026-09-28T14:00:00"));
+    expect(r.data.tasks[0].received).toBe(at("2026-09-25T12:26:00"));
+    expect(r.data.tasks[0].history.at(-1)!.text).toContain("Received changed");
+    expect(applyAction(d, { type: "setReceived", id: "A", received: at("2026-10-05T00:00:00") }, at("2026-09-28T14:00:00")).data).toBe(d);
+  });
+});

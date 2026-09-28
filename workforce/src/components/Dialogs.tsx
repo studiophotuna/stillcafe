@@ -133,6 +133,23 @@ function TaskDialog({ id }: { id: string }) {
               </div>
             ) : null}
             <div className="field">
+              <label htmlFor="dt-rec">Received (team time)</label>
+              <input
+                id="dt-rec"
+                key={t.received}
+                className="input"
+                type="datetime-local"
+                defaultValue={new Date(t.received + 8 * 3600_000).toISOString().slice(0, 16)}
+                onBlur={(e) => {
+                  const v = e.target.value;
+                  if (!v) return;
+                  const ms = Date.parse(v + ":00Z") - 8 * 3600_000;
+                  if (ms !== t.received) run({ type: "setReceived", id, received: ms });
+                }}
+                onKeyDown={(e) => e.key === "Enter" && (e.target as HTMLInputElement).blur()}
+              />
+            </div>
+            <div className="field">
               <label htmlFor="dt-as">Assign to</label>
               <select
                 id="dt-as"

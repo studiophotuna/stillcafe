@@ -19,6 +19,7 @@ import {
   resumeTask,
   setPriority,
   setTaskType,
+  setReceived,
   setTrade,
   startTask,
   startWork,
@@ -43,6 +44,7 @@ export type Action =
   | { type: "setTrade"; id: string; trade: string }
   | { type: "setPriority"; id: string; pr: Priority }
   | { type: "setTaskType"; id: string; ttype: string }
+  | { type: "setReceived"; id: string; received: number }
   | { type: "assign"; id: string; pid: number | null }
   | { type: "checkMail" }
   | { type: "importRows"; rows: UploadRow[] }
@@ -69,6 +71,7 @@ export function applyAction(d: WorkloadData, a: Action, now: number): Outcome {
     case "setTrade": return setTrade(d, a.id, a.trade, now);
     case "setPriority": return setPriority(d, a.id, a.pr, now);
     case "setTaskType": return setTaskType(d, a.id, a.ttype, now);
+    case "setReceived": return setReceived(d, a.id, a.received, now);
     case "assign": return assignTask(d, a.id, a.pid, now);
     case "checkMail": return checkMail(d, now);
     // Rows are re-validated against the stored task fields, not trusted from the client.

@@ -5,7 +5,7 @@
 import type { Action } from "./actions";
 import type { WorkloadData } from "./engine";
 
-const ADMIN_ONLY: Action["type"][] = ["distribute", "setTrade", "setPriority", "setTaskType", "assign", "checkMail", "setSettings", "setFields"];
+const ADMIN_ONLY: Action["type"][] = ["distribute", "setTrade", "setPriority", "setTaskType", "setReceived", "assign", "checkMail", "setSettings", "setFields"];
 
 /** Admins, and members an admin has allowed to upload tasks (they must be in the team). */
 export const canUpload = (d: WorkloadData, me: number) =>
