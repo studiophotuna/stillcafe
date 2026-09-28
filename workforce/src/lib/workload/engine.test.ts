@@ -629,3 +629,54 @@ describe("upload keeps the Received date and time from the file", async () => {
     expect(applyAction(d, { type: "setReceived", id: "A", received: at("2026-10-05T00:00:00") }, at("2026-09-28T14:00:00")).data).toBe(d);
   });
 });
+
+describe("dashboard metrics for any period", async () => {
+  const E = await import("./engine");
+  const { personPeriod, teamPeriod } = await import("./metrics");
+  const { periodRange, periodBuckets, periodLabel } = await import("./period");
+  const at = (s: string) => Date.parse(s + "+08:00");
+  const ana = { ...person(ANA)!, shiftStart: 8 };
+  const done = (day: string, i: number, p: Partial<Task> = {}) =>
+    task({ assignee: ANA, status: "done", received: at(`${day}T08:00:00`), startedAt: at(`${day}T09:00:00`) + i * H, doneAt: at(`${day}T09:30:00`) + i * H, ...p });
+
+  it("weeks, months and years, with day or month breakdowns", () => {
+    const now = at("2026-09-24T10:30:00");
+    const [f, t] = periodRange("year", now);
+    expect([new Date(f).toISOString(), new Date(t).toISOString()]).toEqual(["2025-12-31T16:00:00.000Z", "2026-12-31T16:00:00.000Z"]);
+    expect(periodLabel("year", now, now)).toBe("2026");
+    expect(periodBuckets("year", now).map((b) => b[0])).toEqual(["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]);
+    expect(periodBuckets("week", now).map((b) => b[0])).toEqual(["Mon 21 Sep", "Tue 22 Sep", "Wed 23 Sep", "Thu 24 Sep", "Fri 25 Sep", "Sat 26 Sep", "Sun 27 Sep"]);
+    expect(periodBuckets("month", now)).toHaveLength(30);
+  });
+
+  it("a week: productivity over the days worked, utilization, timeliness, overtime", () => {
+    const now = at("2026-09-26T12:00:00"); // Saturday, the week so far
+    const tasks = [done("2026-09-21", 0), done("2026-09-21", 1), done("2026-09-22", 0), done("2026-09-23", 0, { received: at("2026-09-18T08:00:00") })];
+    const d = data(tasks);
+    const [from, to] = periodRange("week", now);
+    const activities = [
+      { id: "b", pid: ANA, kind: "break" as const, start: at("2026-09-21T12:00:00"), end: at("2026-09-21T13:00:00"), otMin: 0, otStatus: null, decidedBy: null, decidedAt: null },
+      { id: "e", pid: ANA, kind: "end" as const, start: at("2026-09-22T18:00:00"), end: at("2026-09-22T18:00:00"), otMin: 45, otStatus: "approved" as const, decidedBy: 1, decidedAt: 0 },
+    ];
+    const x = { from, to, now, workDays: { [ANA]: ["2026-09-21", "2026-09-22", "2026-09-23", "2026-09-24", "2026-09-25"] }, activities };
+    const r = personPeriod(d, ana, x);
+    expect(r.days).toBe(5);
+    expect(r.done).toHaveLength(4);
+    expect(r.prod).toBe(Math.round((4 / 8 / 5) * 100)); // 4 tasks, target 8 a day, 5 days
+    expect(r.onTime).toBe(3); // the one received the week before was late (24 h SLA)
+    expect(r.otMin).toBe(45);
+    expect(r.awayMin).toBe(60);
+    expect(r.handle).toBe(4 * 30 * 60000);
+    const team = teamPeriod(d, [r], tasks, x);
+    expect(team).toMatchObject({ done: 4, onTime: 3, received: 3, time: 75 });
+  });
+
+  it("today matches the live daily figures", () => {
+    const now = at("2026-09-24T14:00:00");
+    const tasks = [done("2026-09-24", 0), done("2026-09-24", 1)];
+    const d = data(tasks);
+    const [from, to] = periodRange("day", now);
+    const r = personPeriod(d, ana, { from, to, now, workDays: { [ANA]: ["2026-09-24"] }, activities: [] });
+    expect(r.prod).toBe(E.personMetrics(d, ana, now).prod);
+  });
+});

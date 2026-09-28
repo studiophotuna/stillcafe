@@ -170,3 +170,29 @@ export async function readTaskFile(file: File): Promise<UploadRow[]> {
   });
   return rowsToObjects(table);
 }
+
+/** A workbook of simple tables (first row = header), downloaded as .xlsx. */
+export async function downloadSheets(fileName: string, sheets: { name: string; rows: (string | number | null)[][] }[]) {
+  const { default: ExcelJS } = await import("exceljs");
+  const wb = new ExcelJS.Workbook();
+  wb.creator = "Workforce Management";
+  for (const sh of sheets) {
+    const ws = wb.addWorksheet(sh.name.slice(0, 31), { views: [{ state: "frozen", ySplit: 1 }] });
+    sh.rows.forEach((r) => ws.addRow(r.map((v) => (v === null ? "" : v))));
+    const head = ws.getRow(1);
+    head.font = { bold: true, color: { argb: "FFFFFFFF" } };
+    head.eachCell((c) => (c.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FF416180" } }));
+    ws.columns.forEach((col, i) => {
+      const w = Math.max(...sh.rows.map((r) => String(r[i] ?? "").length), 6);
+      col.width = Math.min(48, w + 2);
+    });
+  }
+  const buf = await wb.xlsx.writeBuffer();
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(new Blob([buf], { type: XLSX_MIME }));
+  a.download = fileName;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+}
