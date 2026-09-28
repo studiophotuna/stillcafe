@@ -2,6 +2,7 @@
 
 import { useMemo } from "react";
 import { isNodeAdmin } from "./org";
+import { isLeader as isLeaderLevel } from "./constants";
 import { useCalendar } from "./store";
 import type { CalPerson, OrgNode } from "./types";
 
@@ -38,7 +39,7 @@ export function useCalView() {
     const sys = !!meP.sysAdmin;
     const isAdmin = sys || isNodeAdmin(O, branch.id, me);
     const anyAdmin = sys || data.nodes.some((n) => (n.admins ?? []).includes(me) && O.anc(n.id).includes(dept.id));
-    const isLeader = meP.level !== "member";
+    const isLeader = isLeaderLevel(meP.level);
     const systems = O.kids(bid, "system");
     const system = systems.some((x) => x.id === sel.system) ? sel.system : "all";
     // With all systems, a trade name used under several systems (e.g. EU under GPM and RCM)

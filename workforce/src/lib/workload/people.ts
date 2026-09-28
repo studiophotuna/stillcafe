@@ -6,6 +6,7 @@
  */
 import type { Cal } from "../calendar/engine";
 import type { OrgNode } from "../calendar/types";
+import { isLeader } from "../calendar/constants";
 import { dayKey, localHour } from "./clock";
 import type { Availability, Person, Trade, WlOrg } from "./types";
 
@@ -101,7 +102,7 @@ export function workloadApprovers(c: Cal, teamId: string): number[] {
   const ids = new Set(workloadAdmins(c, teamId));
   const above = new Set(c.O.anc(teamId));
   c.d.people.forEach((p) => {
-    if (p.level === "member" || !c.alive(p, c.today)) return;
+    if (!isLeader(p.level) || !c.alive(p, c.today)) return;
     if (c.O.inN(p, teamId) || p.assign.some((a) => above.has(a))) ids.add(p.id);
   });
   return [...ids];

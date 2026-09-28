@@ -1,5 +1,6 @@
 export type NodeType = "dept" | "tower" | "branch" | "system" | "trade";
-export type Level = "member" | "lead" | "manager" | "director";
+/** Role. "member" is shown as Associate (the key is kept so saved data stays valid). */
+export type Level = "member" | "specialist" | "senior" | "lead" | "manager" | "director";
 export type ApprovalState = "approved" | "pending" | "declined";
 export type Code = "RTO" | "WFH" | "VL" | "SL" | "EL" | "HD" | "BT" | "HOL" | "HDY" | "RD";
 export type Bucket = "morning" | "mid" | "gy";

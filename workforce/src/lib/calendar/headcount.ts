@@ -11,7 +11,7 @@
  * - Billed: FTE for members, 0 for team leads and above, unless an admin set an override
  *   for that person, team and month (Calendar data "billing").
  */
-import { LEVELS } from "./constants";
+import { LEVELS, LEVEL_RANK, isLeader } from "./constants";
 import type { Cal } from "./engine";
 import { hcTeamOf, primaryTeamOf } from "./org";
 import type { CalPerson, Level, OrgNode } from "./types";
@@ -48,7 +48,7 @@ export interface HcTower {
   teams: HcTeam[];
 }
 
-const RANK: Record<Level, number> = { director: 0, manager: 1, lead: 2, member: 3 };
+const RANK = LEVEL_RANK;
 export const ym = (year: number, m: number) => `${year}-${String(m + 1).padStart(2, "0")}`;
 const r2 = (n: number) => Math.round(n * 100) / 100;
 
@@ -64,7 +64,7 @@ export function teamHeadcount(c: Cal, team: OrgNode, year: number): HcTeam {
   const rows: HcRow[] = people
     .map((p: CalPerson) => {
       const fte = 1;
-      const lead = p.level !== "member";
+      const lead = isLeader(p.level);
       // Current allocations in this team; for a past team, what was recorded when they moved.
       let subs = [...new Set(p.assign.filter((a) => O.anc(a).includes(team.id)).map((a) => O.sub(a)).filter(Boolean))];
       if (primaryTeamOf(O, p) !== team.id) {
@@ -90,11 +90,6 @@ export function teamHeadcount(c: Cal, team: OrgNode, year: number): HcTeam {
       return { pid: p.id, name: p.name, level: p.level, lead, sub, fte, months };
     })
     .sort((a, b) => RANK[a.level] - RANK[b.level] || a.name.localeCompare(b.name));
-  const sum = (rs: HcRow[]) =>
-    MONTHS.map((_, m) => ({
-      actual: r2(rs.reduce((a, r) => a + (r.months[m].actual ?? 0), 0)),
-      billed: r2(rs.reduce((a, r) => a + (r.months[m].billed ?? 0), 0)),
-    }));
   return {
     id: team.id,
     name: team.name,
@@ -103,6 +98,28 @@ export function teamHeadcount(c: Cal, team: OrgNode, year: number): HcTeam {
     without: sum(rows.filter((r) => !r.lead)),
     withTl: sum(rows),
   };
+}
+
+const sum = (rs: HcRow[]) =>
+  MONTHS.map((_, m) => ({
+    actual: r2(rs.reduce((a, r) => a + (r.months[m].actual ?? 0), 0)),
+    billed: r2(rs.reduce((a, r) => a + (r.months[m].billed ?? 0), 0)),
+  }));
+
+/** Only the people with these roles (totals recomputed); teams left empty are dropped. */
+export function byRoles(towers: HcTower[], roles: Level[] | null): HcTower[] {
+  if (!roles) return towers;
+  return towers
+    .map((t) => ({
+      ...t,
+      teams: t.teams
+        .map((tm) => {
+          const rows = tm.rows.filter((r) => roles.includes(r.level));
+          return { ...tm, rows, without: sum(rows.filter((r) => !r.lead)), withTl: sum(rows) };
+        })
+        .filter((tm) => tm.rows.length),
+    }))
+    .filter((t) => t.teams.length);
 }
 
 /** Towers (with their teams) for the report; `canSee` limits teams to those the viewer administers. */

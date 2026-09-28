@@ -39,7 +39,21 @@ export const ANNUAL: Code[] = ["VL", "SL", "EL", "HD"];
 export const POOL: Code[] = ["VL", "SL", "HD"];
 export const REQ_TYPES: Code[] = ["VL", "SL", "EL", "HD", "BT", "WFH", "RTO"];
 
-export const LEVELS: Record<Level, string> = { member: "Member", lead: "Team lead", manager: "Manager", director: "Director" };
+export const LEVELS: Record<Level, string> = {
+  member: "Associate",
+  specialist: "Specialist",
+  senior: "Sr. Specialist",
+  lead: "Team lead",
+  manager: "Manager",
+  director: "Director",
+};
+/** Roles from the top down (for sorting and filters). */
+export const LEVEL_ORDER: Level[] = ["director", "manager", "lead", "senior", "specialist", "member"];
+export const LEVEL_RANK = Object.fromEntries(LEVEL_ORDER.map((l, i) => [l, i])) as Record<Level, number>;
+/** Team leads, managers and directors lead people (approve, see the management view). */
+export const isLeader = (l: Level) => l === "lead" || l === "manager" || l === "director";
+/** Other names accepted for a role in uploads. */
+export const LEVEL_ALIAS: Record<string, Level> = { member: "member", "sr specialist": "senior", "senior specialist": "senior", "team leader": "lead" };
 export const TYPE_L: Record<NodeType, string> = { dept: "Department", tower: "Tower", branch: "Team", system: "System", trade: "Trade" };
 export const HTYPE: Record<HolidayType, string> = {
   regular: "Regular holiday",

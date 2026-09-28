@@ -155,7 +155,7 @@ export async function downloadMembersTemplate(c: Cal, dept: OrgNode, tower: OrgN
   for (let r = 2; r <= 301; r++) {
     const row = ws.getRow(r);
     if (r <= 51) {
-      row.getCell(3).value = "Member";
+      row.getCell(3).value = LEVELS.member;
       row.getCell(4).value = dept.name;
       row.getCell(5).value = tower.name;
       row.getCell(6).value = branch.name;
@@ -267,7 +267,8 @@ export async function downloadHeadcount(towers: import("./headcount").HcTower[],
   const NAVY = "FF0B2265";
   const GREY = "FFD9D9D9";
   const TEAM = "FFDCE3EF";
-  const LEAD = "FF8EA9DB";
+  // Role colours on the name cells (associates plain), matching the page.
+  const ROLE_FILL: Partial<Record<string, string>> = { director: "FFE3D9F0", manager: "FFC9D2EA", lead: "FF8EA9DB", senior: "FFD1F0E4", specialist: "FFFBE0D4" };
   const ZERO = "FFF8CBAD";
   const TOTAL = "FFEBF1DE";
   const thin = { style: "thin" as const, color: { argb: "FFBFBFBF" } };
@@ -328,11 +329,11 @@ export async function downloadHeadcount(towers: import("./headcount").HcTower[],
             else if (v === 0 && m.actual === 0) cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: ZERO } };
           }
         });
-        if (row.lead)
-          for (let c = 3; c <= 5; c++) {
-            ws.getCell(r, c).font = { bold: true };
-            ws.getCell(r, c).fill = { type: "pattern", pattern: "solid", fgColor: { argb: LEAD } };
-          }
+        const fill = ROLE_FILL[row.level];
+        for (let c = 3; c <= 5; c++) {
+          if (row.lead) ws.getCell(r, c).font = { bold: true };
+          if (fill) ws.getCell(r, c).fill = { type: "pattern", pattern: "solid", fgColor: { argb: fill } };
+        }
         for (let c = 3; c <= last; c++) ws.getCell(r, c).border = border;
         r++;
       }

@@ -4,7 +4,7 @@ import { useMemo, useState } from "react";
 import { Modal } from "@/components/Dialogs";
 import { Blueprint, Icon } from "@/components/ui";
 import {
-  ANNUAL, APPR_WORD, BCP_ST, BUCKETS, CI_DESC, CODES, HTYPE, LEVELS, OOO, POOL, REQ_TYPES, TYPE_L, first,
+  ANNUAL, APPR_WORD, BCP_ST, BUCKETS, CI_DESC, CODES, HTYPE, LEVELS, LEVEL_RANK, OOO, POOL, REQ_TYPES, TYPE_L, first,
 } from "@/lib/calendar/constants";
 import { DOW, addDays, daysInMonth, dowOf, fmt, fmtY, MONL, rng2 } from "@/lib/calendar/dates";
 import { downloadMembersTemplate, downloadScheduleTemplate, readCalendarUpload } from "@/lib/calendar/excel";
@@ -1523,10 +1523,9 @@ function NodeAdminsDialog({ id }: { id: string }) {
   const admins = n.admins ?? [];
   const close = () => s.setDialog(null);
   // Suggest people allocated here (directors and managers first), then everyone else.
-  const rank: Record<string, number> = { director: 0, manager: 1, lead: 2, member: 3 };
   const cands = s.data.people
     .filter((p) => !admins.includes(p.id) && !(p.resign && p.resign < s.today))
-    .sort((a, b) => Number(O.inN(b, id)) - Number(O.inN(a, id)) || rank[a.level] - rank[b.level] || a.name.localeCompare(b.name));
+    .sort((a, b) => Number(O.inN(b, id)) - Number(O.inN(a, id)) || LEVEL_RANK[a.level] - LEVEL_RANK[b.level] || a.name.localeCompare(b.name));
   const kind = n.type === "dept" ? "department" : "tower";
   return (
     <Modal onClose={close} width={560}>

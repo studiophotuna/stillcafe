@@ -31,7 +31,7 @@ const ASSIGN: Record<number, string[]> = {
   8: ["rm"], 18: ["rm"], 28: ["rm"], 23: ["rm"], 24: ["gpm"], 14: ["rcm"], 15: ["lcl"], 16: ["lcl"], 19: ["lcl"],
   20: ["lcl"], 22: ["lcl"], 25: ["us"], 26: ["rm", "cs"], 27: ["cs"], 29: ["asla"], 30: ["asla"], 31: ["cs"],
 };
-const LEVEL0: Record<number, Level> = { 23: "manager", 26: "director", 27: "manager", 24: "lead", 21: "lead", 14: "lead" };
+const LEVEL0: Record<number, Level> = { 23: "manager", 26: "director", 27: "manager", 24: "lead", 21: "lead", 14: "lead", 1: "senior", 5: "senior", 2: "specialist", 7: "specialist", 10: "specialist" };
 const HOL0: [string, string, "regular" | "special" | "company", string?][] = [
   ["2026-08-21", "Ninoy Aquino Day", "special"],
   ["2026-08-31", "National Heroes Day", "regular"],

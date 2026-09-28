@@ -5,9 +5,11 @@ import { Modal } from "@/components/Dialogs";
 import { Blueprint, Icon } from "@/components/ui";
 import { rightsOf } from "@/lib/calendar/authz";
 import { primaryTeamOf } from "@/lib/calendar/org";
-import type { HcTag } from "@/lib/calendar/types";
+import { LEVELS, LEVEL_ORDER } from "@/lib/calendar/constants";
+import type { HcTag, Level } from "@/lib/calendar/types";
 import { downloadHeadcount } from "@/lib/calendar/excel";
-import { MONTHS, headcount, ym, type HcRow } from "@/lib/calendar/headcount";
+import { MONTHS, byRoles, headcount, ym, type HcRow } from "@/lib/calendar/headcount";
+import { RoleFilter, RoleLegend } from "@/components/calendar/Roles";
 import { useCalendar } from "@/lib/calendar/store";
 import { useCalView } from "@/lib/calendar/useCalView";
 
@@ -22,12 +24,17 @@ export default function HeadcountPage() {
   const s = useCalendar();
   const v = useCalView();
   const [year, setYear] = useState(Number(s.today.slice(0, 4)));
-  const towers = useMemo(() => {
+  const [role, setRole] = useState<Level | "all">("all");
+  const all = useMemo(() => {
     const r = rightsOf(s.cal, s.me);
     return headcount(s.cal, year, (id) => r.teamAdmin(id));
   }, [s.cal, year, s.me]);
+  const towers = useMemo(() => byRoles(all, role === "all" ? null : [role]), [all, role]);
   const [towerId, setTowerId] = useState("");
-  const tower = towers.find((t) => t.id === towerId) ?? towers.find((t) => t.teams.some((x) => x.id === v.bid)) ?? towers[0];
+  const pickTower = (list: typeof all) => list.find((t) => t.id === towerId) ?? list.find((t) => t.teams.some((x) => x.id === v.bid)) ?? list[0];
+  // Keep the tower chosen from the full list, so a role filter can show it empty.
+  const tower = towers.find((t) => t.id === pickTower(all)?.id);
+  const towerName = pickTower(all)?.name ?? "";
   const [edit, setEdit] = useState<{ row: HcRow; team: string; teamName: string; m: number } | null>(null);
   const [tag, setTag] = useState<number | null>(null);
   const curM = s.today.startsWith(String(year)) ? Number(s.today.slice(5, 7)) - 1 : -1;
@@ -51,9 +58,10 @@ export default function HeadcountPage() {
           <button className="btn btn-secondary btn-icon" aria-label="Next year" onClick={() => setYear(year + 1)}>
             ›
           </button>
-          {towers.length > 1 && (
-            <select aria-label="Tower" className="input" value={tower?.id ?? ""} onChange={(e) => setTowerId(e.target.value)} style={{ width: "auto" }}>
-              {towers.map((t) => (
+          <RoleFilter value={role} onChange={setRole} />
+          {all.length > 1 && (
+            <select aria-label="Tower" className="input" value={pickTower(all)?.id ?? ""} onChange={(e) => setTowerId(e.target.value)} style={{ width: "auto" }}>
+              {all.map((t) => (
                 <option key={t.id} value={t.id}>
                   {t.name}
                 </option>
@@ -73,12 +81,15 @@ export default function HeadcountPage() {
             }}
           >
             <Icon name="download" size={16} />
-            Download Excel (all towers)
+            Download Excel (all towers{role === "all" ? "" : ` · ${LEVELS[role]}`})
           </button>
         </div>
       </div>
-      {!tower ? (
+      <RoleLegend levels={LEVEL_ORDER} />
+      {!all.length ? (
         <Blueprint className="panel">No teams you administer.</Blueprint>
+      ) : !tower ? (
+        <Blueprint className="panel">No {role === "all" ? "members" : LEVELS[role as Level] + "s"} in {towerName} in {year}.</Blueprint>
       ) : (
         <Blueprint className="scroll-x">
           <table className="table hc">
@@ -87,6 +98,7 @@ export default function HeadcountPage() {
                 <th rowSpan={2}>Cost centre</th>
                 <th rowSpan={2}>Process</th>
                 <th rowSpan={2}>Employee</th>
+                <th rowSpan={2}>Role</th>
                 <th rowSpan={2}>Sub process</th>
                 <th rowSpan={2}>FTE</th>
                 {MONTHS.map((m, i) => (
@@ -109,7 +121,7 @@ export default function HeadcountPage() {
             <tbody>
               {tower.teams.map((tm) => [
                 ...tm.rows.map((row, i) => (
-                  <tr key={tm.id + row.pid} className={row.lead ? "hc-lead" : undefined}>
+                  <tr key={tm.id + row.pid} className={"hc-role lv-" + row.level}>
                     {i === 0 && (
                       <>
                         <td rowSpan={tm.rows.length} className="hc-team">
@@ -120,11 +132,12 @@ export default function HeadcountPage() {
                         </td>
                       </>
                     )}
-                    <td className="nowrap" style={{ fontWeight: row.lead ? 600 : 400 }}>
+                    <td className="nowrap hc-emp" style={{ fontWeight: row.lead ? 600 : 400 }}>
                       <button className="hc-name" title="Headcount tagging over time" onClick={() => setTag(row.pid)}>
                         {row.name}
                       </button>
                     </td>
+                    <td className="nowrap">{LEVELS[row.level]}</td>
                     <td className="nowrap">{row.sub}</td>
                     <td className="hc-n">{row.fte}</td>
                     {row.months.map((c, m) => [
@@ -149,15 +162,16 @@ export default function HeadcountPage() {
                       <tr key={tm.id + "empty"}>
                         <td className="hc-team">{tm.costCentre}</td>
                         <td className="hc-team">{tm.name}</td>
-                        <td colSpan={27} className="small">
+                        <td colSpan={28} className="small">
                           No members.
                         </td>
                       </tr>,
                     ]),
-                ...(["without", "withTl"] as const).map((k) => (
+                ...(role === "all" ? (["without", "withTl"] as const) : (["withTl"] as const)).map((k) => (
                   <tr key={tm.id + k} className="hc-total">
-                    <td colSpan={5} style={{ textAlign: "right" }}>
-                      Total {tm.name} {k === "without" ? "without TL" : "with TL"}
+                    <td colSpan={6} style={{ textAlign: "right" }}>
+                      Total {tm.name}
+                      {role !== "all" ? ` · ${LEVELS[role]}` : k === "without" ? " without TL" : " with TL"}
                     </td>
                     {tm[k].map((x, m) => [
                       <td key={m + "a"} className="hc-n">

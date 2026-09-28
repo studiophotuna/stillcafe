@@ -630,3 +630,32 @@ describe("headcount keeps each month with the team the person was in", async () 
     expect(row(r.data, "rm", p.id)!.months.filter((m) => m.actual === 1).length).toBe(5);
   });
 });
+
+describe("roles", async () => {
+  const { teamHeadcount, headcount, byRoles } = await import("./headcount");
+  const { isLeader, LEVELS } = await import("./constants");
+  it("has Associate to Director, and only team leads and above lead", () => {
+    expect(Object.values(LEVELS)).toEqual(["Associate", "Specialist", "Sr. Specialist", "Team lead", "Manager", "Director"]);
+    expect((["member", "specialist", "senior", "lead", "manager", "director"] as const).map(isLeader)).toEqual([false, false, false, true, true, true]);
+  });
+  it("reads roles from uploads, including the old names", () => {
+    const d = fresh();
+    const row = (Role: string) => ({ Name: "New Person", Email: `np.${Role.length}@example.com`, Role, Department: "BSS", Tower: "A&S Support - Rate Management", Team: "Rate Management" });
+    const chk = checkUpload(new Cal(d, TODAY), "members", [row("Sr. Specialist"), row("Specialist"), row("Member"), row("Associate"), row("Boss")], "rm");
+    expect(chk.map((x) => x.stText)).toEqual(["New", "New", "New", "New", "Error"]);
+  });
+  it("bills specialists like associates, and filters the headcount by role", () => {
+    const d = fresh();
+    d.people = d.people.map((p) => (p.id === ANA ? { ...p, level: "senior" } : p));
+    const c = new Cal(d, TODAY);
+    const ana = teamHeadcount(c, c.O.by.rm, 2026).rows.find((r) => r.pid === ANA)!;
+    expect(ana.lead).toBe(false);
+    expect(ana.months[0].billed).toBe(1);
+    const only = byRoles(headcount(c, 2026, () => true), ["senior"]);
+    const rows = only.flatMap((t) => t.teams.flatMap((tm) => tm.rows));
+    expect(rows.every((r) => r.level === "senior")).toBe(true);
+    expect(rows.some((r) => r.pid === ANA)).toBe(true);
+    const rm = only.flatMap((t) => t.teams).find((tm) => tm.id === "rm")!;
+    expect(rm.withTl[0].actual).toBe(rm.rows.filter((r) => r.months[0].actual).length);
+  });
+});
