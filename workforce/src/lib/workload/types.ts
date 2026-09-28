@@ -68,6 +68,8 @@ export interface Person {
   shift: string;
   /** Shift start hour in team-local time (0–23). */
   shiftStart: number;
+  /** Scheduled to work today (not on leave or rest day), so outside the shift they can carry on as overtime until they end work. */
+  onToday?: boolean;
   /** Today is a holiday for this person: its name, and where they work if they're on holiday duty. */
   holiday?: { name: string; date: string; working: "RTO" | "WFH" | null; answered: boolean };
 }

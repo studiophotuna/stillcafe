@@ -157,7 +157,11 @@ export default function MyWorkPage() {
             </>
           ) : (
             <>
-              <span className="small">Away from tasks? Log it so utilization stays accurate.</span>
+              <span className="small">
+                {me.avail === "offshift" && me.onToday
+                  ? "Your shift is over. You can keep taking tasks as overtime and report it at End work."
+                  : "Away from tasks? Log it so utilization stays accurate."}
+              </span>
               <div className="row" style={{ gap: 6 }}>
                 {AWAY.map(([k, l]) => (
                   <button key={k} className="btn btn-secondary btn-36" onClick={() => run({ type: "away", kind: k, pid: me.id })}>

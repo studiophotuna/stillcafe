@@ -62,6 +62,8 @@ export function peopleFromCalendar(c: Cal, now: number, teamId: string): Person[
       let avail: Availability = "available";
       if (OUT.includes(cell.code) && !cell.pending) avail = "leave";
       else if (!cell.code || !inShift) avail = "offshift";
+      const hol = cell.code === "HOL" || cell.code === "HDY";
+      const onToday = hol ? !!workingOn(c.d.overrides[p.id + "|" + today]) : avail !== "leave" && !!cell.code;
       return {
         id: p.id,
         name: p.name,
@@ -69,7 +71,8 @@ export function peopleFromCalendar(c: Cal, now: number, teamId: string): Person[
         avail,
         shift: sh ? `${sh.name} ${sh.start}–${sh.end}` : "—",
         shiftStart: Math.floor(start),
-        ...(cell.code === "HOL" || cell.code === "HDY"
+        onToday,
+        ...(hol
           ? { holiday: { name: cell.note ?? "Holiday", date: today, working: workingOn(c.d.overrides[p.id + "|" + today]), answered: !!c.d.overrides[p.id + "|" + today] } }
           : {}),
       };

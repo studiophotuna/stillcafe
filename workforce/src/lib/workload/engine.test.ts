@@ -14,6 +14,8 @@ import {
   sortTasks,
   startTask,
   startWork,
+  endWork,
+  undoEndWork,
   type WorkloadData,
 } from "./engine";
 import { seedTasks } from "./seed";
@@ -115,6 +117,35 @@ describe("start work (FIFO)", () => {
     const t = task({ trade: "eu" });
     expect(get(startWork(data([t]), ELI, NOW).data, t.id).status).toBe("new");
     expect(get(startWork(data([t], { skipUnavail: false }), ELI, NOW).data, t.id).status).toBe("in_progress");
+  });
+
+  it("lets people scheduled today carry on after their shift (overtime) until they end work, also after Undo End work", () => {
+    const after = (d: WorkloadData): WorkloadData => ({ ...d, people: d.people.map((p) => (p.id === ANA ? { ...p, avail: "offshift", onToday: true } : p)) });
+    const t = task();
+    // Off shift and not scheduled today: skipped.
+    const off = { ...data([t]), people: PEOPLE.map((p) => (p.id === ANA ? { ...p, avail: "offshift" as const } : p)) };
+    expect(get(startWork(off, ANA, NOW).data, t.id).status).toBe("new");
+    // Scheduled today, after the shift: can start.
+    expect(get(startWork(after(data([t])), ANA, NOW).data, t.id).status).toBe("in_progress");
+    // Ended work: blocked; after Undo End work: can start again.
+    const ended = endWork(after(data([t])), ANA, 0, NOW).data;
+    expect(get(startWork(ended, ANA, NOW + M).data, t.id).status).toBe("new");
+    const back = undoEndWork(ended, ANA, NOW + M).data;
+    expect(get(startWork(back, ANA, NOW + 2 * M).data, t.id).status).toBe("in_progress");
+  });
+
+  it("round-robin gives new tasks after the shift only to people working overtime", () => {
+    const off = (d: WorkloadData): WorkloadData => ({
+      ...d,
+      people: d.people.map((p) => (p.trades.includes("lcl") ? { ...p, avail: p.id === ANA ? "offshift" : "leave", onToday: p.id === ANA } : p)),
+    });
+    const t = task();
+    // Not working now: stays in the queue.
+    expect(get(addTasks(off(data([], { mode: "rr" })), [t], "", NOW).data, t.id).status).toBe("new");
+    // Working a task after the shift: gets it.
+    const cur = task({ status: "in_progress", assignee: ANA, startedAt: NOW - M });
+    const o = addTasks(off(data([cur], { mode: "rr" })), [t], "", NOW).data;
+    expect(get(o, t.id).assignee).toBe(ANA);
   });
 
   it("does not pull from the queue in admin-assigns mode", () => {

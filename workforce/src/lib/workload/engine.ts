@@ -113,7 +113,12 @@ export function sortTasks(list: Task[], c: SlaCtx): Task[] {
     );
 }
 
-export const canWork = (p: Person, s: Settings) => !s.skipUnavail || p.avail === "available";
+/**
+ * Whether the member can take tasks. With "Skip people who are unavailable", people off
+ * shift are skipped, except those scheduled today: they can carry on after the shift
+ * (overtime) until they end work.
+ */
+export const canWork = (p: Person, s: Settings) => !s.skipUnavail || p.avail === "available" || (p.avail === "offshift" && !!p.onToday);
 export const isBusy = (tasks: Task[], pid: number) => tasks.some((t) => t.assignee === pid && t.status === "in_progress");
 
 const hist = (t: Task, at: number, text: string) => [...t.history, { at, text }];
@@ -257,20 +262,28 @@ export function completeTask(d: WorkloadData, id: string, vals: Task["fields"], 
   return { data: done, message: `${id} done. Click Start work for the next one.` };
 }
 
-/** Round-robin: the available member of the trade with the fewest open (assigned + in progress) tasks. */
-export function rrPick(tradeId: string, tasks: Task[], s: Settings, people: Person[]): Person | null {
-  const cand = people.filter((p) => p.trades.includes(tradeId) && canWork(p, s));
+/**
+ * Round-robin: the available member of the trade with the fewest open (assigned + in
+ * progress) tasks. Outside their shift, members get new tasks only while they're working
+ * overtime (a task in progress or finished in the last 15 minutes, and work not ended).
+ */
+export function rrPick(tradeId: string, tasks: Task[], s: Settings, people: Person[], onOt: (p: Person) => boolean = () => false): Person | null {
+  const cand = people.filter((p) => p.trades.includes(tradeId) && canWork(p, s) && (!s.skipUnavail || p.avail === "available" || onOt(p)));
   if (!cand.length) return null;
   const load = (p: Person) => tasks.filter((t) => t.assignee === p.id && (t.status === "assigned" || t.status === "in_progress")).length;
   return cand.slice().sort((a, b) => load(a) - load(b) || a.name.localeCompare(b.name))[0];
 }
 
-function rrAssign(tasks: Task[], ids: string[], s: Settings, people: Person[], now: number): { tasks: Task[]; n: number } {
+function rrAssign(d: WorkloadData, tasks: Task[], ids: string[], now: number): { tasks: Task[]; n: number } {
+  const { settings: s, people } = d;
+  const ended = new Set(d.activities.filter((a) => a.kind === "end" && sameDay(a.start, now)).map((a) => a.pid));
   let n = 0;
   for (const id of ids) {
     const t = tasks.find((x) => x.id === id);
     if (!t || t.status !== "new" || !t.trade) continue;
-    const p = rrPick(t.trade, tasks, s, people);
+    const onOt = (p: Person) =>
+      !ended.has(p.id) && tasks.some((x) => x.assignee === p.id && (x.status === "in_progress" || (x.status === "done" && x.doneAt !== null && x.doneAt >= now - 15 * M)));
+    const p = rrPick(t.trade, tasks, s, people, onOt);
     if (!p) continue;
     n++;
     tasks = tasks.map((x) =>
@@ -285,14 +298,14 @@ function rrAssign(tasks: Task[], ids: string[], s: Settings, people: Person[], n
 /** Add new tasks to the queue; in round-robin mode they are assigned straight away. */
 export function addTasks(d: WorkloadData, newTasks: Task[], label: string, now: number): Outcome {
   let tasks = d.tasks.concat(newTasks);
-  if (d.settings.mode === "rr") tasks = rrAssign(tasks, newTasks.map((t) => t.id), d.settings, d.people, now).tasks;
+  if (d.settings.mode === "rr") tasks = rrAssign(d, tasks, newTasks.map((t) => t.id), now).tasks;
   return { data: { ...d, tasks }, message: `${plural(newTasks.length, "task")} added${label}.` };
 }
 
 /** "Share out queue now": round-robin every waiting task that has a trade. */
 export function distribute(d: WorkloadData, now: number): Outcome {
   const ids = sortTasks(d.tasks.filter((t) => t.status === "new" && t.trade), d).map((t) => t.id);
-  const { tasks, n } = rrAssign(d.tasks, ids, d.settings, d.people, now);
+  const { tasks, n } = rrAssign(d, d.tasks, ids, now);
   return { data: { ...d, tasks }, message: `${n} tasks shared out.` };
 }
 
@@ -310,7 +323,7 @@ export function setTrade(d: WorkloadData, id: string, tradeId: string, now: numb
       history: hist(x, now, "Trade set to " + trPathOf(d.org, tradeId)),
     };
   });
-  if (d.settings.mode === "rr" && tradeId) data = { ...data, tasks: rrAssign(data.tasks, [id], d.settings, d.people, now).tasks };
+  if (d.settings.mode === "rr" && tradeId) data = { ...data, tasks: rrAssign(d, data.tasks, [id], now).tasks };
   return { data };
 }
 
