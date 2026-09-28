@@ -425,7 +425,13 @@ describe("primary team for headcount", async () => {
     const c = new Cal(r.data, TODAY);
     expect(c.person(ANA).primaryTeam).toBe("cs");
     expect(teamHeadcount(c, c.O.by.cs, 2026).rows.map((x) => x.pid)).toContain(ANA);
-    expect(teamHeadcount(c, c.O.by.rm, 2026).rows.map((x) => x.pid)).not.toContain(ANA);
+    // From this month on she counts in Customer Service only; earlier months stay in Rate Management.
+    const m = Number(TODAY.slice(5, 7)) - 1;
+    const rmRow = teamHeadcount(c, c.O.by.rm, 2026).rows.find((x) => x.pid === ANA)!;
+    const csRow = teamHeadcount(c, c.O.by.cs, 2026).rows.find((x) => x.pid === ANA)!;
+    expect(rmRow.months.slice(m).every((x) => x.actual === null)).toBe(true);
+    expect(csRow.months.slice(0, m).every((x) => x.actual === null)).toBe(true);
+    expect(csRow.months[m].actual).toBe(1);
     // Removed from the primary team: falls back to the remaining team.
     const out = run(r.data, { type: "removeFromTeam", pid: ANA, bid: "cs" }).data;
     expect(out.people.find((p) => p.id === ANA)!.primaryTeam).toBeUndefined();
@@ -565,5 +571,62 @@ describe("BCP events are active on their date only", () => {
     const r = run(today.data, { ...ci, evId: today.data.bcpEvents[0].id });
     expect(r.data.checkins[today.data.bcpEvents[0].id][ANA]).toBeTruthy();
     expect(start("2026-09-20").error).toBeTruthy(); // past date
+  });
+});
+
+describe("headcount keeps each month with the team the person was in", async () => {
+  const { teamHeadcount } = await import("./headcount");
+  const { hcTeamOf } = await import("./org");
+  // Someone only in Rate Management, hired before this year, who moves to Customer Service.
+  const pick = (d: CalendarData) => {
+    const c = new Cal(d, TODAY);
+    return d.people.find((p) => c.O.branchesOf(p).length === 1 && c.O.branchesOf(p)[0].id === "rm" && p.hire < "2026-01-01" && !p.resign && p.level === "member")!;
+  };
+  const move = (d: CalendarData, pid: number, hcFrom?: string) => {
+    const p = d.people.find((x) => x.id === pid)!;
+    return run(d, { type: "saveMember", pid, level: p.level, shift: p.shift, adminHere: false, bid: "cs", assign: ["cs"], isNew: false, hcFrom });
+  };
+  const row = (d: CalendarData, team: string, pid: number) =>
+    teamHeadcount(new Cal(d, TODAY), d.nodes.find((n) => n.id === team)!, 2026).rows.find((r) => r.pid === pid);
+
+  it("a move from April keeps January–March in the old team", () => {
+    const d0 = fresh();
+    const p = pick(d0);
+    const r = move(d0, p.id, "2026-04");
+    expect(r.error).toBeUndefined();
+    const moved = r.data.people.find((x) => x.id === p.id)!;
+    expect(moved.hcHistory).toEqual([expect.objectContaining({ from: "0000-00", team: "rm" }), { from: "2026-04", team: "cs" }]);
+    const O = new Cal(r.data, TODAY).O;
+    expect([hcTeamOf(O, moved, "2026-03"), hcTeamOf(O, moved, "2026-04"), hcTeamOf(O, moved, "2026-12")]).toEqual(["rm", "cs", "cs"]);
+    const rm = row(r.data, "rm", p.id)!;
+    const cs = row(r.data, "cs", p.id)!;
+    expect(rm.months.map((m) => m.actual)).toEqual([1, 1, 1, null, null, null, null, null, null, null, null, null]);
+    expect(cs.months.map((m) => m.actual)).toEqual([null, null, null, 1, 1, 1, 1, 1, 1, 1, 1, 1]);
+    expect(rm.sub).toContain("moved");
+    // Moving on again later keeps both earlier periods.
+    const again = run(r.data, { type: "saveMember", pid: p.id, level: p.level, shift: p.shift, adminHere: false, bid: "rm", assign: ["rm"], isNew: false, hcFrom: "2026-10" });
+    const h = again.data.people.find((x) => x.id === p.id)!.hcHistory!;
+    expect(h.map((x) => `${x.from}:${x.team}`)).toEqual(["0000-00:rm", "2026-04:cs", "2026-10:rm"]);
+  });
+
+  it("without an effective month the change counts from this month; unrelated edits add nothing", () => {
+    const d0 = fresh();
+    const p = pick(d0);
+    const r = move(d0, p.id);
+    expect(r.data.people.find((x) => x.id === p.id)!.hcHistory!.at(-1)).toEqual({ from: TODAY.slice(0, 7), team: "cs" });
+    const same = run(d0, { type: "saveMember", pid: p.id, level: p.level, shift: p.shift, adminHere: false, bid: "rm", assign: p.assign, isNew: false });
+    expect(same.data.people.find((x) => x.id === p.id)!.hcHistory).toBeUndefined();
+  });
+
+  it("admins correct the tagging; bad months and teams are dropped", () => {
+    const d0 = fresh();
+    const p = pick(d0);
+    const r = run(d0, {
+      type: "setHcHistory",
+      pid: p.id,
+      history: [{ from: "2026-02", team: "rm" }, { from: "2026-06", team: "cs" }, { from: "2026-13", team: "cs" }, { from: "2026-08", team: "nope" }],
+    });
+    expect(r.data.people.find((x) => x.id === p.id)!.hcHistory).toEqual([{ from: "0000-00", team: "rm" }, { from: "2026-06", team: "cs" }]);
+    expect(row(r.data, "rm", p.id)!.months.filter((m) => m.actual === 1).length).toBe(5);
   });
 });

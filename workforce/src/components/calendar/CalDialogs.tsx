@@ -9,7 +9,7 @@ import {
 import { DOW, addDays, daysInMonth, dowOf, fmt, fmtY, MONL, rng2 } from "@/lib/calendar/dates";
 import { downloadMembersTemplate, downloadScheduleTemplate, readCalendarUpload } from "@/lib/calendar/excel";
 import { useCalendar, type Issued } from "@/lib/calendar/store";
-import { ALLOC_MIN, allocNeeds, allocProblem } from "@/lib/calendar/org";
+import { ALLOC_MIN, allocNeeds, allocProblem, primaryTeamOf } from "@/lib/calendar/org";
 import { parseOrgText, planOrgImport } from "@/lib/calendar/orgImport";
 import { checkUpload, type UploadRow } from "@/lib/calendar/uploads";
 import { useCalView } from "@/lib/calendar/useCalView";
@@ -575,6 +575,7 @@ function MemberDialog({ pid: pid0 }: { pid: number | null }) {
   const [f, setF] = useState(() => detailsOf(init));
   const [wfh, setWfh] = useState<number[]>(() => wfhOf(init));
   const [primary, setPrimary] = useState(init?.primaryTeam ?? "");
+  const [hcFrom, setHcFrom] = useState(s.today.slice(0, 7));
   const [level, setLevel] = useState<Level>(init?.level ?? "member");
   const [shift, setShift] = useState(init?.shift ?? (s.data.shifts.some((x) => x.id === "D") ? "D" : s.data.shifts[0]?.id ?? "D"));
   const [adminHere, setAdminHere] = useState(init ? (v.branch.admins ?? []).includes(init.id) : false);
@@ -652,7 +653,7 @@ function MemberDialog({ pid: pid0 }: { pid: number | null }) {
       primaryTeam: primary,
     };
     if (isNew && !existing) s.run({ type: "addPerson", details, level, shift, adminHere, bid: v.bid, assign });
-    else s.run({ type: "saveMember", pid: pid!, level, shift, adminHere, bid: v.bid, assign, isNew, details });
+    else s.run({ type: "saveMember", pid: pid!, level, shift, adminHere, bid: v.bid, assign, isNew, details, hcFrom });
     close();
   };
   const opts = (l: { id: string; name: string }[]) =>
@@ -853,6 +854,23 @@ function MemberDialog({ pid: pid0 }: { pid: number | null }) {
                 </select>
                 <span className="small" style={{ fontSize: 12 }}>
                   They appear on every team’s calendar, but are counted as 1 FTE only in this team on the headcount report.
+                </span>
+              </div>
+            );
+          })()}
+          {(() => {
+            // Moving teams: from which month the new team counts on the headcount report.
+            if (!init || isNew) return null;
+            const teams = [...new Set(alloc.map((r) => r.branch).filter(Boolean))];
+            const next = teams.length > 1 ? (teams.includes(primary) ? primary : teams[0]) : teams[0];
+            const was = primaryTeamOf(O, init);
+            if (!next || next === was) return null;
+            return (
+              <div className="field" style={{ maxWidth: 420 }}>
+                <label htmlFor="mem-hcfrom">Counts in {O.by[next]?.name}’s headcount from</label>
+                <input id="mem-hcfrom" className="input" type="month" value={hcFrom} onChange={(e) => e.target.value && setHcFrom(e.target.value)} />
+                <span className="small" style={{ fontSize: 12 }}>
+                  Earlier months stay with {was ? O.by[was]?.name : "no team"} on the headcount report. Change the tagging later from the person’s name on Headcount.
                 </span>
               </div>
             );

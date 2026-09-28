@@ -65,6 +65,20 @@ export interface CalPerson {
   sysAdmin?: boolean;
   /** With allocations in several teams: the team they're counted in on the headcount report. */
   primaryTeam?: string;
+  /**
+   * Headcount tagging over time, oldest first: from month `from` (yyyy-mm) the person
+   * counts in `team` ("" = no team) until the next entry. Missing: always their current team.
+   */
+  hcHistory?: HcTag[];
+}
+
+export interface HcTag {
+  /** First month (yyyy-mm) of this tagging; "0000-00" = from the start. */
+  from: string;
+  /** Team id, or "" when not counted in any team. */
+  team: string;
+  /** System › trade shown on the report for this period, when it's no longer their allocation. */
+  sub?: string;
 }
 
 export interface LeaveRequest {

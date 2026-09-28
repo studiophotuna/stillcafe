@@ -4,6 +4,8 @@ import { useMemo, useState } from "react";
 import { Modal } from "@/components/Dialogs";
 import { Blueprint, Icon } from "@/components/ui";
 import { rightsOf } from "@/lib/calendar/authz";
+import { primaryTeamOf } from "@/lib/calendar/org";
+import type { HcTag } from "@/lib/calendar/types";
 import { downloadHeadcount } from "@/lib/calendar/excel";
 import { MONTHS, headcount, ym, type HcRow } from "@/lib/calendar/headcount";
 import { useCalendar } from "@/lib/calendar/store";
@@ -27,6 +29,7 @@ export default function HeadcountPage() {
   const [towerId, setTowerId] = useState("");
   const tower = towers.find((t) => t.id === towerId) ?? towers.find((t) => t.teams.some((x) => x.id === v.bid)) ?? towers[0];
   const [edit, setEdit] = useState<{ row: HcRow; team: string; teamName: string; m: number } | null>(null);
+  const [tag, setTag] = useState<number | null>(null);
   const curM = s.today.startsWith(String(year)) ? Number(s.today.slice(5, 7)) - 1 : -1;
   const title = `${v.dept.name.split(" (")[0].toUpperCase()}`;
 
@@ -36,7 +39,7 @@ export default function HeadcountPage() {
         <div className="page-head">
           <h1>Headcount · {year}</h1>
           <span style={{ maxWidth: "90ch" }}>
-            From Calendar members: counted from the month they were hired through the month of their last day, then 0. People in several teams are counted once, in their primary team (set in Members › Edit).
+            From Calendar members: counted from the month they were hired through the month of their last day, then 0. People in several teams are counted once, in their primary team (set in Members › Edit). When someone moves team, earlier months stay with the team they were in — click a name to see or correct their tagging over time.
             Team leads and above are billed 0 unless changed — click a Billed cell to change it.
           </span>
         </div>
@@ -118,7 +121,9 @@ export default function HeadcountPage() {
                       </>
                     )}
                     <td className="nowrap" style={{ fontWeight: row.lead ? 600 : 400 }}>
-                      {row.name}
+                      <button className="hc-name" title="Headcount tagging over time" onClick={() => setTag(row.pid)}>
+                        {row.name}
+                      </button>
                     </td>
                     <td className="nowrap">{row.sub}</td>
                     <td className="hc-n">{row.fte}</td>
@@ -170,6 +175,7 @@ export default function HeadcountPage() {
         </Blueprint>
       )}
       {edit && <BilledDialog year={year} edit={edit} onClose={() => setEdit(null)} />}
+      {tag !== null && <TagDialog pid={tag} onClose={() => setTag(null)} />}
     </>
   );
 }
@@ -214,6 +220,106 @@ function BilledDialog({ year, edit, onClose }: { year: number; edit: { row: HcRo
             style={{ padding: "0 18px" }}
             onClick={() => {
               s.run({ type: "setBilled", pid: edit.row.pid, bid: edit.team, months, value: val === "default" ? null : Number(val) });
+              onClose();
+            }}
+          >
+            Save
+          </Blueprint>
+        </div>
+      </div>
+    </Modal>
+  );
+}
+
+/**
+ * A person's headcount tagging over time: from which month they count in which team.
+ * Moves are recorded automatically; admins correct or backdate them here.
+ */
+function TagDialog({ pid, onClose }: { pid: number; onClose: () => void }) {
+  const s = useCalendar();
+  const { O } = s.cal;
+  const p = s.cal.people.get(pid);
+  const [rows, setRows] = useState<HcTag[]>(() =>
+    p?.hcHistory?.length ? p.hcHistory.map((x) => ({ ...x })) : [{ from: "0000-00", team: (p && primaryTeamOf(O, p)) ?? "" }],
+  );
+  if (!p) return null;
+  const teams = s.data.nodes
+    .filter((n) => n.type === "branch")
+    .map((b) => ({ id: b.id, name: `${O.up(b.id, "tower")?.name ?? ""} › ${b.name}` }))
+    .sort((a, b) => a.name.localeCompare(b.name));
+  const set = (i: number, patch: Partial<HcTag>) => setRows(rows.map((r, j) => (j === i ? { ...r, ...patch } : r)));
+  const months = rows.slice(1).map((r) => r.from);
+  const bad = months.some((m, i) => !/^\d{4}-\d{2}$/.test(m) || (i > 0 && m <= months[i - 1]));
+  return (
+    <Modal onClose={onClose} width={620}>
+      <div className="dialog-scroll" style={{ padding: 20 }}>
+        <div className="dialog-title" style={{ fontSize: 24 }}>
+          Headcount tagging · {p.name}
+        </div>
+        <span className="small">
+          Which team {p.name.split(" ")[0]} counts in on the headcount report, month by month. Each line applies from its month until the next line. Moving someone in
+          Members records this automatically; use this to correct or backdate it.
+        </span>
+        <table className="table">
+          <thead>
+            <tr>
+              <th>From</th>
+              <th>Counted in</th>
+              <th />
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((r, i) => (
+              <tr key={i}>
+                <td style={{ width: 190 }}>
+                  {i === 0 ? (
+                    <span className="small">Hire date</span>
+                  ) : (
+                    <input className="input" type="month" aria-label="From month" value={r.from} onChange={(e) => set(i, { from: e.target.value })} />
+                  )}
+                </td>
+                <td>
+                  <select className="input" aria-label="Team" value={r.team} onChange={(e) => set(i, { team: e.target.value, sub: undefined })}>
+                    <option value="">Not counted (no team)</option>
+                    {teams.map((t) => (
+                      <option key={t.id} value={t.id}>
+                        {t.name}
+                      </option>
+                    ))}
+                  </select>
+                </td>
+                <td style={{ width: 80, textAlign: "right" }}>
+                  {i > 0 && (
+                    <button className="btn btn-ghost" onClick={() => setRows(rows.filter((_, j) => j !== i))}>
+                      Remove
+                    </button>
+                  )}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+        <div>
+          <button
+            className="btn btn-secondary btn-36"
+            onClick={() => setRows(rows.concat({ from: s.today.slice(0, 7), team: rows[rows.length - 1].team }))}
+          >
+            <Icon name="plus" size={16} />
+            Add a change
+          </button>
+        </div>
+        {bad && <span style={{ color: "var(--color-accent-800)", fontSize: 13 }}>Each change needs a month, later than the line above it.</span>}
+        <div className="dialog-actions" style={{ gap: 10 }}>
+          <button className="btn btn-secondary btn-40" onClick={onClose}>
+            Cancel
+          </button>
+          <Blueprint
+            as="button"
+            className="btn btn-primary btn-40"
+            style={{ padding: "0 18px" }}
+            disabled={bad}
+            onClick={() => {
+              s.run({ type: "setHcHistory", pid, history: rows });
               onClose();
             }}
           >

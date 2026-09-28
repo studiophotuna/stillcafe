@@ -1,4 +1,4 @@
-import type { CalPerson, Level, NodeType, OrgNode } from "./types";
+import type { CalPerson, Level, NodeType, OrgNode, HcTag } from "./types";
 
 /** Lookups over the Department › Tower › Team › System › Trade tree. */
 export interface Org {
@@ -92,6 +92,29 @@ export function allocProblem(O: Pick<Org, "by">, level: Level, assign: string[])
  * The team a person is counted in for headcount: their chosen primary team if they're still
  * allocated to it, else the team of their first allocation. Undefined if in no team.
  */
+/**
+ * The team a person counts in for a month (yyyy-mm) on the headcount report: their tagging
+ * history for that month, else their current primary team.
+ */
+export function hcTeamOf(O: Pick<Org, "branchesOf">, p: CalPerson, month: string): string | undefined {
+  const h = p.hcHistory;
+  if (!h?.length) return primaryTeamOf(O, p);
+  let cur: HcTag | undefined;
+  for (const x of h) if (x.from <= month) cur = x;
+  return (cur ?? h[0]).team || undefined;
+}
+
+/**
+ * Record that a person's headcount team changes from `month` on: keeps what came before
+ * (starting the history from their old team if there was none) and replaces later entries.
+ */
+export function withHcChange(p: CalPerson, oldTeam: string | undefined, oldSub: string, newTeam: string | undefined, month: string): CalPerson {
+  const h: HcTag[] = p.hcHistory?.length ? p.hcHistory.filter((x) => x.from < month) : [{ from: "0000-00", team: oldTeam ?? "", ...(oldSub ? { sub: oldSub } : {}) }];
+  const last = h[h.length - 1];
+  const next = last && last.team === (newTeam ?? "") ? h : h.concat({ from: month, team: newTeam ?? "" });
+  return { ...p, hcHistory: next };
+}
+
 export const primaryTeamOf = (O: Pick<Org, "branchesOf">, p: CalPerson) => {
   const bs = O.branchesOf(p);
   return (bs.find((b) => b.id === p.primaryTeam) ?? bs[0])?.id;

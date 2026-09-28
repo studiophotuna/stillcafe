@@ -340,3 +340,6 @@ button.org-tog:hover { color: var(--color-text); }
 .check-row > span { display: flex; flex-direction: column; gap: 2px; font-size: 14px; }
 .check-row strong { font-weight: 500; }
 .tt-tag { display: inline-block; margin-left: 6px; padding: 0 6px; font-size: 11px; line-height: 18px; border: 1px solid var(--color-divider); color: var(--color-neutral-800); white-space: nowrap; }
+
+.hc-name { background: none; border: 0; padding: 0; font: inherit; color: inherit; cursor: pointer; text-align: left; text-decoration: underline dotted; text-underline-offset: 3px; }
+.hc-name:hover { color: var(--color-accent-800); }
