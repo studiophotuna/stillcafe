@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { fieldOptions, trPathOf } from "@/lib/workload/constants";
 import { nowMs } from "@/lib/workload/clock";
-import { fmtMin, missingRequired, pastShiftMin, type AssistOffer, slaText, otProcesses, suggestOtSplit, asksOtSplit, typesFor } from "@/lib/workload/engine";
+import { fmtMin, missingRequired, pastShiftMin, type AssistOffer, slaText, otProcesses, suggestOtSplit, asksOtSplit, typesFor, cxLevels, cxTotal, cxField } from "@/lib/workload/engine";
 import { useWorkload } from "@/lib/workload/store";
 import type { Priority, Task, OtPart } from "@/lib/workload/types";
 import { assignOptions, taskDetail } from "@/lib/workload/view";
@@ -256,9 +256,17 @@ function DoneDialog({ id }: { id: string }) {
   const { data, run, me, setDialog } = useWorkload();
   const t = data.tasks.find((x) => x.id === id);
   const [vals, setVals] = useState<Task["fields"]>(() => ({ ...(t?.fields ?? {}) }));
+  // Complexity: contracts per level; with a number field as the productivity basis, that field is their total.
+  const levels = cxLevels(data.settings);
+  const [cx, setCx] = useState<Record<string, string>>(() => Object.fromEntries(levels.map((l) => [l.id, t?.cx?.[l.id] ? String(t.cx[l.id]) : ""])));
   if (!t) return null;
   const close = () => setDialog(null);
-  const miss = missingRequired(data.fields, vals);
+  const counts = Object.fromEntries(levels.map((l) => [l.id, Math.max(0, Math.round(Number(cx[l.id]) || 0))]));
+  const total = cxTotal(counts);
+  const bf = levels.length > 0 ? cxField(data) : undefined;
+  const fromCx = !!bf;
+  const eff = fromCx ? { ...vals, [bf!.key]: total || "" } : vals;
+  const miss = missingRequired(data.fields, eff).concat(levels.length && !total ? ["contracts by complexity"] : []);
   return (
     <Modal onClose={close} width={520}>
       <div className="dialog-scroll" style={{ gap: 12, padding: 20 }}>
@@ -268,7 +276,35 @@ function DoneDialog({ id }: { id: string }) {
         <span className="muted">
           {t.id} · {t.title}
         </span>
+        {levels.length > 0 && (
+          <div className="ot-split">
+            <strong>Contracts by complexity *</strong>
+            <span className="small">How many contracts of each complexity this ticket had, e.g. 1 Simple and 2 Complex. Each counts toward its own target.</span>
+            <div style={{ display: "grid", gridTemplateColumns: `repeat(${Math.min(levels.length, 4)}, 1fr)`, gap: 10 }}>
+              {levels.map((l) => (
+                <div className="field" key={l.id}>
+                  <label htmlFor={"cx-" + l.id}>{l.name}</label>
+                  <input
+                    id={"cx-" + l.id}
+                    className="input"
+                    type="number"
+                    min={0}
+                    step={1}
+                    value={cx[l.id] ?? ""}
+                    placeholder="0"
+                    onChange={(e) => setCx((x) => ({ ...x, [l.id]: e.target.value }))}
+                  />
+                </div>
+              ))}
+            </div>
+            <span className="small">
+              {total} contract{total === 1 ? "" : "s"}
+              {fromCx ? ` · ${bf!.label} is set to this total` : ""}
+            </span>
+          </div>
+        )}
         {data.fields.map((f) => {
+          if (fromCx && f.key === bf!.key) return null;
           const fid = "done-" + f.key;
           const val = String(vals[f.key] ?? "");
           const set = (v: string) => setVals((x) => ({ ...x, [f.key]: v }));
@@ -310,7 +346,7 @@ function DoneDialog({ id }: { id: string }) {
             disabled={miss.length > 0}
             onClick={() => {
               close();
-              run({ type: "complete", id, vals, pid: me.id });
+              run({ type: "complete", id, vals: eff, pid: me.id, ...(levels.length ? { cx: counts } : {}) });
             }}
           >
             Mark done

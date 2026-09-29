@@ -2,7 +2,7 @@
 import { H, dur, fmtS, fmtT } from "./clock";
 import { AV, PR, ST, trPathOf } from "./constants";
 import type { Action } from "./actions";
-import { canTake, due, holdPeriods, isBusy, overdueMs, personOf, slaOf, slaText, taskTypeOf, waitingMs, taskWorkMs, ticketOf, type WorkloadData } from "./engine";
+import { canTake, cxCheck, cxOn, cxText, due, holdPeriods, isBusy, overdueMs, personOf, slaOf, slaText, taskTypeOf, waitingMs, taskWorkMs, ticketOf, type WorkloadData } from "./engine";
 import type { Task } from "./types";
 
 export interface RowAction {
@@ -115,6 +115,7 @@ export function taskDetail(d: WorkloadData, t: Task, now: number) {
   ]
     .concat(timeRows)
     .concat(d.fields.map((f) => ({ label: f.label, value: (t.fields[f.key] ?? "") === "" ? "—" : String(t.fields[f.key]) })))
+    .concat(cxRows(d, t))
     // Every pending (on hold) period with its date and reason.
     .concat(
       holdPeriods(t, now).map((p, i, all) => ({
@@ -153,4 +154,29 @@ export function assignOptions(d: WorkloadData, t: Task) {
       p.name +
       (p.avail !== "available" ? ` (${AV[p.avail][0].toLowerCase()})` : isBusy(d.tasks, p.id) ? " (busy)" : ""),
   }));
+}
+
+/** Complexity tagged on a done ticket, how its handling time compares, and any admin check. */
+function cxRows(d: WorkloadData, t: Task) {
+  if (!cxOn(d.settings) || !t.cx) return [];
+  const chk = cxCheck(d, t);
+  const rows = [{ label: "Complexity", value: cxText(d.settings, t.cx) }];
+  if (chk)
+    rows.push({
+      label: "Handling time",
+      value:
+        `${dur(chk.actMs)} worked · ${dur(chk.expMs)} expected` +
+        (chk.flag === "slow" ? " · took much longer than this complexity suggests" : chk.flag === "fast" ? " · much quicker than this complexity suggests" : ""),
+    });
+  const r = t.cxReview;
+  if (r)
+    rows.push({
+      label: "Complexity check",
+      value:
+        (r.verdict === "ok" ? "Confirmed" : `Corrected (tagged ${cxText(d.settings, r.was)})`) +
+        ` by ${d.people.find((p) => p.id === r.by)?.name ?? "an admin"}, ${fmtT(r.at)}` +
+        (r.note ? ` · ${r.note}` : ""),
+    });
+  else if (chk?.flag) rows.push({ label: "Complexity check", value: "Question for an admin: check the complexity" });
+  return rows;
 }

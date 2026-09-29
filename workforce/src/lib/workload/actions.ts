@@ -13,6 +13,7 @@ import {
   checkMail,
   checkRows,
   completeTask,
+  reviewCx,
   distribute,
   holdTask,
   importRows,
@@ -34,7 +35,8 @@ export type Action =
   | { type: "startTask"; id: string; pid: number }
   | { type: "hold"; id: string; reason: string }
   | { type: "resume"; id: string; pid: number }
-  | { type: "complete"; id: string; vals: Task["fields"]; pid: number }
+  | { type: "complete"; id: string; vals: Task["fields"]; pid: number; cx?: Record<string, number> | null }
+  | { type: "reviewCx"; id: string; cx?: Record<string, number> | null; note?: string; by: number }
   | { type: "away"; kind: ActivityKind; pid: number }
   | { type: "back"; pid: number }
   | { type: "endWork"; otMin: number; pid: number; split?: OtPart[] | null }
@@ -52,7 +54,7 @@ export type Action =
   | { type: "setFields"; fields: TaskField[] };
 
 const SETTING_KEYS: (keyof Settings)[] = [
-  "mode", "order", "skipUnavail", "autoFeed", "sla", "mailbox", "mailTrade", "work", "targets", "memberTargets", "prodBasis", "uploaders", "staleDays", "ticketField", "slaWeekends", "slaHolidays", "taskTypes",
+  "mode", "order", "skipUnavail", "autoFeed", "sla", "mailbox", "mailTrade", "work", "targets", "memberTargets", "prodBasis", "uploaders", "staleDays", "ticketField", "slaWeekends", "slaHolidays", "taskTypes", "complexity",
 ];
 
 export function applyAction(d: WorkloadData, a: Action, now: number): Outcome {
@@ -61,7 +63,8 @@ export function applyAction(d: WorkloadData, a: Action, now: number): Outcome {
     case "startTask": return startTask(d, a.id, a.pid, now);
     case "hold": return holdTask(d, a.id, a.reason, now);
     case "resume": return resumeTask(d, a.id, a.pid, now);
-    case "complete": return completeTask(d, a.id, a.vals, a.pid, now);
+    case "complete": return completeTask(d, a.id, a.vals, a.pid, now, a.cx);
+    case "reviewCx": return reviewCx(d, a.id, a.by, now, a.cx, a.note);
     case "away": return startAway(d, a.pid, a.kind, now);
     case "back": return backToWork(d, a.pid, now);
     case "endWork": return endWork(d, a.pid, a.otMin, now, a.split);

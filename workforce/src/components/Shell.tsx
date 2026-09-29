@@ -4,6 +4,7 @@ import { usePathname, useRouter } from "next/navigation";
 import { useEffect } from "react";
 import { fmtT } from "@/lib/workload/clock";
 import { modeLabel, trPathOf } from "@/lib/workload/constants";
+import { cxQuestions } from "@/lib/workload/engine";
 import { useWorkload } from "@/lib/workload/store";
 import { useUnit } from "@/lib/workload/useUnit";
 import { AppFrame, type NavItem } from "./AppFrame";
@@ -30,6 +31,7 @@ export function Shell({ children }: { children: React.ReactNode }) {
   }, [blocked, router]);
 
   const openQ = data.tasks.filter((t) => t.status === "new").length;
+  const cxQs = isAdmin ? cxQuestions(data).length : 0;
   const nav: NavItem[] = [
     { href: "/workload", icon: "my", label: "My work" },
     { href: "/workload/queue", icon: "queue", label: "Queue", badge: openQ },
@@ -44,6 +46,7 @@ export function Shell({ children }: { children: React.ReactNode }) {
         { href: "/workload/admin/fields", icon: "fields", label: "Task fields" },
         { href: "/workload/admin/allocation", icon: "rules", label: "Allocation" },
         { href: "/workload/admin/sla", icon: "check", label: "SLA & task types" },
+        { href: "/workload/admin/complexity", icon: "fields", label: "Complexity", badge: cxQs },
         { href: "/workload/admin/targets", icon: "targets", label: "Targets" },
       ]
     : [];

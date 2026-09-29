@@ -124,6 +124,39 @@ export interface Task {
    * changes to the SLA settings don't move open tasks. Missing on older tasks: current settings apply.
    */
   slaH?: number | null;
+  /** Contracts in the ticket by complexity level, as tagged by the member at Mark done (e.g. { simple: 1, complex: 2 }). */
+  cx?: Record<string, number> | null;
+  /** An admin's check of the complexity (when the handling time didn't match it). */
+  cxReview?: CxReview | null;
+}
+
+/** A complexity level: its own daily target (put first) and average handling time per contract. */
+export interface CxLevel {
+  id: string;
+  name: string;
+  /** Contracts of this level one person is expected to finish in a day; 0/missing: the task's usual target. */
+  target?: number;
+  /** Average handling time per contract, in minutes; 0/missing: not checked. */
+  aht?: number;
+}
+
+export interface Complexity {
+  on: boolean;
+  levels: CxLevel[];
+  /** How far (in %) the handling time may differ from the expected time before it's questioned. Default 50. */
+  tol?: number;
+  /** Number field set to the total contracts (e.g. "No. of contracts"); default: the productivity field when it's a number. "" = none. */
+  field?: string;
+}
+
+export interface CxReview {
+  by: number;
+  at: number;
+  /** "ok": the tagging was right; "corrected": the admin changed it. */
+  verdict: "ok" | "corrected";
+  note?: string;
+  /** What the member tagged, when corrected. */
+  was?: Record<string, number>;
 }
 
 /** A kind of request with its own SLA (e.g. Doc review 2 h, Booking 4 h). */
@@ -183,6 +216,8 @@ export interface Settings {
   slaHolidays?: boolean;
   /** Request types with their own SLA. Tasks without a type use the standard SLA (by priority). */
   taskTypes?: TaskType[];
+  /** Complexity of contracts in a ticket (Simple / Medium / Complex …), each with its own target and handling time. */
+  complexity?: Complexity;
 }
 
 export interface Toast {

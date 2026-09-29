@@ -5,7 +5,7 @@ import { Blueprint, Icon, Kpi, PageHead, pct } from "@/components/ui";
 import { PeriodNav } from "@/components/WorkloadBits";
 import { H, dayKey, dur, fmtT } from "@/lib/workload/clock";
 import { AV, PR, tradeOf, trPathOf } from "@/lib/workload/constants";
-import { awayLabel, basisUnit, due, fmtMin, isOverdue, slaOf, slaText, taskTypeOf, taskWorkMs, ticketField, ticketOf, typeTargets } from "@/lib/workload/engine";
+import { awayLabel, cxCheck, cxOn, cxText, basisUnit, due, fmtMin, isOverdue, slaOf, slaText, taskTypeOf, taskWorkMs, ticketField, ticketOf, typeTargets } from "@/lib/workload/engine";
 import { downloadSheets } from "@/lib/workload/excel";
 import { BarList, ColumnChart, LineChart, VIZ } from "@/components/Charts";
 import { personPeriod, teamPeriod, typeLabel, type PeriodInput, type PersonPeriod } from "@/lib/workload/metrics";
@@ -214,7 +214,7 @@ export default function DashboardPage() {
     sheets.push({
       name: "Tasks done",
       rows: [
-        ["Task ID", ...(tf ? [tf.label] : []), "Title", "System › Trade", "Task type", "Priority", "SLA (h)", "Received", "Due", "Started", "Finished", "Worked (min)", "On time", "Done by", ...data.fields.filter((f) => f !== tf).map((f) => f.label)],
+        ["Task ID", ...(tf ? [tf.label] : []), "Title", "System › Trade", "Task type", "Priority", "SLA (h)", "Received", "Due", "Started", "Finished", "Worked (min)", "On time", "Done by", ...(cxOn(s) ? ["Complexity", "Expected (min)", "Complexity check"] : []), ...data.fields.filter((f) => f !== tf).map((f) => f.label)],
         ...view.doneTasks.map((t): Row => [
           t.id,
           ...(tf ? [ticketOf(data, t)] : []),
@@ -230,6 +230,17 @@ export default function DashboardPage() {
           min(taskWorkMs(view.withActs, t, view.until)),
           t.doneAt! <= due(t, data) ? "Yes" : "No",
           data.people.find((p) => p.id === t.assignee)?.name ?? "",
+          ...(cxOn(s)
+            ? (() => {
+                const c = cxCheck(data, t);
+                const r = t.cxReview;
+                return [
+                  t.cx ? cxText(s, t.cx) : "",
+                  c ? min(c.expMs) : "",
+                  r ? (r.verdict === "ok" ? "Confirmed" : "Corrected") : c?.flag ? "Question" : "",
+                ];
+              })()
+            : []),
           ...data.fields.filter((f) => f !== tf).map((f) => String(t.fields[f.key] ?? "")),
         ]),
       ],

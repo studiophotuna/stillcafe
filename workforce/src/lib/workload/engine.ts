@@ -6,7 +6,7 @@
 import { H, M, TZ_OFFSET_H, addHours, dayKey, fmtT, localHour, spanMs, weekend } from "./clock";
 import { CARRIERS, PR, fieldOptions, lc, sysName, trPathOf } from "./constants";
 import { SAMPLE_MAIL } from "./seed";
-import type { Activity, ActivityKind, OtPart, Person, Priority, Settings, Task, TaskField, TaskType, WlOrg } from "./types";
+import type { Activity, ActivityKind, CxLevel, OtPart, Person, Priority, Settings, Task, TaskField, TaskType, WlOrg } from "./types";
 
 export interface WorkloadData {
   tasks: Task[];
@@ -246,12 +246,21 @@ export const fmtMin = (m: number) => (m >= 60 ? `${Math.floor(m / 60)} h${m % 60
  * Mark done (required fields must be filled — they may be blank when uploaded), then
  * auto-feed the next task if the team uses it. Overtime is reported at End work.
  */
-export function completeTask(d: WorkloadData, id: string, vals: Task["fields"], pid: number, now: number): Outcome {
+export function completeTask(d: WorkloadData, id: string, vals: Task["fields"], pid: number, now: number, cx?: Record<string, number> | null): Outcome {
   const t = d.tasks.find((x) => x.id === id);
   if (!t || t.status !== "in_progress" || t.assignee !== pid) return { data: d };
+  // Complexity: the contracts by level; with a number field as the productivity basis, it's their total.
+  let counts: Record<string, number> | null = null;
+  if (cxOn(d.settings)) {
+    counts = cleanCx(d.settings, cx);
+    if (!counts) return { data: d, message: `Enter how many contracts of each complexity ${id} had.` };
+    const f = cxField(d);
+    if (f) vals = { ...vals, [f.key]: cxTotal(counts) };
+  }
   const miss = missingRequired(d.fields, vals);
   if (miss.length) return { data: d, message: `Fill in ${miss.join(", ")} before marking ${id} done.` };
-  const done = patch(d, id, (x) => ({ ...x, status: "done", doneAt: now, fields: { ...vals }, history: hist(x, now, "Done") }));
+  const note = counts ? ` · ${cxText(d.settings, counts)}` : "";
+  const done = patch(d, id, (x) => ({ ...x, status: "done", doneAt: now, fields: { ...vals }, ...(counts ? { cx: counts, cxReview: null } : {}), history: hist(x, now, "Done" + note) }));
   const s = d.settings;
   const feed = s.autoFeed && (s.mode === "fifo" || done.tasks.some((x) => x.assignee === pid && x.status === "assigned"));
   if (feed) {
@@ -603,7 +612,7 @@ export function output(d: Pick<WorkloadData, "fields" | "settings">, done: Task[
 
 /** Whether productivity is weighted by task type targets (counting tasks, and a type has a target). */
 export const typeTargets = (d: Pick<WorkloadData, "fields" | "settings">) =>
-  !basisField(d) && (d.settings.taskTypes ?? []).some((t) => (t.target ?? 0) > 0);
+  (!basisField(d) && (d.settings.taskTypes ?? []).some((t) => (t.target ?? 0) > 0)) || cxLevels(d.settings).some((l) => (l.target ?? 0) > 0);
 
 /**
  * How much of a full day's work the done tasks make. Counting tasks: each task of a type
@@ -611,19 +620,35 @@ export const typeTargets = (d: Pick<WorkloadData, "fields" | "settings">) =>
  * reviews of 4 plus 1 Booking of 2 = 1.25 days). With a field as the basis: output ÷ target.
  */
 export function dayShare(d: Pick<WorkloadData, "fields" | "settings">, done: Task[], target: number) {
-  if (basisField(d)) return { share: target > 0 ? output(d, done) / target : 0, mix: "", any: false };
+  const f = basisField(d);
+  const levels = cxLevels(d.settings);
+  // Distinct values of a field (e.g. tickets): output ÷ target.
+  if (f && f.type !== "number") return { share: target > 0 ? output(d, done) / target : 0, mix: "", any: false };
   const groups = new Map<string, { name: string; n: number; of: number }>();
   let share = 0;
   let any = false;
-  for (const t of done) {
-    const ty = taskTypeOf(d.settings, t);
-    const of = ty && (ty.target ?? 0) > 0 ? ty.target! : target;
-    if (ty && (ty.target ?? 0) > 0) any = true;
-    if (of > 0) share += 1 / of;
-    const key = ty && (ty.target ?? 0) > 0 ? ty.id : "";
-    const g = groups.get(key) ?? { name: key ? ty!.name : "standard", n: 0, of };
-    g.n++;
+  const add = (key: string, name: string, n: number, of: number) => {
+    if (of > 0) share += n / of;
+    const g = groups.get(key) ?? { name, n: 0, of };
+    g.n += n;
     groups.set(key, g);
+  };
+  for (const t of done) {
+    const ty = f ? undefined : taskTypeOf(d.settings, t);
+    const typed = !!ty && (ty.target ?? 0) > 0;
+    const base = typed ? ty!.target! : target;
+    // Complexity first: each contract counts 1 ÷ its level's target (or the task's usual target).
+    if (levels.length && t.cx && cxTotal(t.cx) > 0) {
+      for (const l of levels) {
+        const n = t.cx[l.id] ?? 0;
+        if (!n) continue;
+        if ((l.target ?? 0) > 0) any = true;
+        add("cx:" + l.id, l.name, n, (l.target ?? 0) > 0 ? l.target! : base);
+      }
+      continue;
+    }
+    if (typed) any = true;
+    add(typed ? ty!.id : "", typed ? ty!.name : f ? f.label.toLowerCase() : "standard", f ? Number(t.fields[f.key]) || 0 : 1, base);
   }
   const mix = [...groups.values()].map((g) => `${g.n} ${g.name}${g.of ? " of " + g.of : ""}`).join(" · ");
   return { share, mix, any };
@@ -928,6 +953,87 @@ export function holdPeriods(t: Task, now: number): { from: number; to: number | 
     out.push({ from: h.at, to, reason: h.text.replace(/^On hold:?\s*/, "") || t.hold });
   });
   return out;
+}
+
+// ── complexity ──
+
+/** The team's complexity levels when complexity is switched on, else none. */
+export const cxLevels = (s: Settings): CxLevel[] => (s.complexity?.on ? s.complexity.levels.filter((l) => l.name.trim()) : []);
+export const cxOn = (s: Settings) => cxLevels(s).length > 0;
+/** The number field that holds the ticket's total contracts: the one chosen, else the productivity field when it's a number. */
+export function cxField(d: Pick<WorkloadData, "fields" | "settings">) {
+  const k = d.settings.complexity?.field;
+  if (k === "") return undefined;
+  const f = k ? d.fields.find((x) => x.key === k && x.type === "number") : undefined;
+  if (f) return f;
+  const b = basisField(d);
+  return b?.type === "number" ? b : undefined;
+}
+export const cxTotal = (cx: Record<string, number> | null | undefined) => Object.values(cx ?? {}).reduce((a, n) => a + n, 0);
+/** "1 Simple · 2 Complex". */
+export const cxText = (s: Settings, cx: Record<string, number> | null | undefined) =>
+  cxLevels(s)
+    .filter((l) => cx?.[l.id])
+    .map((l) => `${cx![l.id]} ${l.name}`)
+    .join(" · ") || "—";
+/** Whole contracts per known level, or null when there are none. */
+export function cleanCx(s: Settings, cx: Record<string, unknown> | null | undefined): Record<string, number> | null {
+  const out: Record<string, number> = {};
+  for (const l of cxLevels(s)) {
+    const n = Math.round(Number(cx?.[l.id]) || 0);
+    if (n > 0) out[l.id] = Math.min(n, 999);
+  }
+  return cxTotal(out) > 0 ? out : null;
+}
+
+export interface CxCheck {
+  /** Expected handling time from the levels' average handling times, ms. */
+  expMs: number;
+  /** Time actually worked on the ticket, ms. */
+  actMs: number;
+  /** "slow": took much longer than the tagging suggests (maybe tagged too simple); "fast": much quicker (maybe tagged too complex). */
+  flag: "slow" | "fast" | null;
+}
+
+/** Compare a done ticket's handling time with what its complexity tagging implies (every tagged level needs an average handling time). */
+export function cxCheck(d: WorkloadData, t: Task): CxCheck | null {
+  const levels = cxLevels(d.settings);
+  if (!levels.length || !t.cx || t.status !== "done" || !t.startedAt || !t.doneAt) return null;
+  let exp = 0;
+  for (const [id, n] of Object.entries(t.cx)) {
+    const l = levels.find((x) => x.id === id);
+    if (!l || !((l.aht ?? 0) > 0)) return null;
+    exp += n * l.aht! * M;
+  }
+  if (!exp) return null;
+  const act = taskWorkMs(d, t, t.doneAt);
+  const tol = Math.max(0, d.settings.complexity?.tol ?? 50) / 100;
+  return { expMs: exp, actMs: act, flag: act > exp * (1 + tol) ? "slow" : act < exp * Math.max(0, 1 - tol) ? "fast" : null };
+}
+
+/** Done tickets whose handling time doesn't match their complexity and that no admin has checked yet. */
+export const cxQuestions = (d: WorkloadData) =>
+  d.tasks.filter((t) => t.status === "done" && !t.cxReview && cxCheck(d, t)?.flag).sort((a, b) => (b.doneAt ?? 0) - (a.doneAt ?? 0));
+
+/** Admin check of a ticket's complexity: confirm it, or correct the counts (the productivity field follows). */
+export function reviewCx(d: WorkloadData, id: string, by: number, now: number, cx?: Record<string, number> | null, note = ""): Outcome {
+  const t = d.tasks.find((x) => x.id === id);
+  if (!t || t.status !== "done" || !cxOn(d.settings)) return { data: d };
+  const next = cx ? cleanCx(d.settings, cx) : null;
+  if (cx && !next) return { data: d, message: "Enter at least one contract." };
+  const changed = !!next && cxText(d.settings, next) !== cxText(d.settings, t.cx);
+  const who = personOf(d, by)?.name ?? "an admin";
+  const f = cxField(d);
+  const review = { by, at: now, verdict: changed ? ("corrected" as const) : ("ok" as const), ...(note.trim() ? { note: note.trim().slice(0, 300) } : {}), ...(changed && t.cx ? { was: t.cx } : {}) };
+  return {
+    data: patch(d, id, (x) => ({
+      ...x,
+      ...(changed ? { cx: next, ...(f?.type === "number" ? { fields: { ...x.fields, [f.key]: cxTotal(next) } } : {}) } : {}),
+      cxReview: review,
+      history: hist(x, now, changed ? `Complexity corrected by ${who}: ${cxText(d.settings, t.cx)} → ${cxText(d.settings, next)}` : `Complexity confirmed by ${who}`),
+    })),
+    message: changed ? `${id}: complexity corrected.` : `${id}: complexity confirmed.`,
+  };
 }
 
 /** Time a task was worked: start to finish (or now), minus time on hold and the member's time away. */

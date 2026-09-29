@@ -805,3 +805,59 @@ describe("overtime: processes worked, task types per process, and the target", a
     expect(E.personMetrics(no, one, at("20:05")).prod).toBe(125);
   });
 });
+
+describe("complexity", async () => {
+  const E = await import("./engine");
+  const { authorizeWl } = await import("./authz");
+  const at = (hm: string) => Date.parse(`2026-09-24T${hm}:00+08:00`);
+  const levels = [
+    { id: "simple", name: "Simple", target: 12, aht: 30 },
+    { id: "medium", name: "Medium", target: 8, aht: 60 },
+    { id: "complex", name: "Complex", target: 4, aht: 120 },
+  ];
+  const cxs = (p: Partial<Settings> = {}) => ({ complexity: { on: true, levels, tol: 50 }, prodBasis: "contracts", ...p });
+  const working = (started: string) => task({ status: "in_progress", assignee: ANA, startedAt: at(started) });
+
+  it("asks for the contracts by complexity at Mark done and sets the contracts field to their total", () => {
+    const t = working("09:00");
+    const d = data([t], cxs());
+    expect(E.completeTask(d, t.id, { ticket: "1", carrier: "MSK" }, ANA, at("10:00")).message).toMatch(/contracts of each complexity/);
+    const o = E.completeTask(d, t.id, { ticket: "1", carrier: "MSK" }, ANA, at("10:00"), { simple: 1, complex: 2, bogus: 5 });
+    const done = get(o.data, t.id);
+    expect(done.status).toBe("done");
+    expect(done.cx).toEqual({ simple: 1, complex: 2 });
+    expect(done.fields.contracts).toBe(3);
+    expect(done.history.at(-1)!.text).toBe("Done · 1 Simple · 2 Complex");
+  });
+
+  it("counts each contract against its level's target first", () => {
+    const d = data([], cxs());
+    const t = task({ status: "done", cx: { simple: 1, medium: 1, complex: 1 }, fields: { contracts: 3 } });
+    expect(E.dayShare(d, [t], 20).share).toBeCloseTo(1 / 12 + 1 / 8 + 1 / 4);
+    expect(E.dayShare(d, [t], 20).mix).toBe("1 Simple of 12 · 1 Medium of 8 · 1 Complex of 4");
+    // A level without its own target uses the usual one; without complexity, the contracts field ÷ target.
+    const noT = data([], cxs({ complexity: { on: true, levels: [{ id: "simple", name: "Simple" }], tol: 50 } }));
+    expect(E.dayShare(noT, [task({ status: "done", cx: { simple: 2 }, fields: { contracts: 2 } })], 20).share).toBeCloseTo(0.1);
+    expect(E.dayShare(data([], { prodBasis: "contracts" }), [t], 20).share).toBeCloseTo(0.15);
+  });
+
+  it("questions tagging that doesn't match the time worked, until an admin checks it", () => {
+    // 3 Simple at 30 min = 1 h 30 expected; worked 4 h.
+    const slow = task({ status: "done", assignee: ANA, startedAt: at("09:00"), doneAt: at("13:00"), cx: { simple: 3 }, fields: { contracts: 3 } });
+    const ok = task({ status: "done", assignee: ANA, startedAt: at("13:00"), doneAt: at("14:40"), cx: { simple: 3 }, fields: { contracts: 3 } });
+    const fast = task({ status: "done", assignee: ANA, startedAt: at("15:00"), doneAt: at("15:10"), cx: { complex: 1 }, fields: { contracts: 1 } });
+    const d = data([slow, ok, fast], cxs());
+    expect(E.cxCheck(d, slow)).toMatchObject({ expMs: 90 * M, actMs: 4 * H, flag: "slow" });
+    expect(E.cxCheck(d, ok)!.flag).toBeNull();
+    expect(E.cxCheck(d, fast)!.flag).toBe("fast");
+    expect(E.cxQuestions(d).map((t) => t.id).sort()).toEqual([slow.id, fast.id].sort());
+    // Confirm one, correct the other: both leave the list; the correction updates the contracts.
+    const c1 = E.reviewCx(d, fast.id, 23, at("16:00")).data;
+    expect(get(c1, fast.id).cxReview).toMatchObject({ by: 23, verdict: "ok" });
+    const c2 = E.reviewCx(c1, slow.id, 23, at("16:00"), { complex: 2 }, "two complex contracts").data;
+    expect(get(c2, slow.id)).toMatchObject({ cx: { complex: 2 }, fields: { contracts: 2 }, cxReview: { verdict: "corrected", was: { simple: 3 }, note: "two complex contracts" } });
+    expect(E.cxQuestions(c2)).toEqual([]);
+    // Only admins may check it.
+    expect(authorizeWl({ type: "reviewCx", id: slow.id, by: 0 }, d, ANA)).toEqual({ error: "Only Workload admins can do that." });
+  });
+});
