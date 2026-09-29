@@ -39,7 +39,7 @@ export async function downloadScheduleTemplate(c: Cal, unitIds: string[], unitLa
   const ppl = c.d.people.filter((p) => unitIds.some((u) => c.O.inN(p, u)) && (!p.resign || p.resign >= mS)).sort((a, b) => a.name.localeCompare(b.name));
   const wb = new ExcelJS.Workbook();
   wb.creator = "Workforce Management";
-  const codes = ["RTO", "WFH", "RD", "VL", "SL", "EL", "HD", "BT", "HDY"];
+  const codes = ["RTO", "WFH", "RD", "RDOT", "VL", "SL", "EL", "HD", "BT", "HDY"];
   const shs = c.d.shifts.map((x) => x.id);
   const sheet = (name: string, val: (pid: number, d: string) => string, list: string[], help: string) => {
     const ws = wb.addWorksheet(name, { views: [{ state: "frozen", xSplit: 2, ySplit: 3 }] });

@@ -38,6 +38,8 @@ export interface Activity {
   decidedAt: number | null;
   /** Where the overtime went (End work): minutes per process (trade) and task type; adds up to otMin. */
   otSplit?: OtPart[] | null;
+  /** The whole day was overtime: holiday duty or rest day OT (weekend / rest day worked). */
+  otKind?: "holiday" | "restday" | null;
 }
 
 /** Part of a day's overtime: a process (trade id) and optionally a task type. */
@@ -70,6 +72,10 @@ export interface Person {
   shiftStart: number;
   /** Scheduled to work today (not on leave or rest day), so outside the shift they can carry on as overtime until they end work. */
   onToday?: boolean;
+  /** Today is overtime as a whole: holiday duty, or a weekend / rest day worked (rest day OT). */
+  otDay?: "holiday" | "restday";
+  /** A rest day not yet marked rest day OT in the Calendar. */
+  rdTag?: boolean;
   /** Today is a holiday for this person: its name, and where they work if they're on holiday duty. */
   holiday?: { name: string; date: string; working: "RTO" | "WFH" | null; answered: boolean };
 }

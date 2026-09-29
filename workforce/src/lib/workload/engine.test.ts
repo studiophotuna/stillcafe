@@ -884,3 +884,22 @@ describe("average handling time", async () => {
     expect(vsExpected(st.members[0])).toBe(Math.round((240 / 210) * 100));
   });
 });
+
+describe("holiday duty and rest day overtime", async () => {
+  const E = await import("./engine");
+  const at = (hm: string) => Date.parse(`2026-09-26T${hm}:00+08:00`);
+  const rest = { ...PEOPLE.find((p) => p.id === ANA)!, trades: ["lcl"], shiftStart: 8, otDay: "restday" as const };
+  const mk = (tasks: Task[] = []) => ({ ...data(tasks, { memberTargets: { [ANA]: "4" } }), people: data([]).people.map((x) => (x.id === ANA ? rest : x)) });
+  it("counts all time worked that day as overtime of its type", () => {
+    const d = mk([task({ assignee: ANA, trade: "lcl", status: "done", startedAt: at("09:00"), doneAt: at("11:00") })]);
+    expect(E.otAvailMin(d, rest, at("12:30"))).toBe(210);
+    const a = E.endWork(d, ANA, 210, at("12:30")).data.activities[0];
+    expect(a).toMatchObject({ otMin: 210, otStatus: "pending", otKind: "restday" });
+    // Only the overtime is expected: 3.5 h at 4 a day in 6.8 h fits 2 tasks; 1 done = 50%.
+    expect(E.personMetrics(E.endWork(d, ANA, 210, at("12:30")).data, rest, at("12:31")).prod).toBe(50);
+    // A normal day's end-of-work entry has no type.
+    const norm = { ...rest, otDay: undefined };
+    const n = { ...d, people: d.people.map((x) => (x.id === ANA ? norm : x)) };
+    expect(E.endWork(n, ANA, 0, Date.parse("2026-09-24T18:00:00+08:00")).data.activities[0].otKind).toBeNull();
+  });
+});

@@ -5,7 +5,7 @@ import { DateRangePicker } from "@/components/DateRangePicker";
 import { Blueprint, PageHead } from "@/components/ui";
 import { rangeMs, type DateRange } from "@/lib/workload/period";
 import { dayKey, fmtT } from "@/lib/workload/clock";
-import { fmtMin, personOf } from "@/lib/workload/engine";
+import { OT_KIND, fmtMin, personOf } from "@/lib/workload/engine";
 import { trPathOf } from "@/lib/workload/constants";
 import { useWorkload } from "@/lib/workload/store";
 import type { Activity } from "@/lib/workload/types";
@@ -77,15 +77,26 @@ export default function OvertimePage() {
       }),
     );
   const procRows = [...byProc.values()].sort((a, b) => b.min - a.min);
+  // Approved overtime by type: regular (after the shift), holiday duty, rest day OT.
+  const kindOf = (a: Activity) => (a.otKind ? OT_KIND[a.otKind] : "Regular overtime");
+  const byKind = new Map<string, { min: number; people: Set<number> }>();
+  decided
+    .filter((a) => a.otStatus === "approved")
+    .forEach((a) => {
+      const r = byKind.get(kindOf(a)) ?? { min: 0, people: new Set<number>() };
+      r.min += a.otMin;
+      r.people.add(a.pid);
+      byKind.set(kindOf(a), r);
+    });
 
   const csv = () => {
     const q = (x: string | number) => `"${String(x).replace(/"/g, '""')}"`;
     // One line per process the overtime was for.
-    const body = [["Name", "Date", "Ended at", "Process", "Task type", "Overtime (min)", "Total that day (min)", "Status", "Decided by"].map(q).join(",")]
+    const body = [["Name", "Date", "Ended at", "Overtime type", "Process", "Task type", "Overtime (min)", "Total that day (min)", "Status", "Decided by"].map(q).join(",")]
       .concat(
         decided.flatMap((a) =>
           partsOf(a).map((x) =>
-            [name(a.pid), dayKey(a.start), fmtT(a.start), x.trade ? trPathOf(data.org, x.trade) : "", typeName((x as { ttype?: string }).ttype), x.min, a.otMin, a.otStatus ?? "", name(a.decidedBy)].map(q).join(","),
+            [name(a.pid), dayKey(a.start), fmtT(a.start), kindOf(a), x.trade ? trPathOf(data.org, x.trade) : "", typeName((x as { ttype?: string }).ttype), x.min, a.otMin, a.otStatus ?? "", name(a.decidedBy)].map(q).join(","),
           ),
         ),
       )
@@ -101,7 +112,7 @@ export default function OvertimePage() {
     <>
       <PageHead
         title={`Overtime · ${data.org.team.name}`}
-        sub="Members report overtime when they end work after their shift. It counts in the dashboard and reports only once an admin or lead approves it. You can’t approve your own."
+        sub="Members report overtime when they end work after their shift, and on holiday duty or a rest day they work (all of that day counts). It counts in the dashboard and reports only once an admin or lead approves it. You can’t approve your own."
       />
       <Blueprint as="section" className="panel tight">
         <h2 className="h2">Waiting for approval · {pending.length}</h2>
@@ -125,6 +136,11 @@ export default function OvertimePage() {
                   <td>{fmtT(a.start)}</td>
                   <td>
                     <span style={{ fontWeight: 600 }}>{fmtMin(a.otMin)}</span>
+                    {a.otKind && (
+                      <span className="tag tag-amber" style={{ marginLeft: 8 }}>
+                        {OT_KIND[a.otKind]}
+                      </span>
+                    )}
                     {a.otSplit?.length ? (
                       <div className="small">{a.otSplit.map((x) => `${partName(x)} ${fmtMin(x.min)}`).join(" · ")}</div>
                     ) : null}
@@ -187,6 +203,31 @@ export default function OvertimePage() {
           </table>
         ) : (
           <span className="small">No overtime decided in this period.</span>
+        )}
+        {byKind.size > 0 && (
+          <>
+            <h2 className="h2" style={{ marginTop: 10 }}>
+              Approved overtime by type
+            </h2>
+            <table className="table">
+              <thead>
+                <tr>
+                  <th>Type</th>
+                  <th>Approved</th>
+                  <th>People</th>
+                </tr>
+              </thead>
+              <tbody>
+                {[...byKind.entries()].map(([k, r]) => (
+                  <tr key={k}>
+                    <td style={{ fontWeight: 500 }}>{k}</td>
+                    <td style={{ fontWeight: 600 }}>{fmtMin(r.min)}</td>
+                    <td>{r.people.size}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </>
         )}
         {procRows.length > 0 && (
           <>

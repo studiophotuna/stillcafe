@@ -6,7 +6,7 @@ import { Blueprint, Icon } from "@/components/ui";
 import {
   ANNUAL, APPR_WORD, BCP_ST, BUCKETS, CI_DESC, CODES, HTYPE, LEVELS, LEVEL_RANK, OOO, POOL, REQ_TYPES, TYPE_L, first,
 } from "@/lib/calendar/constants";
-import { DOW, addDays, daysInMonth, dowOf, fmt, fmtY, MONL, rng2 } from "@/lib/calendar/dates";
+import { DOW, addDays, daysInMonth, dowOf, fmt, isWk, fmtY, MONL, rng2 } from "@/lib/calendar/dates";
 import { downloadMembersTemplate, downloadScheduleTemplate, readCalendarUpload } from "@/lib/calendar/excel";
 import { useCalendar, type Issued } from "@/lib/calendar/store";
 import { ALLOC_MIN, allocNeeds, allocProblem, primaryTeamOf } from "@/lib/calendar/org";
@@ -204,7 +204,7 @@ function HolidayWorkDialog({ date }: { date: string }) {
 
 // ── Admin: update schedules for several members, a week or a month at a time ──
 const mondayOf = (d: string) => addDays(d, -((dowOf(d) + 6) % 7));
-const DAY_OPTS: [SchedDay | "keep", string][] = [["keep", "Keep"], ["RTO", "RTO"], ["WFH", "WFH"], ["RD", "RD (rest)"], ["", "Usual"]];
+const DAY_OPTS: [SchedDay | "keep", string][] = [["keep", "Keep"], ["RTO", "RTO"], ["WFH", "WFH"], ["RD", "RD (rest)"], ["RDOT", "RDOT (rest day OT)"], ["", "Usual"]];
 function ScheduleDialog({ pids: pids0, date }: { pids?: number[]; date?: string }) {
   const s = useCalendar();
   const v = useCalView();
@@ -393,7 +393,10 @@ function CellDialog({ pid, date }: { pid: number; date: string }) {
   const p = c.person(pid);
   const cell = c.raw(p, date, v.bid);
   const close = () => s.setDialog(null);
-  const codes: Code[] = (c.holFor(p, date) ? (["HDY"] as Code[]) : []).concat(["RTO", "WFH", "VL", "SL", "EL", "HD", "BT", "RD"]);
+  // Weekends: a regular shift (RTO / WFH) or rest day overtime (RDOT).
+  const codes: Code[] = (c.holFor(p, date) ? (["HDY"] as Code[]) : []).concat(
+    isWk(date) ? ["RTO", "WFH", "RDOT", "RD"] : ["RTO", "WFH", "VL", "SL", "EL", "HD", "BT", "RD", "RDOT"],
+  );
   return (
     <Modal onClose={close} width={480} pad>
       <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>

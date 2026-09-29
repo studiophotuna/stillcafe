@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { applyCalAction } from "./actions";
 import { Cal, evState } from "./engine";
-import { buildReport, toCsv } from "./reports";
+import { REPORT_TYPES, buildReport, toCsv } from "./reports";
 import { initialCalendar } from "./seed";
 import { checkUpload } from "./uploads";
 import type { CalendarData } from "./types";
@@ -161,7 +161,7 @@ describe("uploads", () => {
     expect(chk[0].skip).toBe(true);
     expect(chk.slice(1).map((x) => x.msg)).toEqual([
       "Recorded as approved leave",
-      "Give a Code (RTO, WFH, RD, VL, SL, EL, HD, BT, HDY) or a Shift",
+      "Give a Code (RTO, WFH, RD, RDOT, VL, SL, EL, HD, BT, HDY) or a Shift",
       "Person not found",
       "Shift Midshift 12:00–21:00",
     ]);
@@ -657,5 +657,68 @@ describe("roles", async () => {
     expect(rows.some((r) => r.pid === ANA)).toBe(true);
     const rm = only.flatMap((t) => t.teams).find((tm) => tm.id === "rm")!;
     expect(rm.withTl[0].actual).toBe(rm.rows.filter((r) => r.months[0].actual).length);
+  });
+});
+
+describe("rest day overtime", async () => {
+  const { peopleFromCalendar } = await import("../workload/people");
+  const SAT = "2026-09-26";
+  it("tags a member's unscheduled weekend RDOT, not a weekday or a scheduled weekend", () => {
+    const r = run(fresh(), { type: "restDayWork", pid: ANA, date: SAT, actor: ANA });
+    expect(r.data.overrides[`${ANA}|${SAT}`]).toBe("RDOT");
+    expect(new Cal(r.data, TODAY).raw(r.data.people.find((p) => p.id === ANA)!, SAT, null).code).toBe("RDOT");
+    expect(run(fresh(), { type: "restDayWork", pid: ANA, date: "2026-09-25", actor: ANA }).data.overrides[`${ANA}|2026-09-25`]).toBeUndefined();
+    const sched = { ...fresh(), overrides: { [`${ANA}|${SAT}`]: "RTO" as const } };
+    expect(run(sched, { type: "restDayWork", pid: ANA, date: SAT, actor: ANA }).data.overrides[`${ANA}|${SAT}`]).toBe("RTO");
+  });
+  it("Workload treats an unscheduled weekend as a rest day they can work, and RDOT / RTO weekends accordingly", () => {
+    const at = Date.parse(`${SAT}T10:00:00+08:00`);
+    const d = fresh();
+    const ana = () => peopleFromCalendar(new Cal(d, SAT), at, "rm").find((p) => p.id === ANA)!;
+    expect(ana()).toMatchObject({ otDay: "restday", onToday: true, rdTag: true });
+    d.overrides[`${ANA}|${SAT}`] = "RDOT";
+    expect(ana()).toMatchObject({ otDay: "restday", onToday: true });
+    expect(ana().rdTag).toBeUndefined();
+    d.overrides[`${ANA}|${SAT}`] = "RTO"; // a regular weekend shift
+    expect(ana().otDay).toBeUndefined();
+  });
+});
+
+describe("attendance summary, reports, payroll and approvers", async () => {
+  const { attendanceSummary, summaryText } = await import("./summary");
+  const { nextCutoff, daysBetween } = await import("./dates");
+  it("summarises a day per team and system", () => {
+    const c = new Cal(fresh(), TODAY);
+    const b = attendanceSummary(c, "rm", TODAY);
+    expect(b[0]).toMatchObject({ name: "Rate Management", level: "team", detail: false });
+    expect(b.slice(1).every((x) => x.level === "system")).toBe(true);
+    const sys = b.slice(1);
+    expect(sys.reduce((a, x) => a + x.headcount, 0)).toBeGreaterThan(0);
+    const t = summaryText(b);
+    expect(t.split("\n")[0]).toMatch(/^Rate Management \d+\/\d+$/);
+    expect(t).toMatch(/\nRTO - \d+/);
+  });
+  it("has count tiles for every report, and the schedule and summary reports", () => {
+    const c = new Cal(fresh(), TODAY);
+    for (const [type] of REPORT_TYPES) expect(buildReport(c, type, "bss", "2026-09-01", "2026-09-30").tiles.length).toBeGreaterThan(0);
+    const sch = buildReport(c, "schedule", "rm", "2026-09-21", "2026-09-27");
+    expect(sch.rows[0].slice(-7)).toHaveLength(7);
+    expect(sch.rows.slice(1).some((r) => String(r[6]).startsWith("RTO · ") || String(r[6]).startsWith("WFH · "))).toBe(true);
+    const sum = buildReport(c, "summary", "rm", TODAY, TODAY);
+    expect(sum.rows[1][2]).toBe("Rate Management");
+  });
+  it("finds the next payroll cut-off", () => {
+    expect(nextCutoff("2026-09-24", [10, 25])).toBe("2026-09-25");
+    expect(nextCutoff("2026-09-26", [10, 25])).toBe("2026-10-10");
+    expect(nextCutoff("2026-02-20", [31])).toBe("2026-02-28");
+    expect(nextCutoff("2026-09-24", [])).toBeNull();
+    expect(daysBetween("2026-09-23", "2026-09-25")).toBe(2);
+  });
+  it("records who decided a request", () => {
+    const d = fresh();
+    const q = d.requests.find((x) => x.approvals.rm === "pending");
+    if (!q) return;
+    const r = run(d, { type: "decide", rid: q.id, bid: "rm", st: "approved", actor: SAM });
+    expect(r.data.requests.find((x) => x.id === q.id)!.decided?.rm?.by).toBe(SAM);
   });
 });

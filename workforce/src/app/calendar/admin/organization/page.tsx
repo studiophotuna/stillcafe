@@ -89,7 +89,7 @@ export default function OrganizationPage() {
         <Seg<Level>
           name="org-level"
           value={level}
-          options={[["dept", "Departments"], ["tower", "Towers"], ["branch", "Teams"], ["system", "Systems"], ["all", "Everything"]]}
+          options={[["dept", "Departments"], ["tower", "Towers"], ["branch", "Teams"], ["system", "Systems"], ["all", "All"]]}
           onChange={showTo}
         />
       </div>
@@ -168,7 +168,15 @@ function AppLinksPanel() {
   const [leave, setLeave] = useState(l.bipoLeave ?? "");
   const [ot, setOt] = useState(l.bipoOt ?? "");
   const [quick, setQuick] = useState<{ label: string; url: string }[]>(l.quick ?? []);
-  const save = () => s.run({ type: "setLinks", links: { bipoLeave: leave, bipoOt: ot, quick: quick.filter((q) => q.label.trim() && q.url.trim()) } });
+  const [pay, setPay] = useState((l.payrollDays ?? []).join(", "));
+  const [payNote, setPayNote] = useState(l.payrollNote ?? "");
+  const payDays = pay.split(/[,\s]+/).filter(Boolean).map(Number);
+  const payBad = payDays.some((n) => !Number.isInteger(n) || n < 1 || n > 31);
+  const save = () =>
+    s.run({
+      type: "setLinks",
+      links: { bipoLeave: leave, bipoOt: ot, quick: quick.filter((q) => q.label.trim() && q.url.trim()), payrollDays: payBad ? l.payrollDays : payDays, payrollNote: payNote },
+    });
   return (
     <Blueprint as="section" className="panel">
       <h2 className="h2">App links</h2>
@@ -181,6 +189,19 @@ function AppLinksPanel() {
         <div className="field">
           <label htmlFor="bipo-o">BIPO — filing approved overtime</label>
           <input id="bipo-o" className="input" value={ot} onChange={(e) => setOt(e.target.value)} placeholder="https://…" />
+        </div>
+      </div>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(320px,1fr))", gap: 12 }}>
+        <div className="field">
+          <label htmlFor="pay-d">Payroll cut-off days of the month</label>
+          <input id="pay-d" className="input" value={pay} onChange={(e) => setPay(e.target.value)} placeholder="e.g. 10, 25" />
+          <span className="small" style={{ color: payBad ? "var(--color-accent-800)" : undefined }}>
+            {payBad ? "Use days 1 to 31, separated by commas." : "Everyone gets a pop-up reminder from 2 days before each cut-off. 31 = the last day of the month."}
+          </span>
+        </div>
+        <div className="field">
+          <label htmlFor="pay-n">Reminder message (optional)</label>
+          <input id="pay-n" className="input" value={payNote} maxLength={200} onChange={(e) => setPayNote(e.target.value)} placeholder="e.g. File leave and overtime in BIPO before the cut-off." />
         </div>
       </div>
       <span className="small" style={{ fontSize: 12 }}>Quick links everyone sees (members add their own on top)</span>
@@ -198,7 +219,7 @@ function AppLinksPanel() {
           Add a shared link
         </button>
         <Blueprint as="button" className="btn btn-primary btn-36" style={{ padding: "0 16px" }} onClick={save}>
-          Save links
+          Save links and payroll
         </Blueprint>
       </div>
     </Blueprint>

@@ -158,7 +158,9 @@ export default function MyWorkPage() {
           ) : (
             <>
               <span className="small">
-                {me.avail === "offshift" && me.onToday
+                {me.otDay
+                  ? `Today is ${me.otDay === "holiday" ? "holiday duty" : "a rest day"}: the time you work counts as ${me.otDay === "holiday" ? "holiday duty" : "rest day"} overtime. Report it at End work.`
+                  : me.avail === "offshift" && me.onToday
                   ? "Your shift is over. You can keep taking tasks as overtime and report it at End work."
                   : "Away from tasks? Log it so utilization stays accurate."}
               </span>

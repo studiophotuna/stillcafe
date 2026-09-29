@@ -707,7 +707,9 @@ export function personMetrics(d: WorkloadData, p: Person, now: number): PersonMe
   const { share, mix, any } = dayShare(d, done, target);
   // Overtime raises the day's target by the tasks that fit in it.
   const ot = otDays(s, target, otMinFor(d, p, now));
-  const exp = target > 0 || any ? fr + ot : 0;
+  // Holiday duty and rest days aren't scheduled days: only the overtime is expected.
+  const dayPart = p.otDay ? 0 : fr;
+  const exp = target > 0 || any ? dayPart + ot : 0;
   return {
     otTarget: Math.round(ot * target * 100) / 100,
     otDays: ot,
@@ -720,7 +722,7 @@ export function personMetrics(d: WorkloadData, p: Person, now: number): PersonMe
     away: act.away,
     done: done.length,
     target,
-    tgt: tgt + ot * target,
+    tgt: (p.otDay ? 0 : tgt) + ot * target,
     avail,
     handle,
     onTime,
@@ -782,6 +784,23 @@ export function backToWork(d: WorkloadData, pid: number, now: number): Outcome {
   return { data: { ...d, activities: closeAway(d.activities, pid, now) }, message: `Back to work after ${fmtMin(Math.round((now - cur.start) / 60000))} ${awayLabel(cur.kind).toLowerCase()}.` };
 }
 
+/**
+ * Minutes that can be reported as overtime now: on holiday duty or a rest day worked,
+ * everything since the member first started today (up to 16 h); otherwise the time past the shift.
+ */
+export function otAvailMin(d: Pick<WorkloadData, "tasks" | "activities" | "settings">, p: Person, now: number) {
+  if (!p.otDay) return pastShiftMin(p, d.settings, now);
+  const today = dayKey(now);
+  const starts = d.tasks
+    .filter((t) => t.assignee === p.id && t.startedAt && dayKey(t.startedAt) === today)
+    .map((t) => t.startedAt!)
+    .concat(d.activities.filter((a) => a.pid === p.id && a.kind !== "end" && dayKey(a.start) === today).map((a) => a.start));
+  if (!starts.length) return 0;
+  return Math.max(0, Math.min(16 * 60, Math.round((now - Math.min(...starts)) / M)));
+}
+
+export const OT_KIND: Record<"holiday" | "restday", string> = { holiday: "Holiday duty", restday: "Rest day OT" };
+
 /** Minutes worked past the end of today's shift so far (0 during or before the shift). */
 export function pastShiftMin(p: Person, s: Settings, now: number) {
   const e = (localHour(now) - p.shiftStart + 24) % 24;
@@ -797,11 +816,12 @@ export function endWork(d: WorkloadData, pid: number, otMin: number, now: number
   const me = personOf(d, pid);
   if (!me || endedToday(d, pid, now)) return { data: d };
   if (isBusy(d.tasks, pid)) return { data: d, message: "Resolve your ticket or set it to pending before you end work." };
-  const ot = Math.max(0, Math.min(Math.round(Number(otMin) || 0), pastShiftMin(me, d.settings, now)));
+  const avail = otAvailMin(d, me, now);
+  const ot = Math.max(0, Math.min(Math.round(Number(otMin) || 0), avail));
   // The breakdown must use this team's processes and task types and add up to the overtime.
   let parts: OtPart[] | null = null;
   // Processes: the member's own, plus other trades they worked tasks in after the shift.
-  const procs = otProcesses(d, me, pastShiftMin(me, d.settings, now), now);
+  const procs = otProcesses(d, me, avail, now);
   if (ot && split?.length && asksOtSplit(d.settings, procs)) {
     const clean = split
       .map((x) => ({ trade: String(x.trade ?? ""), ttype: x.ttype ? String(x.ttype) : "", min: Math.round(Number(x.min) || 0) }))
@@ -818,10 +838,10 @@ export function endWork(d: WorkloadData, pid: number, otMin: number, now: number
     }
     parts = [...merged.values()];
   } else if (ot && procs.length === 1 && !asksOtSplit(d.settings, procs)) parts = [{ trade: procs[0].id, min: ot }];
-  const end = newActivity(pid, "end", now, { otMin: ot, otStatus: ot ? "pending" : null, otSplit: parts });
+  const end = newActivity(pid, "end", now, { otMin: ot, otStatus: ot ? "pending" : null, otSplit: parts, otKind: ot && me.otDay ? me.otDay : null });
   return {
     data: { ...d, activities: closeAway(d.activities, pid, now).concat(end) },
-    message: ot ? `Work ended. ${fmtMin(ot)} overtime sent for approval.` : "Work ended. See you next shift.",
+    message: ot ? `Work ended. ${fmtMin(ot)} ${me.otDay ? OT_KIND[me.otDay].toLowerCase() : "overtime"} sent for approval.` : "Work ended. See you next shift.",
   };
 }
 
@@ -868,7 +888,7 @@ export function otDays(s: Settings, target: number, otMin: number) {
 export function otMinFor(d: WorkloadData, p: Person, now: number) {
   const e = endedToday(d, p.id, now);
   if (e) return e.otStatus === "declined" ? 0 : e.otMin;
-  const past = pastShiftMin(p, d.settings, now);
+  const past = otAvailMin(d, p, now);
   const working = d.tasks.some((t) => t.assignee === p.id && (t.status === "in_progress" || (t.doneAt !== null && t.doneAt > now - past * M)));
   return past && working ? past : 0;
 }

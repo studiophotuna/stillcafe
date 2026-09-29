@@ -139,7 +139,7 @@ export function CalShell({ children }: { children: React.ReactNode }) {
   return (
     <AppFrame
       module="calendar"
-      top={<SideAction label="Request leave" icon="plus" onClick={() => s.setDialog({ kind: "request" })} />}
+      top={<SideAction label="Request" icon="plus" onClick={() => s.setDialog({ kind: "request" })} />}
       nav={nav}
       adminNav={adminNav}
       user={{

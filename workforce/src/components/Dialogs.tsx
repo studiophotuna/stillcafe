@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { fieldOptions, trPathOf } from "@/lib/workload/constants";
 import { nowMs } from "@/lib/workload/clock";
-import { fmtMin, missingRequired, pastShiftMin, type AssistOffer, slaText, otProcesses, suggestOtSplit, asksOtSplit, typesFor, cxLevels, cxTotal, cxField } from "@/lib/workload/engine";
+import { fmtMin, missingRequired, otAvailMin, OT_KIND, type AssistOffer, slaText, otProcesses, suggestOtSplit, asksOtSplit, typesFor, cxLevels, cxTotal, cxField } from "@/lib/workload/engine";
 import { useWorkload } from "@/lib/workload/store";
 import type { Priority, Task, OtPart } from "@/lib/workload/types";
 import { assignOptions, taskDetail } from "@/lib/workload/view";
@@ -405,7 +405,8 @@ function AssistDialog({ offer }: { offer: AssistOffer }) {
 function EndWorkDialog() {
   const { data, run, me, setDialog } = useWorkload();
   const [nowAt] = useState(() => nowMs());
-  const past = pastShiftMin(me, data.settings, nowAt);
+  // Holiday duty / rest day: all time worked today; otherwise the time past the shift.
+  const past = otAvailMin(data, me, nowAt);
   const [h, setH] = useState(() => String(Math.floor(past / 60)));
   const [m, setM] = useState(() => String(past % 60));
   const close = () => setDialog(null);
@@ -433,16 +434,22 @@ function EndWorkDialog() {
         {past > 0 ? (
           <div className="banner" style={{ display: "flex", flexDirection: "column", gap: 8 }}>
             <strong>
-              You’re {fmtMin(past)} past your shift ({me.shift}).
+              {me.otDay
+                ? `${OT_KIND[me.otDay]}: all ${fmtMin(past)} you worked today counts as overtime.`
+                : `You’re ${fmtMin(past)} past your shift (${me.shift}).`}
             </strong>
-            <span style={{ fontSize: 13.5 }}>How much overtime did you work? It goes to an admin or lead for approval. Enter 0 if none.</span>
+            <span style={{ fontSize: 13.5 }}>
+              {me.otDay
+                ? `Today is ${me.otDay === "holiday" ? "a holiday you’re on duty" : "a rest day"}, so it goes to an admin or lead for approval as ${OT_KIND[me.otDay].toLowerCase()}. Adjust it if needed.`
+                : "How much overtime did you work? It goes to an admin or lead for approval. Enter 0 if none."}
+            </span>
             <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
               <input aria-label="Overtime hours" className="input" type="number" min={0} value={h} onChange={(e) => setH(e.target.value)} style={{ width: 80 }} />
               <span>h</span>
               <input aria-label="Overtime minutes" className="input" type="number" min={0} max={59} value={m} onChange={(e) => setM(e.target.value)} style={{ width: 80 }} />
               <span>min</span>
             </div>
-            {tooMuch && <span style={{ fontSize: 12.5, color: "var(--color-accent-800)" }}>That’s more than the {fmtMin(past)} since your shift ended.</span>}
+            {tooMuch && <span style={{ fontSize: 12.5, color: "var(--color-accent-800)" }}>That’s more than the {fmtMin(past)} {me.otDay ? "you worked today" : "since your shift ended"}.</span>}
           </div>
         ) : null}
         {past > 0 && askSplit ? (

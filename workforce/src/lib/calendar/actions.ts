@@ -29,6 +29,7 @@ export type CalAction =
   | { type: "setOverride"; pid: number; date: string; code: Code | null }
   | { type: "setShiftDay"; pid: number; date: string; shift: string }
   | { type: "holidayWork"; pid: number; date: string; code: "RTO" | "WFH" | "HOL" | null; actor: number }
+  | { type: "restDayWork"; pid: number; date: string; actor: number }
   | { type: "teamSettings"; id: string; patch: Partial<Pick<OrgNode, "mode" | "notifyAdmin" | "notifyUser" | "invite" | "defaultScope" | "costCentre" | "schedPeriod">> }
   | { type: "setSchedule"; bid: string; pids: number[]; from: string; to: string; shift: string | null; days: Partial<Record<number, SchedDay>> }
   | { type: "setBilled"; pid: number; bid: string; months: string[]; value: number | null }
@@ -55,8 +56,8 @@ export type CalAction =
   | { type: "importUpload"; mode: UploadMode; rows: UploadRow[]; bid: string };
 
 /** What a weekday becomes in Update schedules: a status, or "" for the person's usual pattern. */
-export type SchedDay = "RTO" | "WFH" | "RD" | "";
-const SCHED_DAYS: SchedDay[] = ["RTO", "WFH", "RD", ""];
+export type SchedDay = "RTO" | "WFH" | "RD" | "RDOT" | "";
+const SCHED_DAYS: SchedDay[] = ["RTO", "WFH", "RD", "RDOT", ""];
 
 /** Editable person details (Members › Add / Edit). */
 export interface MemberDetails {
@@ -224,7 +225,7 @@ function applyInner(d: CalendarData, a: CalAction, today: string, now: number): 
     case "decide": {
       const q = d.requests.find((x) => x.id === a.rid);
       if (!q || q.approvals[a.bid] !== "pending") return { data: d };
-      const upd = { ...q, approvals: { ...q.approvals, [a.bid]: a.st } };
+      const upd = { ...q, approvals: { ...q.approvals, [a.bid]: a.st }, decided: { ...(q.decided ?? {}), [a.bid]: { by: a.actor, at } } };
       const next: CalendarData = { ...d, requests: d.requests.map((x) => (x.id === q.id ? upd : x)) };
       const ls = logsDecision(new Cal(next, today), upd, a.bid, a.st, at, "admin");
       const p = c.person(q.pid);
@@ -287,6 +288,16 @@ function applyInner(d: CalendarData, a: CalAction, today: string, now: number): 
           ? `${self ? "You’re" : first(p.name) + " is"} on holiday duty ${fmtY(a.date)} (${a.code === "WFH" ? "work from home" : "in office"}).`
           : `${fmtY(a.date)} is back to a holiday${self ? " for you" : " for " + first(p.name)}.`,
       };
+    }
+    case "restDayWork": {
+      // Working on a weekend (or rest day) with no schedule: it becomes rest day overtime.
+      const p = c.people.get(a.pid);
+      if (!p || !/^\d{4}-\d{2}-\d{2}$/.test(a.date) || (p.resign && a.date > p.resign)) return { data: d };
+      const cell = c.raw(p, a.date, null);
+      // Members tag their own weekends; admins may also tag a weekday rest day.
+      const self = a.actor === a.pid;
+      if (!(isWk(a.date) || (!self && cell.code === "RD")) || c.holFor(p, a.date) || (cell.code && cell.code !== "RD")) return { data: d };
+      return { data: { ...d, overrides: { ...d.overrides, [a.pid + "|" + a.date]: "RDOT" } }, message: `${fmtY(a.date)} is marked as rest day OT.` };
     }
     case "setSchedule": {
       // Several members at once, for a week or a month: shift and/or each weekday's status.
@@ -354,6 +365,7 @@ function applyInner(d: CalendarData, a: CalAction, today: string, now: number): 
     case "setLinks": {
       const ok = (u: unknown) => typeof u === "string" && /^https:\/\/\S{3,490}$/.test(u.trim());
       const l = a.links ?? {};
+      const payDays = [...new Set((Array.isArray(l.payrollDays) ? l.payrollDays : []).map(Number).filter((n) => Number.isInteger(n) && n >= 1 && n <= 31))].sort((x, y) => x - y).slice(0, 6);
       const links: AppLinks = {
         bipoLeave: ok(l.bipoLeave) ? l.bipoLeave!.trim() : undefined,
         bipoOt: ok(l.bipoOt) ? l.bipoOt!.trim() : undefined,
@@ -361,6 +373,8 @@ function applyInner(d: CalendarData, a: CalAction, today: string, now: number): 
           .filter((q) => q && ok(q.url) && typeof q.label === "string" && q.label.trim())
           .slice(0, 20)
           .map((q) => ({ label: q.label.trim().slice(0, 40), url: q.url.trim() })),
+        payrollDays: payDays.length ? payDays : undefined,
+        payrollNote: typeof l.payrollNote === "string" && l.payrollNote.trim() ? l.payrollNote.trim().slice(0, 200) : undefined,
       };
       return { data: { ...d, links }, message: "Links saved." };
     }

@@ -43,13 +43,24 @@ export default function BcpPage() {
   };
   const deptPeople = s.data.people.filter((p) => O.inN(p, v.dept.id) && !(p.resign && p.resign < s.today)).sort(byName);
   const myR = s.data.bcpReady[s.me] || {};
-  const bcpPeople = scoped.filter((p) => filter === "all" || stOf(p) === filter);
+  const bcpPeople0 = scoped.filter((p) => filter === "all" || stOf(p) === filter);
   const brk = O.desc(v.dept.id, "branch")
     .map((t) => {
       const g = scoped.filter((p) => O.inN(p, t.id));
       return { id: t.id, tower: O.up(t.id, "tower")?.name ?? "", name: t.name, total: g.length, vals: BCP_KEYS.map((k) => g.filter((p) => stOf(p) === k).length) };
     })
     .filter((r) => r.total > 0);
+  // Overall monitoring per tower: who has responded, and each status.
+  const byTower = O.desc(v.dept.id, "tower")
+    .map((t) => {
+      const g = scoped.filter((p) => O.inN(p, t.id));
+      const none = g.filter((p) => stOf(p) === "none").length;
+      return { id: t.id, name: t.name, total: g.length, resp: g.length - none, vals: BCP_KEYS.map((k) => g.filter((p) => stOf(p) === k).length) };
+    })
+    .filter((r) => r.total > 0);
+  const [tw, setTw] = useState("all");
+  const allResp = scoped.filter((p) => stOf(p) !== "none").length;
+  const bcpPeople = bcpPeople0.filter((p) => tw === "all" || O.inN(p, tw));
   return (
     <>
       <div className="page-head-row">
@@ -122,6 +133,45 @@ export default function BcpPage() {
                 ))}
               </div>
               <Blueprint as="section" className="panel tight scroll-x">
+                <h2 className="h2">Overall by tower</h2>
+                <table className="table" style={{ minWidth: 880 }}>
+                  <thead>
+                    <tr>
+                      <th>Tower</th>
+                      <th>In scope</th>
+                      <th>Responded</th>
+                      {BCP_KEYS.map((k) => <th key={k}>{BCP_ST[k]}</th>)}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {byTower.map((r) => (
+                      <tr key={r.id}>
+                        <td style={{ fontWeight: 500 }}>{r.name}</td>
+                        <td>{r.total}</td>
+                        <td>
+                          <div style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 150 }}>
+                            <span className="nowrap" style={{ fontWeight: 600 }}>{r.total ? Math.round((r.resp / r.total) * 100) : 0}%</span>
+                            <span className="viz-bar-track" style={{ flex: 1, background: "var(--viz-grid)", borderRadius: 4 }}>
+                              <i style={{ width: `${r.total ? (r.resp / r.total) * 100 : 0}%`, background: "var(--viz-1)" }} />
+                            </span>
+                            <span className="small nowrap">{r.resp}/{r.total}</span>
+                          </div>
+                        </td>
+                        {r.vals.map((x, i) => <td key={i}>{x}</td>)}
+                      </tr>
+                    ))}
+                    <tr className="hc-total">
+                      <td>All towers</td>
+                      <td>{scoped.length}</td>
+                      <td>
+                        {scoped.length ? Math.round((allResp / scoped.length) * 100) : 0}% · {allResp}/{scoped.length}
+                      </td>
+                      {BCP_KEYS.map((k) => <td key={k}>{scoped.filter((p) => stOf(p) === k).length}</td>)}
+                    </tr>
+                  </tbody>
+                </table>
+              </Blueprint>
+              <Blueprint as="section" className="panel tight scroll-x">
                 <h2 className="h2">By tower and team (FTE)</h2>
                 <table className="table" style={{ minWidth: 880 }}>
                   <thead>
@@ -147,12 +197,23 @@ export default function BcpPage() {
               <Blueprint as="section" className="panel scroll-x" style={{ gap: 10 }}>
                 <div style={{ display: "flex", flexWrap: "wrap", justifyContent: "space-between", alignItems: "flex-end", gap: 10 }}>
                   <h2 className="h2">People</h2>
+                  <div className="row" style={{ alignItems: "flex-end" }}>
+                  {byTower.length > 1 && (
+                    <div className="field">
+                      <label htmlFor="bcp-t">Tower</label>
+                      <select id="bcp-t" className="input" value={tw} onChange={(e) => setTw(e.target.value)} style={{ width: "auto", minWidth: 200 }}>
+                        <option value="all">All towers</option>
+                        {byTower.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
+                      </select>
+                    </div>
+                  )}
                   <div className="field">
                     <label htmlFor="bcp-f">Show</label>
                     <select id="bcp-f" className="input" value={filter} onChange={(e) => setFilter(e.target.value as BcpStatus | "all")} style={{ width: "auto", minWidth: 220 }}>
                       <option value="all">Everyone</option>
                       {BCP_KEYS.map((k) => <option key={k} value={k}>{BCP_ST[k]}</option>)}
                     </select>
+                  </div>
                   </div>
                 </div>
                 <table className="table" style={{ minWidth: 760 }}>

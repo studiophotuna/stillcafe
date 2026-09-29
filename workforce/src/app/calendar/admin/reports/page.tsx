@@ -3,7 +3,7 @@
 import { DateRangePicker } from "@/components/DateRangePicker";
 import { useState } from "react";
 import { bcpScopeOpts } from "@/components/calendar/CalDialogs";
-import { Blueprint, Icon } from "@/components/ui";
+import { Blueprint, Icon, Kpi } from "@/components/ui";
 import { daysInMonth, isoOf } from "@/lib/calendar/dates";
 import { REPORT_TYPES, buildReport, toCsv, type ReportType } from "@/lib/calendar/reports";
 import { useCalendar } from "@/lib/calendar/store";
@@ -24,7 +24,7 @@ export default function ReportsPage() {
   const to = to0 >= from ? to0 : from;
   const evs = s.data.bcpEvents.filter((e) => O.by[e.scope] && O.anc(e.scope).includes(v.dept.id));
   const evSel = evs.find((e) => e.id === ev)?.id ?? evs[0]?.id ?? "";
-  const { rows, desc } = buildReport(s.cal, type, scope, from, to, evSel, v.dept.id);
+  const { rows, desc, tiles } = buildReport(s.cal, type, scope, from, to, evSel, v.dept.id);
   // Search across every column, then page through the matches.
   const [q, setQ] = useState("");
   const [size, setSize] = useState(25);
@@ -101,6 +101,13 @@ export default function ReportsPage() {
           </Blueprint>
         </div>
       </Blueprint>
+      {tiles.length > 0 && (
+        <div className="grid-kpi">
+          {tiles.map((t) => (
+            <Kpi key={t.k} k={t.k} v={t.v} m={t.m ?? ""} />
+          ))}
+        </div>
+      )}
       <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
         <div className="row" style={{ justifyContent: "space-between", alignItems: "center" }}>
           <input

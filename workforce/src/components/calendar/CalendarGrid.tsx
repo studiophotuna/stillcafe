@@ -325,7 +325,7 @@ export function CalendarGrid({ mgmt }: { mgmt?: boolean }) {
         {mgmt
           ? "Click a day in your own row to request leave. Admins change schedules from the Calendar."
           : v.isAdmin
-            ? "Click any day to change someone’s schedule or record leave. Use “Request leave” for your own time off."
+            ? "Click any day to change someone’s schedule or record leave. Use “Request” for your own time off."
             : "Click a day in your own row to request leave or a schedule change for that date. On a holiday (HOL), click it to say you’re working."}
       </p>
     </>

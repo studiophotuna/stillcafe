@@ -2,7 +2,8 @@ export type NodeType = "dept" | "tower" | "branch" | "system" | "trade";
 /** Role. "member" is shown as Associate (the key is kept so saved data stays valid). */
 export type Level = "member" | "specialist" | "senior" | "lead" | "manager" | "director";
 export type ApprovalState = "approved" | "pending" | "declined";
-export type Code = "RTO" | "WFH" | "VL" | "SL" | "EL" | "HD" | "BT" | "HOL" | "HDY" | "RD";
+/** RDOT: rest day overtime (a weekend or rest day worked as overtime). */
+export type Code = "RTO" | "WFH" | "VL" | "SL" | "EL" | "HD" | "BT" | "HOL" | "HDY" | "RD" | "RDOT";
 export type Bucket = "morning" | "mid" | "gy";
 export type HolidayType = "regular" | "special" | "company";
 export type BcpStatus = "wfh" | "office" | "aff_ok" | "aff_no" | "leave" | "none";
@@ -39,6 +40,10 @@ export interface AppLinks {
   bipoOt?: string;
   /** Shown to everyone in the Quick links bar. */
   quick?: QuickLink[];
+  /** Payroll cut-off days of the month (e.g. 10 and 25; 31 = the month's last day). Everyone is reminded from 2 days before. */
+  payrollDays?: number[];
+  /** Extra line in the payroll reminder. */
+  payrollNote?: string;
 }
 
 export interface CalPerson {
@@ -93,6 +98,8 @@ export interface LeaveRequest {
   created: string;
   /** Per team id. */
   approvals: Record<string, ApprovalState>;
+  /** Per team id: who approved or declined it, and when (missing when approved automatically). */
+  decided?: Record<string, { by: number; at: string }>;
 }
 
 export interface Shift {
