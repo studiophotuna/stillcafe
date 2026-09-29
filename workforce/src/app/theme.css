@@ -91,7 +91,7 @@ h1, .page-head h1 { color: var(--color-accent-800); letter-spacing: -0.01em; }
 /* — sidebar and bars — */
 .side { background: var(--color-card); border-right: 1px solid var(--color-divider); }
 .side-brand span { color: var(--color-accent-800); }
-.side-switch { border-radius: var(--radius-md); overflow: hidden; }
+.side-switch { border-radius: var(--radius-md); overflow: hidden; flex-shrink: 0; }
 .side-switch .on { background: var(--color-accent-800); }
 .nav-item { border-radius: var(--radius-md); }
 .nav-item:hover { background: var(--color-accent-100); }
