@@ -1,5 +1,6 @@
 "use client";
 
+import { leadersOf } from "@/lib/calendar/approvals";
 import { useMemo, useState } from "react";
 import { Modal } from "@/components/Dialogs";
 import { Blueprint, Icon } from "@/components/ui";
@@ -578,6 +579,9 @@ function MemberDialog({ pid: pid0 }: { pid: number | null }) {
   const [f, setF] = useState(() => detailsOf(init));
   const [wfh, setWfh] = useState<number[]>(() => wfhOf(init));
   const [primary, setPrimary] = useState(init?.primaryTeam ?? "");
+  const [approver, setApprover] = useState(init?.approver ? String(init.approver) : "");
+  // Approver choices: the leaders of this team (and its tower / department), not the person.
+  const approverOpts = leadersOf(s.cal, v.bid).filter((x) => x.id !== pid);
   const [hcFrom, setHcFrom] = useState(s.today.slice(0, 7));
   const [level, setLevel] = useState<Level>(init?.level ?? "member");
   const [shift, setShift] = useState(init?.shift ?? (s.data.shifts.some((x) => x.id === "D") ? "D" : s.data.shifts[0]?.id ?? "D"));
@@ -654,6 +658,7 @@ function MemberDialog({ pid: pid0 }: { pid: number | null }) {
       ytdEl: Number(f.ytdEl),
       wfhDays: wfh,
       primaryTeam: primary,
+      approver: Number(approver) || 0,
     };
     if (isNew && !existing) s.run({ type: "addPerson", details, level, shift, adminHere, bid: v.bid, assign });
     else s.run({ type: "saveMember", pid: pid!, level, shift, adminHere, bid: v.bid, assign, isNew, details, hcFrom });
@@ -712,6 +717,7 @@ function MemberDialog({ pid: pid0 }: { pid: number | null }) {
                 setF(detailsOf(p));
                 setWfh(wfhOf(p));
                 setPrimary(p.primaryTeam ?? "");
+                setApprover(p.approver ? String(p.approver) : "");
                 setLevel(p.level);
                 setShift(p.shift);
                 setAlloc(p.assign.map(allocOf).concat(hereRow));
@@ -750,6 +756,18 @@ function MemberDialog({ pid: pid0 }: { pid: number | null }) {
                       {LEVELS[k]}
                     </option>
                   ))}
+                </select>
+              </div>
+              <div className="field">
+                <label htmlFor="mem-ap">Approver (team leader)</label>
+                <select id="mem-ap" className="input" value={approver} onChange={(e) => setApprover(e.target.value)}>
+                  <option value="">Not assigned (team admins)</option>
+                  {approverOpts.map((x) => (
+                    <option key={x.id} value={x.id}>
+                      {x.name} · {LEVELS[x.level]}
+                    </option>
+                  ))}
+                  {approver && !approverOpts.some((x) => String(x.id) === approver) && <option value={approver}>{s.cal.people.get(Number(approver))?.name ?? "Removed"}</option>}
                 </select>
               </div>
             </div>

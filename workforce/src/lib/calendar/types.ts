@@ -76,6 +76,8 @@ export interface CalPerson {
    * counts in `team` ("" = no team) until the next entry. Missing: always their current team.
    */
   hcHistory?: HcTag[];
+  /** Their approver: the team leader (or manager) their requests are assigned to. */
+  approver?: number;
 }
 
 export interface HcTag {

@@ -198,7 +198,12 @@ export function logsSubmit(c: Cal, q: LeaveRequest, at: string, adminBid: string
     const st = q.approvals[bid];
     if (!b) return [];
     if (st === "pending") {
-      const admins = (b.admins ?? []).map((i) => c.people.get(i)).filter((x): x is CalPerson => !!x);
+      // The team's admins plus the member's assigned approver (not the requester).
+      const apId = p.approver && p.approver !== p.id ? p.approver : undefined;
+      const admins = [...new Set((b.admins ?? []).concat(apId !== undefined ? [apId] : []))]
+        .filter((i) => i !== p.id)
+        .map((i) => c.people.get(i))
+        .filter((x): x is CalPerson => !!x);
       if (!b.notifyAdmin || !admins.length) return [];
       const n = c.reqDays(q);
       return [

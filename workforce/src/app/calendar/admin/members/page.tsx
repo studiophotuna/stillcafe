@@ -117,6 +117,9 @@ export default function MembersPage() {
                         )}
                       </span>
                       <span className="small" style={{ fontSize: 12 }}>{sh ? `${sh.name} ${sh.start}–${sh.end}` : "—"}</span>
+                      {p.approver && c.people.get(p.approver) && (
+                        <span className="small" style={{ fontSize: 12 }}>Approver: {c.people.get(p.approver)!.name}</span>
+                      )}
                     </div>
                   </td>
                   <td>

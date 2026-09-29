@@ -354,7 +354,8 @@ describe("department and tower admins", async () => {
     expect(r.teamAdmin("cs")).toBe(false); // other tower
     expect(r.adminOf(15)).toBe(true); // Leo, in Rate Management
     expect(visibleTeams(c, ANA).map((b) => b.id).sort()).toEqual(["cs", "rm"]);
-    expect("action" in authorizeCal({ type: "decide", rid: "x", bid: "rm", st: "approved", actor: ANA }, c, ANA)).toBe(true);
+    const other = d.requests.find((q) => q.pid !== ANA && q.approvals.rm === "pending")!;
+    expect("action" in authorizeCal({ type: "decide", rid: other.id, bid: "rm", st: "approved", actor: ANA }, c, ANA)).toBe(true);
   });
   it("lets a department or tower lose its last admin, not a team", () => {
     let d = run(fresh(), { type: "addAdmin", id: "bss", pid: SAM }).data;
@@ -720,5 +721,35 @@ describe("attendance summary, reports, payroll and approvers", async () => {
     if (!q) return;
     const r = run(d, { type: "decide", rid: q.id, bid: "rm", st: "approved", actor: SAM });
     expect(r.data.requests.find((x) => x.id === q.id)!.decided?.rm?.by).toBe(SAM);
+  });
+});
+
+describe("approvals by leaders", async () => {
+  const { canDecide, approverOf, leadersOf } = await import("./approvals");
+  const { authorizeCal } = await import("./authz");
+  const form = { type: "VL" as const, start: "2026-10-12", end: "2026-10-12", half: "AM" as const, reason: "" };
+  it("team leads and above don't need approval; members follow the team's setting", () => {
+    const lead = run(fresh(), { type: "submitRequest", pid: 24, form, adminBid: null, actor: 24 }).data.requests[0];
+    expect(Object.values(lead.approvals).every((x) => x === "approved")).toBe(true); // a team lead in an approval team
+    const mem = run(fresh(), { type: "submitRequest", pid: ANA, form, adminBid: null, actor: ANA }).data.requests[0];
+    expect(mem.approvals).toMatchObject({ cs: "approved", rm: "pending" });
+  });
+  it("the assigned approver and the team's other leaders can decide; nobody decides their own", () => {
+    const d = fresh();
+    d.people = d.people.map((p) => (p.id === ANA ? { ...p, approver: 24 } : p));
+    const r = run(d, { type: "submitRequest", pid: ANA, form, adminBid: null, actor: ANA }).data;
+    const c = new Cal(r, TODAY);
+    const q = r.requests[0];
+    expect(approverOf(c, ANA)?.id).toBe(24);
+    expect(leadersOf(c, "rm").map((p) => p.id)).toEqual(expect.arrayContaining([24, 14, 23]));
+    expect(canDecide(c, 24, q, "rm")).toBe(true); // assigned approver (not an admin)
+    expect(canDecide(c, 14, q, "rm")).toBe(true); // another team lead
+    expect(canDecide(c, 8, q, "rm")).toBe(false); // an associate
+    expect(canDecide(c, ANA, q, "rm")).toBe(false);
+    expect("error" in authorizeCal({ type: "decide", rid: q.id, bid: "rm", st: "approved", actor: 24 }, c, 24)).toBe(false);
+    expect("error" in authorizeCal({ type: "decide", rid: q.id, bid: "rm", st: "approved", actor: 8 }, c, 8)).toBe(true);
+    // Saving a member: the approver must be a leader, not themselves.
+    const bad = run(r, { type: "saveMember", pid: ANA, level: "member", shift: "D", adminHere: false, bid: "rm", assign: ["lcl", "cs"], isNew: false, details: { approver: 8 } });
+    expect(bad.error).toMatch(/approver must be/);
   });
 });
