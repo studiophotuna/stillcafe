@@ -12,13 +12,17 @@ export interface BoardCol {
   label: string;
   sub: string;
   today?: boolean;
+  /** A future day: its Overdue count is projected (still open and due by the end of that day). */
+  future?: boolean;
 }
 export interface BoardGroup {
   id: string;
   name: string;
-  /** Per column: ids of tickets still due, and overdue. */
+  /** Per column: ids of tickets still due, and overdue (on future days: projected). */
   due: string[][];
   over: string[][];
+  /** Overdue right now (for the total). */
+  overNow: string[];
 }
 
 const DOW = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
@@ -41,7 +45,7 @@ export function dueBoard(d: WorkloadData, open: Task[], now: number): { cols: Bo
   if (items.some((x) => x.day < first)) cols.push({ key: "older", label: "Older", sub: `before ${Number(first.slice(8))} ${MON[Number(first.slice(5, 7)) - 1]}` });
   for (const k of days) {
     const dt = new Date(k + "T00:00:00Z");
-    cols.push({ key: k, label: k === today ? "Today" : DOW[dt.getUTCDay()], sub: `${dt.getUTCDate()} ${MON[dt.getUTCMonth()]}`, today: k === today });
+    cols.push({ key: k, label: k === today ? "Today" : DOW[dt.getUTCDay()], sub: `${dt.getUTCDate()} ${MON[dt.getUTCMonth()]}`, today: k === today, ...(k > today ? { future: true } : {}) });
   }
   if (items.some((x) => x.day > last)) cols.push({ key: "later", label: "Later", sub: `after ${Number(last.slice(8))} ${MON[Number(last.slice(5, 7)) - 1]}` });
   const colOf = (day: string) => (day < first ? "older" : day > last ? "later" : day);
@@ -53,12 +57,18 @@ export function dueBoard(d: WorkloadData, open: Task[], now: number): { cols: Bo
   const groups: BoardGroup[] = named
     .map((s) => ({ id: s.id, name: s.name }))
     .concat(sysIds.includes("") ? [{ id: "", name: named.length ? "No system" : d.org.team.name }] : [])
-    .map((g) => ({ ...g, due: cols.map(() => []), over: cols.map(() => []) }));
+    .map((g) => ({ ...g, due: cols.map((): string[] => []), over: cols.map((): string[] => []), overNow: [] as string[] }));
   for (const x of items) {
     const g = groups.find((y) => y.id === sysOf(x.t));
     const i = idx.get(colOf(x.day));
     if (!g || i === undefined) continue;
     (x.over ? g.over : g.due)[i].push(x.t.id);
+    if (x.over) g.overNow.push(x.t.id);
+    // Projected: on each future day (not "Later"), everything still open that's due by the
+    // end of that day would be overdue if not resolved.
+    cols.forEach((c, j) => {
+      if (c.future && x.day <= c.key) g.over[j].push(x.t.id);
+    });
   }
   return { cols, groups };
 }

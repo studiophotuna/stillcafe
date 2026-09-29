@@ -923,10 +923,21 @@ describe("delay remarks and the due / overdue board", async () => {
     const b = dueBoard(data([over, soon]), [over, soon], NOW);
     const rcm = b.groups.find((g) => g.name === "RCM")!;
     const gpm = b.groups.find((g) => g.name === "GPM")!;
-    expect(rcm.over.flat()).toEqual([over.id]);
+    expect(rcm.overNow).toEqual([over.id]);
     expect(rcm.due.flat()).toEqual([]);
     expect(gpm.due.flat()).toEqual([soon.id]);
+    expect(gpm.overNow).toEqual([]);
     expect(b.cols.some((c) => c.today)).toBe(true);
+    // Future days project overdue: still open and due by the end of that day.
+    const later = task({ trade: "fewb", received: NOW + 30 * H }); // due a few days out
+    const b2 = dueBoard(data([over, later]), [over, later], NOW);
+    const g2 = b2.groups.find((g) => g.name === "GPM")!;
+    const dueCol = g2.due.findIndex((x) => x.includes(later.id));
+    expect(b2.cols[dueCol].future).toBe(true);
+    expect(g2.over[dueCol]).toEqual([later.id]); // overdue by the end of its due day if not resolved
+    expect(g2.over[dueCol - 1]).toEqual([]);
+    const r2 = b2.groups.find((g) => g.name === "RCM")!;
+    expect(r2.over.slice(b2.cols.findIndex((c) => c.future)).every((x) => x.includes(over.id))).toBe(true); // stays overdue on every future day
   });
 });
 

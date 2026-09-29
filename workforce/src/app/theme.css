@@ -225,3 +225,4 @@ tr.role-row > td { background: var(--role-bg); }
 .qb .qb-n:hover, .qb .qb-n.on { background: var(--color-accent-100); }
 .qb .qb-n.qb-over { color: #b3261e; }
 .qb .qb-n.qb-over:hover, .qb .qb-n.qb-over.on { background: #fde8e6; }
+.qb .qb-n.qb-proj { font-style: italic; font-weight: 500; opacity: 0.75; }

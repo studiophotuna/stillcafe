@@ -152,10 +152,14 @@ function DueBoard({ board, pick, onPick }: { board: { cols: BoardCol[]; groups: 
   const { cols, groups } = board;
   if (!groups.length) return null;
   const total = (k: "due" | "over") => cols.map((_, i) => groups.flatMap((g) => g[k][i]));
-  const all: BoardGroup = { id: "all", name: "All systems", due: total("due"), over: total("over") };
-  const cell = (ids: string[], label: string, over: boolean) =>
+  const all: BoardGroup = { id: "all", name: "All systems", due: total("due"), over: total("over"), overNow: groups.flatMap((g) => g.overNow) };
+  const cell = (ids: string[], label: string, over: boolean, proj = false) =>
     ids.length ? (
-      <button className={"qb-n" + (over ? " qb-over" : "") + (pick === label ? " on" : "")} onClick={() => onPick(ids, label)} title={`Show ${label}`}>
+      <button
+        className={"qb-n" + (over ? " qb-over" : "") + (proj ? " qb-proj" : "") + (pick === label ? " on" : "")}
+        onClick={() => onPick(ids, label)}
+        title={proj ? `${ids.length} still open and due by then: overdue if not resolved` : `Show ${label}`}
+      >
         {ids.length}
       </button>
     ) : (
@@ -167,17 +171,17 @@ function DueBoard({ board, pick, onPick }: { board: { cols: BoardCol[]; groups: 
         <th colSpan={cols.length + 2}>{g.name}</th>
       </tr>
       {(["due", "over"] as const).map((k) => {
-        const sum = g[k].flat();
+        const sum = k === "over" ? g.overNow : [...new Set(g[k].flat())];
         const lab = k === "due" ? "Due" : "Overdue";
         return (
           <tr key={k} className={k === "over" ? "qb-row-over" : undefined} style={bold ? { fontWeight: 600 } : undefined}>
             <td className="qb-lab">{lab}</td>
             {cols.map((c, i) => (
               <td key={c.key} className={"qb-c" + (c.today ? " qb-today" : "")}>
-                {cell(g[k][i], `${g.name} · ${lab} · ${c.label === "Today" ? "today" : c.sub}`, k === "over")}
+                {cell(g[k][i], `${g.name} · ${k === "over" && c.future ? "Overdue by end of" : lab} · ${c.label === "Today" ? "today" : c.sub}`, k === "over", k === "over" && !!c.future)}
               </td>
             ))}
-            <td className="qb-c qb-tot">{cell(sum, `${g.name} · ${lab} · all days`, k === "over")}</td>
+            <td className="qb-c qb-tot">{cell(sum, `${g.name} · ${k === "over" ? "Overdue now" : "Due · all days"}`, k === "over")}</td>
           </tr>
         );
       })}
@@ -187,7 +191,7 @@ function DueBoard({ board, pick, onPick }: { board: { cols: BoardCol[]; groups: 
     <Blueprint as="section" className="panel tight scroll-x" style={{ gap: 8 }}>
       <div className="chart-head">
         <h2 className="h2">Due and overdue by day</h2>
-        <span className="small">Open tickets by due date · click a number to list them</span>
+        <span className="small">Open tickets by due date · future Overdue (in italics) = still open and due by then, if not resolved · click a number to list them</span>
       </div>
       <table className="table qb">
         <thead>
@@ -199,7 +203,10 @@ function DueBoard({ board, pick, onPick }: { board: { cols: BoardCol[]; groups: 
                 <div className="small">{c.sub}</div>
               </th>
             ))}
-            <th className="qb-c qb-tot">Total</th>
+            <th className="qb-c qb-tot">
+              <div>Total</div>
+              <div className="small">overdue now</div>
+            </th>
           </tr>
         </thead>
         <tbody>
