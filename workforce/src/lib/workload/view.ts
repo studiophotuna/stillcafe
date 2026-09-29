@@ -116,6 +116,7 @@ export function taskDetail(d: WorkloadData, t: Task, now: number) {
     .concat(timeRows)
     .concat(d.fields.map((f) => ({ label: f.label, value: (t.fields[f.key] ?? "") === "" ? "—" : String(t.fields[f.key]) })))
     .concat(cxRows(d, t))
+    .concat(t.delay ? [{ label: "Delay remarks", value: t.delay }] : [])
     // Every pending (on hold) period with its date and reason.
     .concat(
       holdPeriods(t, now).map((p, i, all) => ({

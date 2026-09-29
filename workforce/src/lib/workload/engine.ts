@@ -246,9 +246,13 @@ export const fmtMin = (m: number) => (m >= 60 ? `${Math.floor(m / 60)} h${m % 60
  * Mark done (required fields must be filled — they may be blank when uploaded), then
  * auto-feed the next task if the team uses it. Overtime is reported at End work.
  */
-export function completeTask(d: WorkloadData, id: string, vals: Task["fields"], pid: number, now: number, cx?: Record<string, number> | null): Outcome {
+export function completeTask(d: WorkloadData, id: string, vals: Task["fields"], pid: number, now: number, cx?: Record<string, number> | null, delay?: string | null): Outcome {
   const t = d.tasks.find((x) => x.id === id);
   if (!t || t.status !== "in_progress" || t.assignee !== pid) return { data: d };
+  // Resolving after the due time needs delay remarks.
+  const late = now > due(t, d);
+  const why = typeof delay === "string" ? delay.trim().slice(0, 500) : "";
+  if (late && !why) return { data: d, message: `${id} is overdue. Enter delay remarks to resolve it.` };
   // Complexity: the contracts by level; with a number field as the productivity basis, it's their total.
   let counts: Record<string, number> | null = null;
   if (cxOn(d.settings)) {
@@ -260,7 +264,15 @@ export function completeTask(d: WorkloadData, id: string, vals: Task["fields"], 
   const miss = missingRequired(d.fields, vals);
   if (miss.length) return { data: d, message: `Fill in ${miss.join(", ")} before resolving ${id}.` };
   const note = counts ? ` · ${cxText(d.settings, counts)}` : "";
-  const done = patch(d, id, (x) => ({ ...x, status: "done", doneAt: now, fields: { ...vals }, ...(counts ? { cx: counts, cxReview: null } : {}), history: hist(x, now, "Done" + note) }));
+  const done = patch(d, id, (x) => ({
+    ...x,
+    status: "done",
+    doneAt: now,
+    fields: { ...vals },
+    ...(counts ? { cx: counts, cxReview: null } : {}),
+    ...(late ? { delay: why } : {}),
+    history: hist(x, now, "Done" + note + (late ? ` · Delay: ${why}` : "")),
+  }));
   const s = d.settings;
   const feed = s.autoFeed && (s.mode === "fifo" || done.tasks.some((x) => x.assignee === pid && x.status === "assigned"));
   if (feed) {

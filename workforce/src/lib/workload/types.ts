@@ -134,6 +134,8 @@ export interface Task {
   cx?: Record<string, number> | null;
   /** An admin's check of the complexity (when the handling time didn't match it). */
   cxReview?: CxReview | null;
+  /** Why it was late: required when a ticket is resolved after its due time. */
+  delay?: string | null;
 }
 
 /** A complexity level: its own daily target (put first) and average handling time per contract. */

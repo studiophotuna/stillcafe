@@ -35,7 +35,7 @@ export type Action =
   | { type: "startTask"; id: string; pid: number }
   | { type: "hold"; id: string; reason: string }
   | { type: "resume"; id: string; pid: number }
-  | { type: "complete"; id: string; vals: Task["fields"]; pid: number; cx?: Record<string, number> | null }
+  | { type: "complete"; id: string; vals: Task["fields"]; pid: number; cx?: Record<string, number> | null; delay?: string | null }
   | { type: "reviewCx"; id: string; cx?: Record<string, number> | null; note?: string; by: number }
   | { type: "away"; kind: ActivityKind; pid: number }
   | { type: "back"; pid: number }
@@ -63,7 +63,7 @@ export function applyAction(d: WorkloadData, a: Action, now: number): Outcome {
     case "startTask": return startTask(d, a.id, a.pid, now);
     case "hold": return holdTask(d, a.id, a.reason, now);
     case "resume": return resumeTask(d, a.id, a.pid, now);
-    case "complete": return completeTask(d, a.id, a.vals, a.pid, now, a.cx);
+    case "complete": return completeTask(d, a.id, a.vals, a.pid, now, a.cx, a.delay);
     case "reviewCx": return reviewCx(d, a.id, a.by, now, a.cx, a.note);
     case "away": return startAway(d, a.pid, a.kind, now);
     case "back": return backToWork(d, a.pid, now);

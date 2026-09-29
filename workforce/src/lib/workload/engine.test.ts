@@ -903,3 +903,29 @@ describe("holiday duty and rest day overtime", async () => {
     expect(E.endWork(n, ANA, 0, Date.parse("2026-09-24T18:00:00+08:00")).data.activities[0].otKind).toBeNull();
   });
 });
+
+describe("delay remarks and the due / overdue board", async () => {
+  const E = await import("./engine");
+  const { dueBoard } = await import("./dueBoard");
+  it("needs delay remarks to resolve an overdue ticket", () => {
+    const t = task({ status: "in_progress", assignee: ANA, startedAt: NOW - H, received: NOW - 100 * H, fields: { ticket: "1", carrier: "MSK", contracts: 1 } });
+    const d = data([t]);
+    expect(E.completeTask(d, t.id, t.fields, ANA, NOW).message).toMatch(/overdue\. Enter delay remarks/);
+    const ok = E.completeTask(d, t.id, t.fields, ANA, NOW, null, "  Waited for the carrier  ");
+    expect(get(ok.data, t.id)).toMatchObject({ status: "done", delay: "Waited for the carrier" });
+    // On time: no remarks needed.
+    const fresh = task({ status: "in_progress", assignee: ANA, startedAt: NOW - H, received: NOW - H, fields: { ticket: "1", carrier: "MSK", contracts: 1 } });
+    expect(get(E.completeTask(data([fresh]), fresh.id, fresh.fields, ANA, NOW).data, fresh.id).status).toBe("done");
+  });
+  it("counts open tickets by due day and system", () => {
+    const over = task({ trade: "lcl", received: NOW - 100 * H }); // RCM, overdue
+    const soon = task({ trade: "fewb", received: NOW - H }); // GPM, still due
+    const b = dueBoard(data([over, soon]), [over, soon], NOW);
+    const rcm = b.groups.find((g) => g.name === "RCM")!;
+    const gpm = b.groups.find((g) => g.name === "GPM")!;
+    expect(rcm.over.flat()).toEqual([over.id]);
+    expect(rcm.due.flat()).toEqual([]);
+    expect(gpm.due.flat()).toEqual([soon.id]);
+    expect(b.cols.some((c) => c.today)).toBe(true);
+  });
+});

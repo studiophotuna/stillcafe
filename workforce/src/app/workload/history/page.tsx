@@ -55,7 +55,7 @@ export default function HistoryPage() {
   const csv = () => {
     const iso = (ms: number | null) => (ms ? new Date(ms).toISOString() : "");
     const q2 = (x: unknown) => `"${String(x ?? "").replace(/"/g, '""')}"`;
-    const head = ["Task ID", ...(tf ? [tf.label] : []), "Title", "System › Trade", "Task type", "SLA (h)", "Due", "Done by", "Received", "Started", "Finished", "Worked (min)", "On time", "Pending (min)", "Pending dates", "Pending reasons"].concat(
+    const head = ["Task ID", ...(tf ? [tf.label] : []), "Title", "System › Trade", "Task type", "SLA (h)", "Due", "Done by", "Received", "Started", "Finished", "Worked (min)", "On time", "Delay remarks", "Pending (min)", "Pending dates", "Pending reasons"].concat(
       data.fields.filter((f) => f !== tf).map((f) => f.label),
     );
     const rows = list.map((t) =>
@@ -73,6 +73,7 @@ export default function HistoryPage() {
         iso(t.doneAt),
         Math.round(taskWorkMs(data, t, now) / 60000),
         t.doneAt! <= due(t, data) ? "Yes" : "No",
+        t.delay ?? "",
         Math.round(holdPeriods(t, now).reduce((a, p) => a + ((p.to ?? now) - p.from), 0) / 60000),
         holdPeriods(t, now).map((p) => `${iso(p.from)} to ${iso(p.to)}`).join("; "),
         holdPeriods(t, now).map((p) => p.reason).join("; "),

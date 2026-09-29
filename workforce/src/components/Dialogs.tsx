@@ -2,8 +2,8 @@
 
 import { useEffect, useState } from "react";
 import { fieldOptions, trPathOf } from "@/lib/workload/constants";
-import { nowMs } from "@/lib/workload/clock";
-import { fmtMin, missingRequired, otAvailMin, OT_KIND, type AssistOffer, slaText, otProcesses, suggestOtSplit, asksOtSplit, typesFor, cxLevels, cxTotal, cxField } from "@/lib/workload/engine";
+import { fmtT, nowMs } from "@/lib/workload/clock";
+import { due, fmtMin, missingRequired, otAvailMin, OT_KIND, type AssistOffer, slaText, otProcesses, suggestOtSplit, asksOtSplit, typesFor, cxLevels, cxTotal, cxField } from "@/lib/workload/engine";
 import { useWorkload } from "@/lib/workload/store";
 import type { Priority, Task, OtPart } from "@/lib/workload/types";
 import { assignOptions, taskDetail } from "@/lib/workload/view";
@@ -258,6 +258,7 @@ function DoneDialog({ id }: { id: string }) {
   const [vals, setVals] = useState<Task["fields"]>(() => ({ ...(t?.fields ?? {}) }));
   // Complexity: contracts per level; with a number field as the productivity basis, that field is their total.
   const levels = cxLevels(data.settings);
+  const [delay, setDelay] = useState(t?.delay ?? "");
   const [cx, setCx] = useState<Record<string, string>>(() => Object.fromEntries(levels.map((l) => [l.id, t?.cx?.[l.id] ? String(t.cx[l.id]) : ""])));
   if (!t) return null;
   const close = () => setDialog(null);
@@ -266,7 +267,11 @@ function DoneDialog({ id }: { id: string }) {
   const bf = levels.length > 0 ? cxField(data) : undefined;
   const fromCx = !!bf;
   const eff = fromCx ? { ...vals, [bf!.key]: total || "" } : vals;
-  const miss = missingRequired(data.fields, eff).concat(levels.length && !total ? ["contracts by complexity"] : []);
+  // Resolving after the due time: delay remarks are required.
+  const late = nowMs() > due(t, data);
+  const miss = missingRequired(data.fields, eff)
+    .concat(levels.length && !total ? ["contracts by complexity"] : [])
+    .concat(late && !delay.trim() ? ["delay remarks"] : []);
   return (
     <Modal onClose={close} width={520}>
       <div className="dialog-scroll" style={{ gap: 12, padding: 20 }}>
@@ -276,6 +281,23 @@ function DoneDialog({ id }: { id: string }) {
         <span className="muted">
           {t.id} · {t.title}
         </span>
+        {late && (
+          <div className="field">
+            <label htmlFor="done-delay">Delay remarks *</label>
+            <textarea
+              id="done-delay"
+              className="input"
+              value={delay}
+              maxLength={500}
+              onChange={(e) => setDelay(e.target.value)}
+              placeholder="Why is it late? e.g. Waited for the carrier’s rate sheet"
+              style={{ minHeight: 70 }}
+            />
+            <span className="small" style={{ color: "var(--color-accent-800)" }}>
+              This ticket is past its due time (due {fmtT(due(t, data))}).
+            </span>
+          </div>
+        )}
         {levels.length > 0 && (
           <div className="ot-split">
             <strong>Contracts by complexity *</strong>
@@ -346,7 +368,7 @@ function DoneDialog({ id }: { id: string }) {
             disabled={miss.length > 0}
             onClick={() => {
               close();
-              run({ type: "complete", id, vals: eff, pid: me.id, ...(levels.length ? { cx: counts } : {}) });
+              run({ type: "complete", id, vals: eff, pid: me.id, ...(levels.length ? { cx: counts } : {}), ...(late ? { delay } : {}) });
             }}
           >
             Resolve ticket

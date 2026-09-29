@@ -189,7 +189,7 @@ export default function DashboardPage() {
     sheets.push({
       name: "Tasks done",
       rows: [
-        ["Task ID", ...(tf ? [tf.label] : []), "Title", "System › Trade", "Task type", "Priority", "SLA (h)", "Received", "Due", "Started", "Finished", "Worked (min)", "On time", "Done by", ...(cxOn(s) ? ["Complexity", "Expected (min)", "Complexity check"] : []), ...data.fields.filter((f) => f !== tf).map((f) => f.label)],
+        ["Task ID", ...(tf ? [tf.label] : []), "Title", "System › Trade", "Task type", "Priority", "SLA (h)", "Received", "Due", "Started", "Finished", "Worked (min)", "On time", "Delay remarks", "Done by", ...(cxOn(s) ? ["Complexity", "Expected (min)", "Complexity check"] : []), ...data.fields.filter((f) => f !== tf).map((f) => f.label)],
         ...view.doneTasks.map((t): Row => [
           t.id,
           ...(tf ? [ticketOf(data, t)] : []),
@@ -204,6 +204,7 @@ export default function DashboardPage() {
           T(t.doneAt),
           min(taskWorkMs(view.withActs, t, view.until)),
           t.doneAt! <= due(t, data) ? "Yes" : "No",
+          t.delay ?? "",
           data.people.find((p) => p.id === t.assignee)?.name ?? "",
           ...(cxOn(s)
             ? (() => {
