@@ -168,14 +168,20 @@ function AppLinksPanel() {
   const [leave, setLeave] = useState(l.bipoLeave ?? "");
   const [ot, setOt] = useState(l.bipoOt ?? "");
   const [quick, setQuick] = useState<{ label: string; url: string }[]>(l.quick ?? []);
-  const [pay, setPay] = useState((l.payrollDays ?? []).join(", "));
+  // Payroll cut-offs vary month to month, so they're a list of dates for the year.
+  const [payDates, setPayDates] = useState<string[]>(l.payrollDates ?? []);
   const [payNote, setPayNote] = useState(l.payrollNote ?? "");
-  const payDays = pay.split(/[,\s]+/).filter(Boolean).map(Number);
-  const payBad = payDays.some((n) => !Number.isInteger(n) || n < 1 || n > 31);
+  const [addDate, setAddDate] = useState("");
+  const [paste, setPaste] = useState("");
+  const addDates = (xs: string[]) => setPayDates([...new Set(payDates.concat(xs.filter((x) => /^\d{4}-\d{2}-\d{2}$/.test(x))))].sort());
+  const pasted = paste.split(/[\s,;]+/).filter(Boolean);
+  const pasteBad = pasted.filter((x) => !/^\d{4}-\d{2}-\d{2}$/.test(x) || Number.isNaN(Date.parse(x)));
+  const byMonth = payDates.reduce<Record<string, string[]>>((a, d) => ({ ...a, [d.slice(0, 7)]: (a[d.slice(0, 7)] ?? []).concat(d) }), {});
+  const MON = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
   const save = () =>
     s.run({
       type: "setLinks",
-      links: { bipoLeave: leave, bipoOt: ot, quick: quick.filter((q) => q.label.trim() && q.url.trim()), payrollDays: payBad ? l.payrollDays : payDays, payrollNote: payNote },
+      links: { bipoLeave: leave, bipoOt: ot, quick: quick.filter((q) => q.label.trim() && q.url.trim()), payrollDates: payDates, payrollNote: payNote },
     });
   return (
     <Blueprint as="section" className="panel">
@@ -191,14 +197,71 @@ function AppLinksPanel() {
           <input id="bipo-o" className="input" value={ot} onChange={(e) => setOt(e.target.value)} placeholder="https://…" />
         </div>
       </div>
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(320px,1fr))", gap: 12 }}>
-        <div className="field">
-          <label htmlFor="pay-d">Payroll cut-off days of the month</label>
-          <input id="pay-d" className="input" value={pay} onChange={(e) => setPay(e.target.value)} placeholder="e.g. 10, 25" />
-          <span className="small" style={{ color: payBad ? "var(--color-accent-800)" : undefined }}>
-            {payBad ? "Use days 1 to 31, separated by commas." : "Everyone gets a pop-up reminder from 2 days before each cut-off. 31 = the last day of the month."}
-          </span>
+      <div className="field">
+        <label htmlFor="pay-add">Payroll cut-off dates</label>
+        <span className="small">Everyone gets a pop-up reminder from 2 days before each cut-off. Add the dates for the year, e.g. 15 and 30 Sep, 13 and 27 Oct.</span>
+        <div className="row" style={{ gap: 8 }}>
+          <input id="pay-add" className="input" type="date" value={addDate} onChange={(e) => setAddDate(e.target.value)} style={{ width: 170 }} />
+          <button
+            className="btn btn-secondary btn-36"
+            disabled={!addDate}
+            onClick={() => {
+              addDates([addDate]);
+              setAddDate("");
+            }}
+          >
+            Add date
+          </button>
         </div>
+        {payDates.length ? (
+          <div className="pay-months">
+            {Object.entries(byMonth).map(([ym, ds]) => (
+              <div key={ym} className="pay-month" style={{ opacity: ym < s.today.slice(0, 7) ? 0.55 : 1 }}>
+                <strong>
+                  {MON[Number(ym.slice(5, 7)) - 1]} {ym.slice(0, 4)}
+                </strong>
+                {ds.map((d) => (
+                  <span key={d} className="ql-chip">
+                    <span style={{ padding: "0 4px" }}>{Number(d.slice(8, 10))}</span>
+                    <button aria-label={`Remove ${d}`} onClick={() => setPayDates(payDates.filter((x) => x !== d))}>
+                      ×
+                    </button>
+                  </span>
+                ))}
+              </div>
+            ))}
+          </div>
+        ) : (
+          <span className="small">No cut-off dates yet, so no reminder is shown.</span>
+        )}
+        <details>
+          <summary className="small" style={{ cursor: "pointer" }}>
+            Paste several dates at once
+          </summary>
+          <div className="row" style={{ gap: 8, marginTop: 6, alignItems: "flex-start" }}>
+            <textarea
+              className="input"
+              aria-label="Dates to add"
+              value={paste}
+              onChange={(e) => setPaste(e.target.value)}
+              placeholder="2026-09-15, 2026-09-30, 2026-10-13, 2026-10-27"
+              style={{ flex: 1, minHeight: 60 }}
+            />
+            <button
+              className="btn btn-secondary btn-36"
+              disabled={!pasted.length || pasteBad.length > 0}
+              onClick={() => {
+                addDates(pasted);
+                setPaste("");
+              }}
+            >
+              Add {pasted.length || ""}
+            </button>
+          </div>
+          {pasteBad.length > 0 && <span className="small" style={{ color: "var(--color-accent-800)" }}>Use yyyy-mm-dd dates: {pasteBad.slice(0, 3).join(", ")}</span>}
+        </details>
+      </div>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(320px,1fr))", gap: 12 }}>
         <div className="field">
           <label htmlFor="pay-n">Reminder message (optional)</label>
           <input id="pay-n" className="input" value={payNote} maxLength={200} onChange={(e) => setPayNote(e.target.value)} placeholder="e.g. File leave and overtime in BIPO before the cut-off." />

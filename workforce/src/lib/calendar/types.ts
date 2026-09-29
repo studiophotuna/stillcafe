@@ -40,8 +40,8 @@ export interface AppLinks {
   bipoOt?: string;
   /** Shown to everyone in the Quick links bar. */
   quick?: QuickLink[];
-  /** Payroll cut-off days of the month (e.g. 10 and 25; 31 = the month's last day). Everyone is reminded from 2 days before. */
-  payrollDays?: number[];
+  /** Payroll cut-off dates (yyyy-mm-dd), set for the year as they vary month to month. Everyone is reminded from 2 days before. */
+  payrollDates?: string[];
   /** Extra line in the payroll reminder. */
   payrollNote?: string;
 }

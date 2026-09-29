@@ -42,7 +42,7 @@ export async function GET() {
     const h = me && c.alive(me, today) ? c.holFor(me, today) : null;
     const holiday = h && !isWk(today) ? { pid: me!.id, date: today, name: h.name, answer: data.overrides[me!.id + "|" + today] ?? null } : null;
     // Payroll cut-off: from 2 days before it until the day itself.
-    const cut = nextCutoff(today, data.links?.payrollDays);
+    const cut = nextCutoff(today, data.links?.payrollDates);
     const payroll = cut && daysBetween(today, cut) <= 2 ? { date: cut, days: daysBetween(today, cut), note: data.links?.payrollNote ?? "" } : null;
     return NextResponse.json({ leave, ot, holiday, payroll, links: { leave: data.links?.bipoLeave ?? "", ot: data.links?.bipoOt ?? "" } });
   } catch (e) {

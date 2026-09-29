@@ -377,7 +377,7 @@ function applyInner(d: CalendarData, a: CalAction, today: string, now: number): 
     case "setLinks": {
       const ok = (u: unknown) => typeof u === "string" && /^https:\/\/\S{3,490}$/.test(u.trim());
       const l = a.links ?? {};
-      const payDays = [...new Set((Array.isArray(l.payrollDays) ? l.payrollDays : []).map(Number).filter((n) => Number.isInteger(n) && n >= 1 && n <= 31))].sort((x, y) => x - y).slice(0, 6);
+      const payDates = [...new Set((Array.isArray(l.payrollDates) ? l.payrollDates : []).filter((x) => typeof x === "string" && /^\d{4}-\d{2}-\d{2}$/.test(x) && !Number.isNaN(Date.parse(x))))].sort().slice(-120);
       const links: AppLinks = {
         bipoLeave: ok(l.bipoLeave) ? l.bipoLeave!.trim() : undefined,
         bipoOt: ok(l.bipoOt) ? l.bipoOt!.trim() : undefined,
@@ -385,7 +385,7 @@ function applyInner(d: CalendarData, a: CalAction, today: string, now: number): 
           .filter((q) => q && ok(q.url) && typeof q.label === "string" && q.label.trim())
           .slice(0, 20)
           .map((q) => ({ label: q.label.trim().slice(0, 40), url: q.url.trim() })),
-        payrollDays: payDays.length ? payDays : undefined,
+        payrollDates: payDates.length ? payDates : undefined,
         payrollNote: typeof l.payrollNote === "string" && l.payrollNote.trim() ? l.payrollNote.trim().slice(0, 200) : undefined,
       };
       return { data: { ...d, links }, message: "Links saved." };

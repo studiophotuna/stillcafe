@@ -708,12 +708,13 @@ describe("attendance summary, reports, payroll and approvers", async () => {
     const sum = buildReport(c, "summary", "rm", TODAY, TODAY);
     expect(sum.rows[1][2]).toBe("Rate Management");
   });
-  it("finds the next payroll cut-off", () => {
-    expect(nextCutoff("2026-09-24", [10, 25])).toBe("2026-09-25");
-    expect(nextCutoff("2026-09-26", [10, 25])).toBe("2026-10-10");
-    expect(nextCutoff("2026-02-20", [31])).toBe("2026-02-28");
-    expect(nextCutoff("2026-09-24", [])).toBeNull();
-    expect(daysBetween("2026-09-23", "2026-09-25")).toBe(2);
+  it("finds the next payroll cut-off from the dates set", () => {
+    const dates = ["2026-10-27", "2026-09-15", "2026-09-30", "2026-10-13"];
+    expect(nextCutoff("2026-09-24", dates)).toBe("2026-09-30");
+    expect(nextCutoff("2026-10-01", dates)).toBe("2026-10-13");
+    expect(nextCutoff("2026-10-28", dates)).toBeNull();
+    expect(nextCutoff("2026-09-24", undefined)).toBeNull();
+    expect(daysBetween("2026-09-28", "2026-09-30")).toBe(2);
   });
   it("records who decided a request", () => {
     const d = fresh();
