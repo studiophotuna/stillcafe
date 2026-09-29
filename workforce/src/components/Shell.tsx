@@ -47,6 +47,7 @@ export function Shell({ children }: { children: React.ReactNode }) {
         { href: "/workload/admin/allocation", icon: "rules", label: "Allocation" },
         { href: "/workload/admin/sla", icon: "check", label: "SLA & task types" },
         { href: "/workload/admin/complexity", icon: "fields", label: "Complexity", badge: cxQs },
+        { href: "/workload/admin/aht", icon: "dash", label: "Handling time" },
         { href: "/workload/admin/targets", icon: "targets", label: "Targets" },
       ]
     : [];

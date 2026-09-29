@@ -70,8 +70,6 @@ export default function ComplexityPage() {
             </span>
           ) : chk?.flag === "slow" ? (
             <span className="tag tag-outline">Took longer · maybe tagged too simple</span>
-          ) : chk?.flag === "fast" ? (
-            <span className="tag tag-outline">Much quicker · maybe tagged too complex</span>
           ) : null}
         </td>
         <td className="nowrap" style={{ textAlign: "right" }}>
@@ -130,7 +128,7 @@ export default function ComplexityPage() {
             <span className="small">Filled in from the counts at Mark done, so members don’t enter it twice.</span>
           </div>
           <div className="field">
-            <label htmlFor="cx-tol">Question the tagging when the time worked differs by more than</label>
+            <label htmlFor="cx-tol">Question the tagging when the time worked is longer than expected by more than</label>
             <div className="row" style={{ gap: 6 }}>
               <input
                 id="cx-tol"
@@ -151,8 +149,8 @@ export default function ComplexityPage() {
               <span>%</span>
             </div>
             <span className="small">
-              From the expected time (contracts × average handling time). At {cx.tol ?? 50}%: 3 Simple at 30 min = 1 h 30 min expected, questioned above{" "}
-              {dur(90 * 60000 * (1 + (cx.tol ?? 50) / 100))} or below {dur(Math.max(0, 90 * 60000 * (1 - (cx.tol ?? 50) / 100)))}.
+              From the expected time (contracts × average handling time). At {cx.tol ?? 50}%: 3 Simple at 30 min = 1 h 30 min expected, questioned when it took more than{" "}
+              {dur(90 * 60000 * (1 + (cx.tol ?? 50) / 100))}.
             </span>
           </div>
         </Blueprint>
@@ -239,7 +237,7 @@ export default function ComplexityPage() {
         <div className="row" style={{ justifyContent: "space-between" }}>
           <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
             <h2 className="h2">Questions · {qs.length}</h2>
-            <span className="small">Done tickets whose time worked (excluding breaks and time on hold) doesn’t match their complexity. Confirm the tagging or correct it; productivity follows the correction.</span>
+            <span className="small">Done tickets that took much longer (excluding breaks and time on hold) than their complexity suggests. Confirm the tagging or correct it; productivity follows the correction.</span>
           </div>
           <label className="row small" style={{ gap: 6, cursor: "pointer" }}>
             <input type="checkbox" className="check" checked={showChecked} onChange={() => setShowChecked(!showChecked)} />
@@ -266,7 +264,7 @@ export default function ComplexityPage() {
             </table>
           </div>
         ) : (
-          <div className="banner">No questions. Every tagged ticket’s time is within {cx.tol ?? 50}% of its expected time.</div>
+          <div className="banner">No questions. No tagged ticket took more than {cx.tol ?? 50}% longer than expected.</div>
         )}
       </Blueprint>
       {fix && <FixDialog t={fix} onClose={() => setFix(null)} />}

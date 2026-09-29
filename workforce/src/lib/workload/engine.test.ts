@@ -849,8 +849,8 @@ describe("complexity", async () => {
     const d = data([slow, ok, fast], cxs());
     expect(E.cxCheck(d, slow)).toMatchObject({ expMs: 90 * M, actMs: 4 * H, flag: "slow" });
     expect(E.cxCheck(d, ok)!.flag).toBeNull();
-    expect(E.cxCheck(d, fast)!.flag).toBe("fast");
-    expect(E.cxQuestions(d).map((t) => t.id).sort()).toEqual([slow.id, fast.id].sort());
+    expect(E.cxCheck(d, fast)!.flag).toBeNull(); // quicker than expected isn't questioned
+    expect(E.cxQuestions(d).map((t) => t.id)).toEqual([slow.id]);
     // Confirm one, correct the other: both leave the list; the correction updates the contracts.
     const c1 = E.reviewCx(d, fast.id, 23, at("16:00")).data;
     expect(get(c1, fast.id).cxReview).toMatchObject({ by: 23, verdict: "ok" });
@@ -859,5 +859,28 @@ describe("complexity", async () => {
     expect(E.cxQuestions(c2)).toEqual([]);
     // Only admins may check it.
     expect(authorizeWl({ type: "reviewCx", id: slow.id, by: 0 }, d, ANA)).toEqual({ error: "Only Workload admins can do that." });
+  });
+});
+
+describe("average handling time", async () => {
+  const { ahtStats, perContract, perTicket, vsExpected } = await import("./aht");
+  const at = (hm: string) => Date.parse(`2026-09-24T${hm}:00+08:00`);
+  const levels = [
+    { id: "simple", name: "Simple", aht: 30 },
+    { id: "complex", name: "Complex", aht: 120 },
+  ];
+  it("per ticket, per contract, per level (time shared by set AHT) and vs expected", () => {
+    const a = task({ status: "done", assignee: ANA, trade: "lcl", startedAt: at("09:00"), doneAt: at("10:00"), cx: { simple: 2 }, fields: { contracts: 2 } }); // 60 of 60 expected
+    const b = task({ status: "done", assignee: ANA, trade: "lcl", startedAt: at("10:00"), doneAt: at("13:00"), cx: { simple: 1, complex: 1 }, fields: { contracts: 2 } }); // 180 of 150
+    const d = data([a, b], { complexity: { on: true, levels, tol: 50 }, prodBasis: "contracts" });
+    const st = ahtStats(d, at("00:00"), at("23:59"));
+    expect(st.total).toMatchObject({ tickets: 2, contracts: 4 });
+    expect(perTicket(st.total)).toBe(2 * H);
+    expect(perContract(st.total)).toBe(H);
+    // Ticket b: 180 min shared 30:120 → Simple 36 min, Complex 144 min.
+    const simple = st.levels.find((x) => x.level.id === "simple")!.row;
+    expect(perContract(simple)).toBe(((60 + 36) / 3) * M);
+    expect(perContract(st.levels.find((x) => x.level.id === "complex")!.row)).toBe(144 * M);
+    expect(vsExpected(st.members[0])).toBe(Math.round((240 / 210) * 100));
   });
 });

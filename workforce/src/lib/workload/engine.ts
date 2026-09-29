@@ -991,8 +991,8 @@ export interface CxCheck {
   expMs: number;
   /** Time actually worked on the ticket, ms. */
   actMs: number;
-  /** "slow": took much longer than the tagging suggests (maybe tagged too simple); "fast": much quicker (maybe tagged too complex). */
-  flag: "slow" | "fast" | null;
+  /** "slow": took much longer than the tagging suggests (maybe tagged too simple). */
+  flag: "slow" | null;
 }
 
 /** Compare a done ticket's handling time with what its complexity tagging implies (every tagged level needs an average handling time). */
@@ -1008,7 +1008,7 @@ export function cxCheck(d: WorkloadData, t: Task): CxCheck | null {
   if (!exp) return null;
   const act = taskWorkMs(d, t, t.doneAt);
   const tol = Math.max(0, d.settings.complexity?.tol ?? 50) / 100;
-  return { expMs: exp, actMs: act, flag: act > exp * (1 + tol) ? "slow" : act < exp * Math.max(0, 1 - tol) ? "fast" : null };
+  return { expMs: exp, actMs: act, flag: act > exp * (1 + tol) ? "slow" : null };
 }
 
 /** Done tickets whose handling time doesn't match their complexity and that no admin has checked yet. */

@@ -166,7 +166,7 @@ function cxRows(d: WorkloadData, t: Task) {
       label: "Handling time",
       value:
         `${dur(chk.actMs)} worked · ${dur(chk.expMs)} expected` +
-        (chk.flag === "slow" ? " · took much longer than this complexity suggests" : chk.flag === "fast" ? " · much quicker than this complexity suggests" : ""),
+        (chk.flag === "slow" ? " · took much longer than this complexity suggests" : ""),
     });
   const r = t.cxReview;
   if (r)
