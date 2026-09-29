@@ -1,5 +1,6 @@
 "use client";
 
+import { DateRangePicker } from "@/components/DateRangePicker";
 import { useState } from "react";
 import { bcpScopeOpts } from "@/components/calendar/CalDialogs";
 import { Blueprint, Icon } from "@/components/ui";
@@ -69,13 +70,17 @@ export default function ReportsPage() {
               ))}
             </select>
           </div>
-          <div className="field">
-            <label htmlFor="rep-f">From</label>
-            <input id="rep-f" className="input" type="date" value={from} onChange={(e) => setFrom(e.target.value)} />
-          </div>
-          <div className="field">
-            <label htmlFor="rep-to">To</label>
-            <input id="rep-to" className="input" type="date" value={to} min={from} onChange={(e) => setTo(e.target.value)} />
+          <div className="field" style={{ gridColumn: "span 2" }}>
+            <label>Dates</label>
+            <DateRangePicker
+              value={{ from, to }}
+              onChange={(r) => {
+                setFrom(r?.from ?? s.today);
+                setTo(r?.to ?? s.today);
+              }}
+              today={s.today}
+              id="rep"
+            />
           </div>
           {type === "bcp" && (
             <div className="field">
