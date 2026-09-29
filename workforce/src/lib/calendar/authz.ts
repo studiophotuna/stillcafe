@@ -74,6 +74,8 @@ export function authorizeCal(a: CalAction, c: Cal, me: number): { action: CalAct
       return ok(a.pid === me || r.adminOf(a.pid), { ...a, actor: me });
     case "restDayWork":
       return ok(a.pid === me || r.adminOf(a.pid), { ...a, actor: me });
+    case "bulkMembers":
+      return ok(a.pids.length > 0 && a.pids.every((pid) => r.adminOf(pid)));
     case "setHcHistory":
     case "setOverride":
     case "setShiftDay":

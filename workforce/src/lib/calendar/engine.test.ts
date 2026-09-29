@@ -753,3 +753,21 @@ describe("approvals by leaders", async () => {
     expect(bad.error).toMatch(/approver must be/);
   });
 });
+
+describe("update several members at once", async () => {
+  const { authorizeCal } = await import("./authz");
+  it("changes only the fields given, skips roles that don't fit, and needs admin rights over everyone", () => {
+    const d = fresh();
+    const r = run(d, { type: "bulkMembers", pids: [ANA, 8, 15], approver: 24, shift: "N", wfhDays: [3] });
+    const got = (id: number) => r.data.people.find((p) => p.id === id)!;
+    expect([ANA, 8, 15].map((id) => [got(id).approver, got(id).shift, got(id).wfhDays])).toEqual([[24, "N", [3]], [24, "N", [3]], [24, "N", [3]]]);
+    expect(got(ANA).level).toBe(d.people.find((p) => p.id === ANA)!.level); // role kept
+    const lv = run(d, { type: "bulkMembers", pids: [ANA, 8], level: "specialist" });
+    expect([ANA, 8].map((id) => lv.data.people.find((p) => p.id === id)!.level)).toEqual(["specialist", "specialist"]);
+    expect(lv.message).toBe("2 members updated.");
+    expect(run(d, { type: "bulkMembers", pids: [ANA], approver: 8 }).error).toMatch(/team lead/);
+    const c = new Cal(d, TODAY);
+    expect("error" in authorizeCal({ type: "bulkMembers", pids: [15, 27] }, c, SAM)).toBe(true); // 27 is in another tower
+    expect("error" in authorizeCal({ type: "bulkMembers", pids: [15, 16] }, c, SAM)).toBe(false);
+  });
+});

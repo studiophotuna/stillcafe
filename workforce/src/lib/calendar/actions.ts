@@ -42,6 +42,7 @@ export type CalAction =
   | { type: "deleteNode"; id: string }
   | { type: "saveMember"; pid: number; level: Level; shift: string; adminHere: boolean; bid: string; assign: string[]; isNew: boolean; details?: MemberDetails; hcFrom?: string }
   | { type: "setHcHistory"; pid: number; history: HcTag[] }
+  | { type: "bulkMembers"; pids: number[]; level?: Level; approver?: number; shift?: string; wfhDays?: number[] }
   | { type: "addPerson"; details: MemberDetails & { name: string; email: string }; level: Level; shift: string; adminHere: boolean; bid: string; assign: string[] }
   | { type: "removeFromTeam"; pid: number; bid: string }
   | { type: "setResign"; pid: number; date: string | null }
@@ -481,6 +482,39 @@ function applyInner(d: CalendarData, a: CalAction, today: string, now: number): 
       if (a.adminHere && inHere) na = na.concat(a.pid);
       if (na.join() !== (b.admins ?? []).join()) next = setNode(next, a.bid, { admins: na });
       return { data: next, message: p.name + (a.isNew ? " added." : " updated.") };
+    }
+    case "bulkMembers": {
+      // Several members at once: only the fields given change. A role that doesn't fit
+      // someone's allocations (e.g. Manager without a tower) is skipped for them.
+      const pids = [...new Set(a.pids)].filter((id) => c.people.has(id));
+      if (!pids.length) return { data: d, error: "Select members first." };
+      if (a.level && !LEVELS[a.level]) return { data: d, error: "Choose a role." };
+      if (a.shift && !d.shifts.some((x) => x.id === a.shift)) return { data: d, error: "Choose a shift." };
+      const ap = a.approver ? c.people.get(a.approver) : undefined;
+      if (a.approver && (!ap || !isLeader(ap.level))) return { data: d, error: "The approver must be a team lead, manager or director." };
+      const wfh = a.wfhDays ? [...new Set(a.wfhDays.filter((x) => x >= 1 && x <= 5))].sort() : undefined;
+      const skipped: string[] = [];
+      let n = 0;
+      const people = d.people.map((p) => {
+        if (!pids.includes(p.id)) return p;
+        const next = { ...p };
+        if (a.level && a.level !== p.level) {
+          if (allocProblem(c.O, a.level, p.assign)) skipped.push(p.name);
+          else next.level = a.level;
+        }
+        if (a.approver !== undefined) {
+          if (a.approver === 0) delete next.approver;
+          else if (a.approver !== p.id) next.approver = a.approver;
+        }
+        if (a.shift) next.shift = a.shift;
+        if (wfh) next.wfhDays = wfh;
+        n++;
+        return next;
+      });
+      return {
+        data: { ...d, people },
+        message: `${plural(n, "member")} updated.` + (skipped.length ? ` Role not changed for ${skipped.join(", ")} (their allocations don’t fit it).` : ""),
+      };
     }
     case "setHcHistory": {
       // Admin edits a person's headcount tagging: months must be yyyy-mm, teams real teams (or none).

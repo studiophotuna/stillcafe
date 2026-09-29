@@ -1,7 +1,10 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import { Modal } from "@/components/Dialogs";
 import { Blueprint, Icon } from "@/components/ui";
+import { LEVELS } from "@/lib/calendar/constants";
+import { leadersOf } from "@/lib/calendar/approvals";
 import { RoleFilter, RoleLegend, RoleTag } from "@/components/calendar/Roles";
 import { fmtY } from "@/lib/calendar/dates";
 import { useCalendar } from "@/lib/calendar/store";
@@ -59,6 +62,11 @@ export default function MembersPage() {
   // Team admins manage the people in their teams; system admins manage everyone.
   const canManage = (p: CalPerson) =>
     !!v.meP.sysAdmin || O.branchesOf(p).some((b) => isNodeAdmin(O, b.id, s.me)) || p.assign.some((a) => isNodeAdmin(O, a, s.me));
+  // Selecting several members to update at once (only those I manage).
+  const [sel, setSel] = useState<number[]>([]);
+  const [bulk, setBulk] = useState(false);
+  const selectable = members.filter(canManage);
+  const picked = sel.filter((id) => selectable.some((p) => p.id === id));
   return (
     <>
       <div className="page-head-row">
@@ -80,10 +88,33 @@ export default function MembersPage() {
         </div>
       </div>
       <RoleLegend />
+      {picked.length > 0 && (
+        <Blueprint as="section" className="panel" style={{ flexDirection: "row", alignItems: "center", gap: 10, padding: "10px 16px", flexWrap: "wrap" }}>
+          <strong>{picked.length} selected</strong>
+          <Blueprint as="button" className="btn btn-primary btn-36" style={{ padding: "0 14px" }} onClick={() => setBulk(true)}>
+            Update selected
+          </Blueprint>
+          <button className="btn btn-secondary btn-36" onClick={() => s.setDialog({ kind: "schedule", pids: picked })}>
+            Update their schedules
+          </button>
+          <button className="btn btn-ghost" onClick={() => setSel([])}>
+            Clear
+          </button>
+        </Blueprint>
+      )}
       <Blueprint className="scroll-x">
         <table className="table" style={{ minWidth: logins ? 1180 : 980 }}>
           <thead>
             <tr>
+              <th style={{ width: 36 }}>
+                <input
+                  type="checkbox"
+                  className="check"
+                  aria-label="Select all members shown"
+                  checked={selectable.length > 0 && selectable.every((p) => sel.includes(p.id))}
+                  onChange={(e) => setSel(e.target.checked ? selectable.map((p) => p.id) : [])}
+                />
+              </th>
               <th>Name</th>
               <th>Role · default shift</th>
               <th>Allocations</th>
@@ -100,6 +131,17 @@ export default function MembersPage() {
               const pool = c.poolOf(p);
               return (
                 <tr key={p.id} className={"role-row lv-" + p.level} style={{ opacity: gone ? 0.6 : 1 }}>
+                  <td>
+                    {canManage(p) && (
+                      <input
+                        type="checkbox"
+                        className="check"
+                        aria-label={`Select ${p.name}`}
+                        checked={sel.includes(p.id)}
+                        onChange={() => setSel(sel.includes(p.id) ? sel.filter((x) => x !== p.id) : sel.concat(p.id))}
+                      />
+                    )}
+                  </td>
                   <td>
                     <div style={{ display: "flex", flexDirection: "column" }}>
                       <span style={{ fontWeight: 500 }}>{p.name}</span>
@@ -197,8 +239,114 @@ export default function MembersPage() {
             })}
           </tbody>
         </table>
+        {bulk && <BulkDialog pids={picked} onClose={() => setBulk(false)} onDone={() => setSel([])} />}
         {!members.length && <div style={{ padding: "24px 14px", color: "var(--color-neutral-700)" }}>{role === "all" && !mq ? "No members here yet." : "No members match."}</div>}
       </Blueprint>
     </>
+  );
+}
+
+const WEEK: [number, string][] = [[1, "Mon"], [2, "Tue"], [3, "Wed"], [4, "Thu"], [5, "Fri"]];
+
+/** Update role, approver, default shift or WFH days for several members; "Keep" leaves a field as it is. */
+function BulkDialog({ pids, onClose, onDone }: { pids: number[]; onClose: () => void; onDone: () => void }) {
+  const s = useCalendar();
+  const v = useCalView();
+  const [level, setLevel] = useState<Level | "">("");
+  const [approver, setApprover] = useState("keep");
+  const [shift, setShift] = useState("");
+  const [wfhOn, setWfhOn] = useState(false);
+  const [wfh, setWfh] = useState<number[]>([1, 2]);
+  const leaders = leadersOf(s.cal, v.bid);
+  const names = pids.map((id) => s.cal.people.get(id)?.name ?? "").filter(Boolean);
+  const nothing = !level && approver === "keep" && !shift && !wfhOn;
+  return (
+    <Modal onClose={onClose} width={560}>
+      <div className="dialog-scroll" style={{ padding: 20, gap: 12 }}>
+        <div className="dialog-title" style={{ fontSize: 24 }}>
+          Update {pids.length} member{pids.length === 1 ? "" : "s"}
+        </div>
+        <span className="small">
+          {names.slice(0, 6).join(", ")}
+          {names.length > 6 ? ` and ${names.length - 6} more` : ""}. Only the fields you change are updated.
+        </span>
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+          <div className="field">
+            <label htmlFor="bk-l">Role</label>
+            <select id="bk-l" className="input" value={level} onChange={(e) => setLevel(e.target.value as Level | "")}>
+              <option value="">Keep</option>
+              {(Object.keys(LEVELS) as Level[]).map((k) => (
+                <option key={k} value={k}>
+                  {LEVELS[k]}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div className="field">
+            <label htmlFor="bk-a">Approver (team leader)</label>
+            <select id="bk-a" className="input" value={approver} onChange={(e) => setApprover(e.target.value)}>
+              <option value="keep">Keep</option>
+              <option value="0">Not assigned (team admins)</option>
+              {leaders.map((x) => (
+                <option key={x.id} value={x.id}>
+                  {x.name} · {LEVELS[x.level]}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div className="field">
+            <label htmlFor="bk-s">Default shift</label>
+            <select id="bk-s" className="input" value={shift} onChange={(e) => setShift(e.target.value)}>
+              <option value="">Keep</option>
+              {s.data.shifts.map((x) => (
+                <option key={x.id} value={x.id}>
+                  {x.name} ({x.start}–{x.end})
+                </option>
+              ))}
+            </select>
+          </div>
+          <div className="field">
+            <label style={{ display: "flex", gap: 6, alignItems: "center", cursor: "pointer" }}>
+              <input type="checkbox" className="check" checked={wfhOn} onChange={() => setWfhOn(!wfhOn)} />
+              Change work from home days
+            </label>
+            <div style={{ display: "flex", gap: 10, flexWrap: "wrap", minHeight: 36, alignItems: "center", opacity: wfhOn ? 1 : 0.5 }}>
+              {WEEK.map(([d, l]) => (
+                <label key={d} style={{ display: "flex", gap: 4, alignItems: "center", cursor: wfhOn ? "pointer" : "default" }}>
+                  <input type="checkbox" className="check" disabled={!wfhOn} checked={wfh.includes(d)} onChange={() => setWfh(wfh.includes(d) ? wfh.filter((x) => x !== d) : wfh.concat(d).sort())} />
+                  {l}
+                </label>
+              ))}
+            </div>
+          </div>
+        </div>
+        <span className="small">A member can’t be their own approver; for them the approver stays as it was. Leave, allocations and resignations are changed one by one in Edit.</span>
+        <div className="dialog-actions" style={{ gap: 10 }}>
+          <button className="btn btn-secondary btn-40" onClick={onClose}>
+            Cancel
+          </button>
+          <Blueprint
+            as="button"
+            className="btn btn-primary btn-40"
+            style={{ padding: "0 18px" }}
+            disabled={nothing}
+            onClick={() => {
+              s.run({
+                type: "bulkMembers",
+                pids,
+                ...(level ? { level } : {}),
+                ...(approver !== "keep" ? { approver: Number(approver) } : {}),
+                ...(shift ? { shift } : {}),
+                ...(wfhOn ? { wfhDays: wfh } : {}),
+              });
+              onDone();
+              onClose();
+            }}
+          >
+            Update {pids.length}
+          </Blueprint>
+        </div>
+      </div>
+    </Modal>
   );
 }

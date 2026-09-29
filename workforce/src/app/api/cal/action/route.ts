@@ -7,7 +7,7 @@ import { ForbiddenError, dbConfigured } from "@/lib/db";
 export const dynamic = "force-dynamic";
 
 const TYPES = new Set<CalAction["type"]>([
-  "submitRequest", "decide", "cancelRequest", "setOverride", "holidayWork", "restDayWork", "setHcHistory", "setSchedule", "setShiftDay", "teamSettings", "addAdmin", "removeAdmin",
+  "submitRequest", "decide", "cancelRequest", "setOverride", "holidayWork", "restDayWork", "setHcHistory", "bulkMembers", "setSchedule", "setShiftDay", "teamSettings", "addAdmin", "removeAdmin",
   "addNode", "importOrg", "setBilled", "setLinks", "renameNode", "deleteNode", "saveMember", "addPerson", "removeFromTeam", "setResign", "saveShift", "deleteShift",
   "saveHoliday", "deleteHoliday", "toggleReady", "checkin", "startEvent", "closeEvent", "importUpload",
 ]);
