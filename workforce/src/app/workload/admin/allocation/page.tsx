@@ -74,7 +74,7 @@ export default function AllocationPage() {
           </label>
           <div className="rule-text">
             <strong style={{ fontWeight: 500 }}>One task in progress at a time</strong>
-            <span>Members finish or put a task on hold before starting the next. Tasks are only given to people allocated to the task’s system and trade.</span>
+            <span>Members resolve a ticket or set it to pending before starting the next. Tasks are only given to people allocated to the task’s system and trade.</span>
           </div>
           <div className="rule-text">
             <strong style={{ fontWeight: 500 }}>SLA and task types</strong>

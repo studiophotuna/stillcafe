@@ -7,6 +7,7 @@ import { H, dayKey, dur, fmtT } from "@/lib/workload/clock";
 import { AV, PR, tradeOf, trPathOf } from "@/lib/workload/constants";
 import { awayLabel, cxCheck, cxOn, cxText, basisUnit, due, fmtMin, isOverdue, slaOf, slaText, taskTypeOf, taskWorkMs, ticketField, ticketOf, typeTargets } from "@/lib/workload/engine";
 import { downloadSheets } from "@/lib/workload/excel";
+import { ahtStats } from "@/lib/workload/aht";
 import { BarList, ColumnChart, LineChart, VIZ } from "@/components/Charts";
 import { personPeriod, teamPeriod, typeLabel, type PeriodInput, type PersonPeriod } from "@/lib/workload/metrics";
 import { periodBuckets, periodLabel, periodRange, type PeriodKind } from "@/lib/workload/period";
@@ -137,7 +138,9 @@ export default function DashboardPage() {
           })
       : [];
     const markIdx = parts.findIndex(([, a, b]) => now >= a && now < b);
-    return { rows, team, buckets, markIdx: markIdx < 0 ? undefined : markIdx, byTrade, byType, doneTasks: doneIn(ut).sort((a, b) => a.doneAt! - b.doneAt!), until, withActs };
+    // Average handling time per contract of each complexity level (tickets done in the period).
+    const aht = cxOn(s) ? ahtStats({ ...withActs, tasks: ut }, from, until + 1).levels : [];
+    return { aht, rows, team, buckets, markIdx: markIdx < 0 ? undefined : markIdx, byTrade, byType, doneTasks: doneIn(ut).sort((a, b) => a.doneAt! - b.doneAt!), until, withActs };
   }, [input, now, to, from, people, data, ut, unitTrades, types, per.kind, per.anchor, s]);
 
   const q = ut.filter((t) => t.status === "new");
@@ -210,6 +213,14 @@ export default function DashboardPage() {
       sheets.push({
         name: "Task types",
         rows: [["Task type", "SLA", "Target / day", "Received", "Done", "Timeliness %"], ...view.byType.map((b): Row => [b.name, b.sla, b.target, b.received, b.done, b.onTime])],
+      });
+    if (view.aht.length)
+      sheets.push({
+        name: "AHT by complexity",
+        rows: [
+          ["Level", "Set AHT (min)", "Actual AHT / contract (min)", "Contracts", "Tickets"],
+          ...view.aht.map(({ level, row }): Row => [level.name, level.aht ?? null, row.contracts ? Math.round(row.ms / row.contracts / 60000) : null, row.contracts, row.tickets]),
+        ],
       });
     sheets.push({
       name: "Tasks done",
@@ -360,6 +371,53 @@ export default function DashboardPage() {
                 />
               </Blueprint>
             )}
+            {view.aht.length > 0 && (
+              <Blueprint as="section" className="panel">
+                <div className="chart-head">
+                  <h2 className="h2">Handling time by complexity</h2>
+                  <span className="small">{label} · per contract</span>
+                </div>
+                <BarList
+                  rows={view.aht.map(({ level, row }) => ({
+                    key: level.id,
+                    label: level.name,
+                    value: row.contracts ? Math.round(row.ms / row.contracts / 60000) : null,
+                    note: `${row.contracts} contract${row.contracts === 1 ? "" : "s"}${level.aht ? ` · set ${level.aht} min` : ""}`,
+                  }))}
+                  fmt={(n) => fmtMin(Math.round(n))}
+                  empty="No tickets tagged with complexity in this period."
+                />
+                <details className="table-view">
+                  <summary>Show the numbers</summary>
+                  <table className="table">
+                    <thead>
+                      <tr>
+                        <th>Level</th>
+                        <th style={{ textAlign: "right" }}>Set AHT</th>
+                        <th style={{ textAlign: "right" }}>Actual AHT / contract</th>
+                        <th style={{ textAlign: "right" }}>Difference</th>
+                        <th style={{ textAlign: "right" }}>Contracts</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {view.aht.map(({ level, row }) => {
+                        const act = row.contracts ? row.ms / row.contracts : null;
+                        const diff = act !== null && level.aht ? Math.round((act / (level.aht * 60000) - 1) * 100) : null;
+                        return (
+                          <tr key={level.id}>
+                            <td>{level.name}</td>
+                            <td style={{ textAlign: "right" }}>{level.aht ? `${level.aht} min` : "—"}</td>
+                            <td style={{ textAlign: "right" }}>{act === null ? "—" : dur(act)}</td>
+                            <td style={{ textAlign: "right" }}>{diff === null ? "—" : `${diff > 0 ? "+" : ""}${diff}%`}</td>
+                            <td style={{ textAlign: "right" }}>{row.contracts}</td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </details>
+              </Blueprint>
+            )}
             {view.byType.length > 0 && (
               <Blueprint as="section" className="panel">
                 <div className="chart-head">
@@ -421,7 +479,7 @@ export default function DashboardPage() {
                   {live && <th>In queue</th>}
                   {live && <th>Assigned</th>}
                   {live && <th>In progress</th>}
-                  {live && <th>On hold</th>}
+                  {live && <th>Pending</th>}
                   {live && <th>Overdue</th>}
                 </tr>
               </thead>

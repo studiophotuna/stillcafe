@@ -225,7 +225,7 @@ export function holdTask(d: WorkloadData, id: string, reason: string, now: numbe
     data: patch(d, id, (x) =>
       x.status === "in_progress" ? { ...x, status: "on_hold", hold: r, history: hist(x, now, "On hold: " + r) } : x,
     ),
-    message: "On hold. You can start another task.",
+    message: "Pending. You can start another ticket.",
   };
 }
 
@@ -258,7 +258,7 @@ export function completeTask(d: WorkloadData, id: string, vals: Task["fields"], 
     if (f) vals = { ...vals, [f.key]: cxTotal(counts) };
   }
   const miss = missingRequired(d.fields, vals);
-  if (miss.length) return { data: d, message: `Fill in ${miss.join(", ")} before marking ${id} done.` };
+  if (miss.length) return { data: d, message: `Fill in ${miss.join(", ")} before resolving ${id}.` };
   const note = counts ? ` · ${cxText(d.settings, counts)}` : "";
   const done = patch(d, id, (x) => ({ ...x, status: "done", doneAt: now, fields: { ...vals }, ...(counts ? { cx: counts, cxReview: null } : {}), history: hist(x, now, "Done" + note) }));
   const s = d.settings;
@@ -796,7 +796,7 @@ export function pastShiftMin(p: Person, s: Settings, now: number) {
 export function endWork(d: WorkloadData, pid: number, otMin: number, now: number, split?: OtPart[] | null): Outcome {
   const me = personOf(d, pid);
   if (!me || endedToday(d, pid, now)) return { data: d };
-  if (isBusy(d.tasks, pid)) return { data: d, message: "Finish your task or put it on hold before you end work." };
+  if (isBusy(d.tasks, pid)) return { data: d, message: "Resolve your ticket or set it to pending before you end work." };
   const ot = Math.max(0, Math.min(Math.round(Number(otMin) || 0), pastShiftMin(me, d.settings, now)));
   // The breakdown must use this team's processes and task types and add up to the overtime.
   let parts: OtPart[] | null = null;

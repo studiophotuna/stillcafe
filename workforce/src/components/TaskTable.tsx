@@ -28,7 +28,7 @@ export function TaskTable({ rows, variant }: { rows: TaskRowVM[]; variant: "mine
           {h && <th>Started</th>}
           {h && <th>Finished</th>}
           {h && <th>Worked</th>}
-          {h && <th>On hold</th>}
+          {h && <th>Pending</th>}
           {h && <th>On time</th>}
           {!h && <th>Status</th>}
           {(q || h) && <th>{h ? "Done by" : "Assignee"}</th>}

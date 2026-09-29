@@ -183,3 +183,9 @@ tr.role-row > td { background: var(--role-bg); }
 .role-tag { display: inline-flex; align-items: center; gap: 6px; font-size: 12.5px; white-space: nowrap; }
 .role-tag::before { content: ""; width: 9px; height: 9px; border-radius: 3px; background: var(--role); flex: none; }
 .role-legend { display: flex; flex-wrap: wrap; gap: 6px 16px; margin: 0 0 10px; color: var(--color-neutral-800); }
+
+/* Sidebar: the Admin group can be minimized */
+.side-nav-toggle { display: flex; align-items: center; gap: 8px; width: 100%; background: none; border: 0; cursor: pointer; font-family: inherit; text-align: left; border-radius: var(--radius-sm); padding: 6px 12px; }
+.side-nav-toggle:hover { color: var(--color-accent-800); background: var(--color-accent-100); }
+.side-nav-toggle .side-nav-chev { margin-left: auto; font-size: 12px; }
+.side-nav-toggle .tag { padding: 0 6px; font-size: 10.5px; }

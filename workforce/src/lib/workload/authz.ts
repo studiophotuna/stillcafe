@@ -34,7 +34,7 @@ export function authorizeWl(a: Action, d: WorkloadData, me: number): { action: A
     }
     case "hold": {
       const t = d.tasks.find((x) => x.id === a.id);
-      return t && (t.assignee === me || admin) ? { action: a } : { error: "You can only put your own task on hold." };
+      return t && (t.assignee === me || admin) ? { action: a } : { error: "You can only set your own ticket to pending." };
     }
   }
   return { error: "Unknown action." };

@@ -119,8 +119,8 @@ export function taskDetail(d: WorkloadData, t: Task, now: number) {
     // Every pending (on hold) period with its date and reason.
     .concat(
       holdPeriods(t, now).map((p, i, all) => ({
-        label: all.length > 1 ? `On hold (${i + 1})` : "On hold",
-        value: `${fmtT(p.from)} → ${p.to ? fmtT(p.to) : "still on hold"} · ${dur((p.to ?? now) - p.from)} · ${p.reason || "no reason given"}`,
+        label: all.length > 1 ? `Pending (${i + 1})` : "Pending",
+        value: `${fmtT(p.from)} → ${p.to ? fmtT(p.to) : "still pending"} · ${dur((p.to ?? now) - p.from)} · ${p.reason || "no reason given"}`,
       })),
     );
   return {
@@ -143,7 +143,7 @@ export function taskDetail(d: WorkloadData, t: Task, now: number) {
     history: t.history
       .slice()
       .reverse()
-      .map((h) => ({ at: fmtS(h.at, now), text: h.text })),
+      .map((h) => ({ at: fmtS(h.at, now), text: h.text.replace(/^On hold/, "Pending") })),
   };
 }
 

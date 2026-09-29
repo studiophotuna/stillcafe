@@ -32,7 +32,7 @@ export default function FieldsPage() {
         <div className="page-head">
           <h1>Task fields · {org.team.name}</h1>
           <span style={{ maxWidth: "80ch" }}>
-            Each team decides what information a task carries. Required fields must be filled in the upload file and before a task can be marked done. The upload template follows this list.
+            Each team decides what information a task carries. Required fields must be filled in the upload file and before a ticket can be resolved. The upload template follows this list.
           </span>
         </div>
         <Blueprint

@@ -90,7 +90,7 @@ export default function ComplexityPage() {
     <>
       <PageHead
         title={`Complexity · ${data.org.team.name}`}
-        sub="Members tag the contracts in each ticket by complexity when they mark it done, e.g. 1 Simple and 2 Complex. Each level has its own daily target, used before task type and member targets, and an average handling time used to question tagging that doesn’t match the time worked."
+        sub="Members tag the contracts in each ticket by complexity when they resolve it, e.g. 1 Simple and 2 Complex. Each level has its own daily target, used before task type and member targets, and an average handling time used to question tagging that doesn’t match the time worked."
       />
       <div className="grid-2">
         <Blueprint as="section" className="panel" style={{ gap: 12 }}>
@@ -111,7 +111,7 @@ export default function ComplexityPage() {
             <span>
               <strong>Tag contracts by complexity</strong>
               <span className="small">
-                {cx.on ? "Mark done asks for the number of contracts per level." : "Off: tickets count as usual (task type or member target)."}
+                {cx.on ? "Resolve ticket asks for the number of contracts per level." : "Off: tickets count as usual (task type or member target)."}
               </span>
             </span>
           </label>
@@ -125,7 +125,7 @@ export default function ComplexityPage() {
                 </option>
               ))}
             </select>
-            <span className="small">Filled in from the counts at Mark done, so members don’t enter it twice.</span>
+            <span className="small">Filled in from the counts at Resolve ticket, so members don’t enter it twice.</span>
           </div>
           <div className="field">
             <label htmlFor="cx-tol">Question the tagging when the time worked is longer than expected by more than</label>
@@ -237,7 +237,7 @@ export default function ComplexityPage() {
         <div className="row" style={{ justifyContent: "space-between" }}>
           <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
             <h2 className="h2">Questions · {qs.length}</h2>
-            <span className="small">Done tickets that took much longer (excluding breaks and time on hold) than their complexity suggests. Confirm the tagging or correct it; productivity follows the correction.</span>
+            <span className="small">Done tickets that took much longer (excluding breaks and time pending) than their complexity suggests. Confirm the tagging or correct it; productivity follows the correction.</span>
           </div>
           <label className="row small" style={{ gap: 6, cursor: "pointer" }}>
             <input type="checkbox" className="check" checked={showChecked} onChange={() => setShowChecked(!showChecked)} />

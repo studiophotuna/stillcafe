@@ -54,7 +54,7 @@ export default function HistoryPage() {
   const csv = () => {
     const iso = (ms: number | null) => (ms ? new Date(ms).toISOString() : "");
     const q2 = (x: unknown) => `"${String(x ?? "").replace(/"/g, '""')}"`;
-    const head = ["Task ID", ...(tf ? [tf.label] : []), "Title", "System › Trade", "Task type", "SLA (h)", "Due", "Done by", "Received", "Started", "Finished", "Worked (min)", "On time", "On hold (min)", "On hold dates", "On hold reasons"].concat(
+    const head = ["Task ID", ...(tf ? [tf.label] : []), "Title", "System › Trade", "Task type", "SLA (h)", "Due", "Done by", "Received", "Started", "Finished", "Worked (min)", "On time", "Pending (min)", "Pending dates", "Pending reasons"].concat(
       data.fields.filter((f) => f !== tf).map((f) => f.label),
     );
     const rows = list.map((t) =>
@@ -89,7 +89,7 @@ export default function HistoryPage() {
     <>
       <PageHead
         title={`Task history · ${scope === "team" && lead ? data.org.team.name : "My tasks"}`}
-        sub="Completed tasks with when they were started and finished, the time worked (time on hold, breaks and other time away excluded) and time on hold. Open a task for its hold dates and reasons."
+        sub="Completed tasks with when they were started and finished, the time worked (time pending, breaks and other time away excluded) and time pending. Open a task for its pending dates and reasons."
       />
       <div className="row" style={{ justifyContent: "space-between", alignItems: "flex-end" }}>
         <PeriodNav kind={p.kind} anchor={p.anchor} onChange={(kind, anchor) => setP({ kind, anchor })} kinds={["day", "week", "month"]} />

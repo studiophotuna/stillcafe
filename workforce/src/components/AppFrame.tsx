@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import type { ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { signOut } from "@/lib/session";
 import { BipoNotice, HolidayPrompt, QuickLinks } from "./AppExtras";
 import type { ViewAs } from "@/lib/workload/types";
@@ -48,6 +48,22 @@ export function AppFrame({
   overlay?: ReactNode;
 }) {
   const path = usePathname();
+  // The Admin group can be minimized; remembered per module on this device.
+  const adminKey = `wfm.adminNav.${module}`;
+  const [adminOpen, setAdminOpen] = useState(true);
+  useEffect(() => {
+    try {
+      if (localStorage.getItem(adminKey) === "closed") setAdminOpen(false);
+    } catch {}
+  }, [adminKey]);
+  const toggleAdmin = () => {
+    const next = !adminOpen;
+    setAdminOpen(next);
+    try {
+      localStorage.setItem(adminKey, next ? "open" : "closed");
+    } catch {}
+  };
+  const adminBadge = adminNav.reduce((a, n) => a + (n.badge ?? 0), 0);
   const initials = user.name
     .split(" ")
     .map((w) => w[0])
@@ -82,8 +98,14 @@ export function AppFrame({
           </nav>
           {adminNav.length > 0 && (
             <nav aria-label="Admin" className="side-nav">
-              <span className="side-nav-label">Admin</span>
-              {adminNav.map(item)}
+              <button type="button" className="side-nav-label side-nav-toggle" aria-expanded={adminOpen} onClick={toggleAdmin}>
+                <span>Admin</span>
+                {!adminOpen && adminBadge > 0 && <span className="tag tag-accent">{adminBadge}</span>}
+                <span className="side-nav-chev" aria-hidden>
+                  {adminOpen ? "▾" : "▸"}
+                </span>
+              </button>
+              {adminOpen && adminNav.map(item)}
             </nav>
           )}
           <div className="side-user">

@@ -114,7 +114,7 @@ export default function AhtPage() {
     <>
       <PageHead
         title={`Average handling time · ${data.org.team.name}`}
-        sub="Time worked on done tickets (start to done, minus time on hold and breaks, meetings and other time away), per ticket and per contract."
+        sub="Time worked on done tickets (start to done, minus time pending and breaks, meetings and other time away), per ticket and per contract."
       />
       <div className="row" style={{ justifyContent: "space-between" }}>
         <Seg name="aht-span" value={span} options={SPANS} onChange={setSpan} />

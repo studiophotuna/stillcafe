@@ -168,7 +168,7 @@ export default function MyWorkPage() {
                     {l}
                   </button>
                 ))}
-                <button className="btn btn-secondary btn-36" style={{ marginLeft: 10 }} disabled={!!cur} title={cur ? "Finish your task or put it on hold first" : undefined} onClick={() => setDialog({ kind: "endWork" })}>
+                <button className="btn btn-secondary btn-36" style={{ marginLeft: 10 }} disabled={!!cur} title={cur ? "Resolve your ticket or set it to pending first" : undefined} onClick={() => setDialog({ kind: "endWork" })}>
                   End work
                 </button>
               </div>
@@ -195,13 +195,13 @@ export default function MyWorkPage() {
               </div>
               {curMissing.length > 0 && (
                 <span style={{ display: "block", fontSize: 13, color: "var(--color-accent-800)", marginTop: 4 }}>
-                  Needed before you can mark it done: {curMissing.join(", ")}
+                  Needed before you can resolve it: {curMissing.join(", ")}
                 </span>
               )}
             </div>
             <div className="row">
               <button className="btn btn-secondary btn-md" onClick={() => setDialog({ kind: "hold", id: cur.id })}>
-                Put on hold
+                Pending
               </button>
               <Blueprint
                 as="button"
@@ -210,7 +210,7 @@ export default function MyWorkPage() {
                 onClick={() => setDialog({ kind: "done", id: cur.id })}
               >
                 <Icon name="check" />
-                Mark done
+                Resolve ticket
               </Blueprint>
             </div>
           </div>
@@ -240,7 +240,7 @@ export default function MyWorkPage() {
         <section className="panel" style={{ padding: 0, gap: 8 }}>
           <h2 className="h2">
             {s.mode !== "self"
-              ? "Assigned to you and on hold"
+              ? "Assigned to you and pending"
               : help.length
                 ? "Your trades are clear — help with other trades (your system first)"
                 : "Assigned to you and available to pick"}

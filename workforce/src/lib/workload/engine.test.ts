@@ -397,7 +397,7 @@ describe("status: time away, end of work and overtime approval", async () => {
     expect(e.data.activities[0]).toMatchObject({ otMin: 70, otStatus: "pending" });
     expect(personMetrics(e.data, ana, at("18:10"))).toMatchObject({ otMin: 0, otPending: 70 });
     // Can't end with a task in progress; can undo while pending.
-    expect(endWork(data([task({ status: "in_progress", assignee: ANA, startedAt: at("17:30") })]), ANA, 0, at("18:10")).message).toMatch(/Finish your task/);
+    expect(endWork(data([task({ status: "in_progress", assignee: ANA, startedAt: at("17:30") })]), ANA, 0, at("18:10")).message).toMatch(/Resolve your ticket/);
     expect(undoEndWork(e.data, ANA, at("18:20")).data.activities).toHaveLength(0);
     expect(startWork({ ...e.data, tasks: [task()] }, ANA, at("18:20")).message).toMatch(/ended work/);
   });

@@ -84,7 +84,7 @@ export const ST: Record<TaskStatus, [string, string]> = {
   new: ["In queue", "tag-outline"],
   assigned: ["Assigned", "tag-accent"],
   in_progress: ["In progress", "tag-accent"],
-  on_hold: ["On hold", "tag-neutral"],
+  on_hold: ["Pending", "tag-neutral"],
   done: ["Done", "tag-neutral"],
 };
 

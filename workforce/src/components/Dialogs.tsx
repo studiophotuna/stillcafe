@@ -214,7 +214,7 @@ function HoldDialog({ id }: { id: string }) {
   return (
     <Modal onClose={close} pad>
       <div className="dialog-title" style={{ fontSize: 26 }}>
-        Put on hold
+        Pending
       </div>
       <div className="field">
         <label htmlFor="hold-reason">What are you waiting for?</label>
@@ -229,7 +229,7 @@ function HoldDialog({ id }: { id: string }) {
         />
       </div>
       <span style={{ fontSize: 13, color: "var(--color-neutral-700)" }}>
-        The task stays yours. You can start another task while this one is on hold.
+        The ticket stays yours. You can start another ticket while this one is pending.
       </span>
       <div className="dialog-actions" style={{ gap: 10 }}>
         <button className="btn btn-secondary btn-40" onClick={close}>
@@ -245,7 +245,7 @@ function HoldDialog({ id }: { id: string }) {
             close();
           }}
         >
-          Put on hold
+          Set to pending
         </Blueprint>
       </div>
     </Modal>
@@ -271,7 +271,7 @@ function DoneDialog({ id }: { id: string }) {
     <Modal onClose={close} width={520}>
       <div className="dialog-scroll" style={{ gap: 12, padding: 20 }}>
         <div className="dialog-title" style={{ fontSize: 26 }}>
-          Mark done
+          Resolve ticket
         </div>
         <span className="muted">
           {t.id} · {t.title}
@@ -349,7 +349,7 @@ function DoneDialog({ id }: { id: string }) {
               run({ type: "complete", id, vals: eff, pid: me.id, ...(levels.length ? { cx: counts } : {}) });
             }}
           >
-            Mark done
+            Resolve ticket
           </Blueprint>
         </div>
       </div>

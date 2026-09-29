@@ -17,7 +17,7 @@ const STATUS_OPTS = [
   ["new", "In queue"],
   ["assigned", "Assigned"],
   ["in_progress", "In progress"],
-  ["on_hold", "On hold"],
+  ["on_hold", "Pending"],
 ] as const;
 
 export default function QueuePage() {
