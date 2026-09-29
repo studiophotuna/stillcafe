@@ -9,10 +9,11 @@ import { AWAY, awayLabel, basisUnit, typeTargets, canWork, currentAway, doneToda
 import { fmtT } from "@/lib/workload/clock";
 import { TaskTimer } from "@/components/WorkloadBits";
 import { useWorkload } from "@/lib/workload/store";
+import { breakAllowance } from "@/lib/workload/breaks";
 import { taskDetail, taskRow } from "@/lib/workload/view";
 
 export default function MyWorkPage() {
-  const { data, now, run, me, setDialog, setHolidayWork } = useWorkload();
+  const { data, now, run, me, setDialog, setHolidayWork, mode } = useWorkload();
   const hol = me.holiday;
   const s = data.settings;
   const trades = me.trades.map((x) => trPathOf(data.org, x)).join(", ");
@@ -21,6 +22,7 @@ export default function MyWorkPage() {
   const avg = myDone.length ? dur(myDone.reduce((a, t) => a + (t.doneAt! - t.startedAt!), 0) / myDone.length) : "—";
   const metricF = data.fields.filter((f) => f.type === "number" && f.metric);
   const mm = personMetrics(data, me, now);
+  const brkOver = breakAllowance(data) ? Math.max(0, Math.round((mm.away.break ?? 0) + (mm.away.lunch ?? 0)) - breakAllowance(data)) : 0;
 
   const kpis = me.trades.length
     ? [
@@ -35,7 +37,9 @@ export default function MyWorkPage() {
         {
           k: "Time away",
           v: fmtMin(Object.values(mm.away).reduce((a, b) => a + b, 0)),
-          m: Object.entries(mm.away).map(([k, v]) => `${awayLabel(k as never)} ${fmtMin(v)}`).join(" · ") || "nothing logged today",
+          m:
+            (Object.entries(mm.away).map(([k, v]) => `${awayLabel(k as never)} ${fmtMin(v)}`).join(" · ") || "nothing logged today") +
+            (brkOver > 0 ? ` · break + lunch ${fmtMin(brkOver)} over the ${fmtMin(breakAllowance(data))} allowance (your lead is notified)` : ""),
         },
         { k: "Timeliness", v: pct(mm.time), m: `${mm.onTime} of ${mm.done} done within SLA` },
         { k: "Average time", v: avg, m: "per task today" },
@@ -87,7 +91,9 @@ export default function MyWorkPage() {
     <>
       <PageHead
         title="My work"
-        sub={me.trades.length ? `You work on ${trades} · shift ${me.shift}.` : "Admin view. Switch to employee (bottom of the menu) to see a member’s screen."}
+        sub={me.trades.length ? `You work on ${trades} · shift ${me.shift}.` : mode === "db"
+            ? "You aren’t allocated to a system and trade in this team, so no tasks come to you. To take tasks, allocate yourself in Calendar › Admin › Members."
+            : "Admin view. Switch to employee (bottom of the menu) to see a member’s screen."}
       />
       <div className="grid-kpi">
         {kpis.map((k) => (

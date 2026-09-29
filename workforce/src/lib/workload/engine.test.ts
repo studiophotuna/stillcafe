@@ -929,3 +929,18 @@ describe("delay remarks and the due / overdue board", async () => {
     expect(b.cols.some((c) => c.today)).toBe(true);
   });
 });
+
+describe("break and lunch over the allowance", async () => {
+  const { breakFlags } = await import("./breaks");
+  const act = (pid: number, kind: "break" | "lunch" | "meeting", start: number, min: number | null) =>
+    ({ id: `A${pid}${kind}${start}`, pid, kind, start, end: min === null ? null : start + min * M, otMin: 0, otStatus: null, decidedBy: null, decidedAt: null });
+  it("flags days where break and lunch together exceed the planned breaks", () => {
+    // Planned breaks: 60 + 30 = 90 min.
+    const d = { ...data([]), activities: [act(ANA, "lunch", NOW - 5 * H, 65), act(ANA, "break", NOW - 2 * H, 20), act(ANA, "meeting", NOW - 4 * H, 60), act(8, "break", NOW - 3 * H, 30)] };
+    expect(breakFlags(d, NOW - 10 * H, NOW + H, NOW)).toEqual([]); // 85 min: within
+    d.activities.push(act(ANA, "break", NOW - 20 * M, null)); // ongoing 20 min → 105
+    const f = breakFlags(d, NOW - 10 * H, NOW + H, NOW);
+    expect(f).toHaveLength(1);
+    expect(f[0]).toMatchObject({ pid: ANA, min: 105, allowed: 90, over: 15 });
+  });
+});

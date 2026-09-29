@@ -76,6 +76,8 @@ export interface Person {
   otDay?: "holiday" | "restday";
   /** A rest day not yet marked rest day OT in the Calendar. */
   rdTag?: boolean;
+  /** Their assigned approver in the Calendar (a team lead or above). */
+  approver?: number;
   /** Today is a holiday for this person: its name, and where they work if they're on holiday duty. */
   holiday?: { name: string; date: string; working: "RTO" | "WFH" | null; answered: boolean };
 }

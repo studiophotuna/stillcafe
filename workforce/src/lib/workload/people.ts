@@ -79,6 +79,7 @@ export function peopleFromCalendar(c: Cal, now: number, teamId: string): Person[
         shiftStart: Math.floor(start),
         onToday,
         ...(otDay ? { otDay } : {}),
+        ...(p.approver && p.approver !== p.id ? { approver: p.approver } : {}),
         // Working an unscheduled weekend / rest day: the Calendar gets tagged RDOT once they start.
         ...(otDay === "restday" && cell.code !== "RDOT" ? { rdTag: true } : {}),
         ...(hol
