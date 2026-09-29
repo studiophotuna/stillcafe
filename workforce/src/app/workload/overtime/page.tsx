@@ -8,6 +8,7 @@ import { dayKey, fmtT } from "@/lib/workload/clock";
 import { OT_KIND, fmtMin, personOf } from "@/lib/workload/engine";
 import { trPathOf } from "@/lib/workload/constants";
 import { useWorkload } from "@/lib/workload/store";
+import { useUnit } from "@/lib/workload/useUnit";
 import type { Activity } from "@/lib/workload/types";
 
 /**
@@ -15,7 +16,13 @@ import type { Activity } from "@/lib/workload/types";
  * only approved overtime counts in the dashboard and this report.
  */
 export default function OvertimePage() {
-  const { data, run, me, now, isApprover, mode, toast } = useWorkload();
+  const { data, run, me, now, isApprover, mode, toast, sys, tr } = useWorkload();
+  // The System › Trade filter: only overtime for the selected processes (a split entry
+  // counts its parts there; an unsplit one counts when the person works there).
+  const { unitTrades, people: unitPeople, unitLabel } = useUnit();
+  const filtered = sys !== "all" || tr !== "all";
+  const inTrades = new Set(unitTrades.map((t) => t.id));
+  const inPeople = new Set(unitPeople.map((p) => p.id));
   const today0 = dayKey(now);
   // This month so far by default; Today or any From – To dates.
   const [range, setRange] = useState<DateRange>({ from: today0.slice(0, 8) + "01", to: today0 });
@@ -25,8 +32,11 @@ export default function OvertimePage() {
   const typeName = (id?: string) => (id ? ((data.settings.taskTypes ?? []).find((t) => t.id === id)?.name ?? "Deleted type") : "");
   const partName = (x: { trade: string; ttype?: string }) => trPathOf(data.org, x.trade) + (x.ttype ? ` · ${typeName(x.ttype)}` : "");
   /** The entry's breakdown, or the whole overtime as one unassigned part. */
-  const partsOf = (a: Activity) => (a.otSplit?.length ? a.otSplit : [{ trade: "", min: a.otMin }]);
-  const pending = ends.filter((a) => a.otStatus === "pending").sort((a, b) => a.start - b.start);
+  const allParts = (a: Activity) => (a.otSplit?.length ? a.otSplit : [{ trade: "", min: a.otMin }]);
+  const partsOf = (a: Activity) => (filtered ? allParts(a).filter((x) => (x.trade ? inTrades.has(x.trade) : inPeople.has(a.pid))) : allParts(a));
+  /** Minutes of the entry in the filter. */
+  const minOf = (a: Activity) => partsOf(a).reduce((n, x) => n + x.min, 0);
+  const pending = ends.filter((a) => a.otStatus === "pending" && minOf(a) > 0).sort((a, b) => a.start - b.start);
 
   // Report period (inclusive dates).
   const [from, to] = rangeMs(range);
@@ -52,14 +62,14 @@ export default function OvertimePage() {
   }, [mode, team, from, to, badRange, toast]);
   if (!isApprover) return null;
   const source = mode === "db" ? (rows0 ?? []) : ends.filter((a) => a.start >= from && a.start < to);
-  const decided = badRange ? [] : source.filter((a) => a.otStatus !== "pending").sort((a, b) => b.start - a.start);
+  const decided = badRange ? [] : source.filter((a) => a.otStatus !== "pending" && minOf(a) > 0).sort((a, b) => b.start - a.start);
   const byPerson = new Map<number, { approved: number; days: number; declined: number }>();
   decided.forEach((a) => {
     const r = byPerson.get(a.pid) ?? { approved: 0, days: 0, declined: 0 };
     if (a.otStatus === "approved") {
-      r.approved += a.otMin;
+      r.approved += minOf(a);
       r.days++;
-    } else r.declined += a.otMin;
+    } else r.declined += minOf(a);
     byPerson.set(a.pid, r);
   });
   const rows = [...byPerson.entries()].sort((a, b) => b[1].approved - a[1].approved);
@@ -84,7 +94,7 @@ export default function OvertimePage() {
     .filter((a) => a.otStatus === "approved")
     .forEach((a) => {
       const r = byKind.get(kindOf(a)) ?? { min: 0, people: new Set<number>() };
-      r.min += a.otMin;
+      r.min += minOf(a);
       r.people.add(a.pid);
       byKind.set(kindOf(a), r);
     });
@@ -111,7 +121,7 @@ export default function OvertimePage() {
   return (
     <>
       <PageHead
-        title={`Overtime · ${data.org.team.name}`}
+        title={`Overtime · ${filtered ? unitLabel : data.org.team.name}`}
         sub="Members report overtime when they end work after their shift, and on holiday duty or a rest day they work (all of that day counts). It counts in the dashboard and reports only once an admin or lead approves it. You can’t approve your own."
       />
       <Blueprint as="section" className="panel tight">
