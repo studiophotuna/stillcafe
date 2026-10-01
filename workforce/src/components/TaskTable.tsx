@@ -14,8 +14,9 @@ export function TaskTable({ rows, variant }: { rows: TaskRowVM[]; variant: "mine
   const q = variant === "queue";
   const h = variant === "history";
   const tf = ticketField(data);
-  // Queue: a Delay remarks column whenever the list has overdue tickets.
-  const dl = q && rows.some((r) => r.dueState === "overdue" || r.delay);
+  // Delay remarks column: in the queue whenever the list has overdue tickets; in completed
+  // lists whenever a ticket was resolved late or has remarks.
+  const dl = (q && rows.some((r) => r.dueState === "overdue" || r.delay)) || (h && rows.some((r) => r.delay || !r.onTime));
   return (
     <table className="table" style={{ minWidth: q || h ? 1100 : 760 }}>
       <thead>
@@ -83,7 +84,7 @@ export function TaskTable({ rows, variant }: { rows: TaskRowVM[]; variant: "mine
             {(q || h) && <td className="nowrap">{r.assignee}</td>}
             {dl && (
               <td style={{ minWidth: 200, maxWidth: 320 }}>
-                {r.delay ? <span className="delay-note">{r.delay}</span> : r.dueState === "overdue" ? <span className="muted small" style={{ display: "block" }}>None yet</span> : null}
+                {r.delay ? <span className="delay-note">{r.delay}</span> : r.dueState === "overdue" || (h && !r.onTime) ? <span className="muted small" style={{ display: "block" }}>{h ? "None" : "None yet"}</span> : null}
                 {r.canDelay && (
                   <button className="btn btn-ghost btn-link-sm" onClick={() => setDialog({ kind: "delay", id: r.id })}>
                     {r.delay ? "Edit" : "Add remarks"}
