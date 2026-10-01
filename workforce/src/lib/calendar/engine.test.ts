@@ -686,7 +686,7 @@ describe("rest day overtime", async () => {
 });
 
 describe("attendance summary, reports, payroll and approvers", async () => {
-  const { attendanceSummary, summaryText } = await import("./summary");
+  const { attendanceSummary, leadSummary, summaryText } = await import("./summary");
   const { nextCutoff, daysBetween } = await import("./dates");
   it("summarises a day per team and system", () => {
     const c = new Cal(fresh(), TODAY);
@@ -698,6 +698,23 @@ describe("attendance summary, reports, payroll and approvers", async () => {
     const t = summaryText(b);
     expect(t.split("\n")[0]).toMatch(/^Rate Management \d+\/\d+$/);
     expect(t).toMatch(/\nRTO - \d+/);
+  });
+  it("summarises a day per team lead's scope", () => {
+    const d = fresh();
+    const c = new Cal(d, TODAY);
+    const b = leadSummary(c, "rm", TODAY);
+    const names = b.map((x) => x.name);
+    expect(names).toEqual(expect.arrayContaining(["GPM", "EU", "RCM"]));
+    // Each member counts once: the blocks add up to the team's members (leaders aside).
+    const team = attendanceSummary(c, "rm", TODAY)[0];
+    const leaders = d.people.filter((p) => ["lead", "manager", "director"].includes(p.level) && c.O.inN(p, "rm") && c.alive(p, TODAY));
+    expect(b.reduce((a, x) => a + x.headcount, 0)).toBe(team.headcount - leaders.length);
+    expect(summaryText(b, " - ").split("\n")[0]).toMatch(/ - \d+\/\d+$/);
+    // An assigned approver who is a lead wins over allocation.
+    const ana = d.people.find((p) => p.id === 0)!;
+    ana.approver = 21;
+    const b2 = leadSummary(new Cal(d, TODAY), "rm", TODAY);
+    expect(b2.find((x) => x.name === "EU")!.headcount).toBe(b.find((x) => x.name === "EU")!.headcount + 1);
   });
   it("has count tiles for every report, and the schedule and summary reports", () => {
     const c = new Cal(fresh(), TODAY);

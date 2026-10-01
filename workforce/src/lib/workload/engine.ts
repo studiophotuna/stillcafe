@@ -218,6 +218,19 @@ export function startTask(d: WorkloadData, id: string, pid: number, now: number)
   return { data: begin(d, id, me, now, note), message: take ? `Started ${id}${note}.` : undefined };
 }
 
+/** Delay remarks on an open overdue ticket (shown in the queue; kept when it's resolved). */
+export function setDelay(d: WorkloadData, id: string, delay: string, now: number): Outcome {
+  const t = d.tasks.find((x) => x.id === id);
+  if (!t || t.status === "done") return { data: d };
+  if (now <= due(t, d)) return { data: d, message: `${id} isn't overdue yet.` };
+  const why = String(delay ?? "").trim().slice(0, 500);
+  if ((t.delay ?? "") === why) return { data: d };
+  return {
+    data: patch(d, id, (x) => ({ ...x, delay: why || null, history: hist(x, now, why ? `Delay remarks: ${why}` : "Delay remarks cleared") })),
+    message: why ? `Delay remarks saved for ${id}.` : `Delay remarks cleared for ${id}.`,
+  };
+}
+
 export function holdTask(d: WorkloadData, id: string, reason: string, now: number): Outcome {
   const r = reason.trim();
   if (!r) return { data: d };

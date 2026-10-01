@@ -1,9 +1,9 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Blueprint } from "@/components/ui";
 import { fmtY } from "@/lib/calendar/dates";
-import { attendanceSummary, summaryText } from "@/lib/calendar/summary";
+import { attendanceSummary, leadSummary, summaryText, type SummaryBlock } from "@/lib/calendar/summary";
 import { useCalendar } from "@/lib/calendar/store";
 
 /**
@@ -13,8 +13,20 @@ import { useCalendar } from "@/lib/calendar/store";
 export function AttendanceSummary({ scope, date0 }: { scope: string; date0: string }) {
   const s = useCalendar();
   const [date, setDate] = useState(date0);
-  const blocks = attendanceSummary(s.cal, scope, date);
-  const text = summaryText(blocks);
+  const [by, setBy] = useState<"team" | "lead">("team");
+  useEffect(() => {
+    try {
+      if (localStorage.getItem("wfm.attBy") === "lead") setBy("lead");
+    } catch {}
+  }, []);
+  const pickBy = (v: "team" | "lead") => {
+    setBy(v);
+    try {
+      localStorage.setItem("wfm.attBy", v);
+    } catch {}
+  };
+  const blocks: (SummaryBlock & { lead?: string })[] = by === "lead" ? leadSummary(s.cal, scope, date) : attendanceSummary(s.cal, scope, date);
+  const text = summaryText(blocks, by === "lead" ? " - " : " ");
   const copy = async () => {
     try {
       await navigator.clipboard.writeText(`Attendance · ${fmtY(date)}\n\n` + text);
@@ -28,6 +40,14 @@ export function AttendanceSummary({ scope, date0 }: { scope: string; date0: stri
       <div className="chart-head">
         <h2 className="h2">Attendance summary</h2>
         <div className="row" style={{ gap: 8 }}>
+          <div className="tabs" role="tablist" aria-label="Group by">
+            <button role="tab" aria-selected={by === "team"} onClick={() => pickBy("team")}>
+              By system
+            </button>
+            <button role="tab" aria-selected={by === "lead"} onClick={() => pickBy("lead")}>
+              By lead
+            </button>
+          </div>
           <button className={"btn btn-36 " + (date === s.today ? "btn-primary" : "btn-secondary")} onClick={() => setDate(s.today)}>
             Today
           </button>
@@ -42,7 +62,10 @@ export function AttendanceSummary({ scope, date0 }: { scope: string; date0: stri
           {blocks.map((b) => (
             <div key={b.id} className={"att-block " + (b.level === "team" ? "att-team" : "att-sys")}>
               <div className="att-head">
-                <span>{b.name}</span>
+                <span>
+                  {b.name}
+                  {b.lead && <span className="small"> · {b.lead}</span>}
+                </span>
                 <strong>
                   {b.withStatus}/{b.headcount}
                 </strong>
@@ -68,9 +91,14 @@ export function AttendanceSummary({ scope, date0 }: { scope: string; date0: stri
           ))}
         </div>
       ) : (
-        <span className="small">No one in this scope.</span>
+        <span className="small">{by === "lead" ? "No team leads with members in this scope." : "No one in this scope."}</span>
       )}
-      <span className="small">With status / headcount: people with a schedule or leave that day out of everyone in the team. Midshift and GY in brackets are among those counts.</span>
+      <span className="small">
+        {by === "lead"
+          ? "By lead: each team lead’s members (their assigned approver, else the lead allocated above them), named after the lead’s allocations. "
+          : ""}
+        With status / headcount: people with a schedule or leave that day out of everyone in the group. Midshift and GY in brackets are among those counts.
+      </span>
     </Blueprint>
   );
 }

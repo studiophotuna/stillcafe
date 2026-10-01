@@ -25,6 +25,7 @@ export type DataMode = "demo" | "db";
 export type Dialog =
   | { kind: "task"; id: string }
   | { kind: "hold"; id: string }
+  | { kind: "delay"; id: string }
   | { kind: "done"; id: string }
   | { kind: "assist"; offer: AssistOffer }
   | { kind: "endWork" }

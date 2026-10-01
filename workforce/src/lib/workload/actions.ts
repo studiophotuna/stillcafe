@@ -16,6 +16,7 @@ import {
   reviewCx,
   distribute,
   holdTask,
+  setDelay,
   importRows,
   resumeTask,
   setPriority,
@@ -34,6 +35,7 @@ export type Action =
   | { type: "startWork"; pid: number; assist?: boolean }
   | { type: "startTask"; id: string; pid: number }
   | { type: "hold"; id: string; reason: string }
+  | { type: "setDelay"; id: string; delay: string }
   | { type: "resume"; id: string; pid: number }
   | { type: "complete"; id: string; vals: Task["fields"]; pid: number; cx?: Record<string, number> | null; delay?: string | null }
   | { type: "reviewCx"; id: string; cx?: Record<string, number> | null; note?: string; by: number }
@@ -62,6 +64,7 @@ export function applyAction(d: WorkloadData, a: Action, now: number): Outcome {
     case "startWork": return startWork(d, a.pid, now, !!a.assist);
     case "startTask": return startTask(d, a.id, a.pid, now);
     case "hold": return holdTask(d, a.id, a.reason, now);
+    case "setDelay": return setDelay(d, a.id, a.delay, now);
     case "resume": return resumeTask(d, a.id, a.pid, now);
     case "complete": return completeTask(d, a.id, a.vals, a.pid, now, a.cx, a.delay);
     case "reviewCx": return reviewCx(d, a.id, a.by, now, a.cx, a.note);

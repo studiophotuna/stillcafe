@@ -917,6 +917,19 @@ describe("delay remarks and the due / overdue board", async () => {
     const fresh = task({ status: "in_progress", assignee: ANA, startedAt: NOW - H, received: NOW - H, fields: { ticket: "1", carrier: "MSK", contracts: 1 } });
     expect(get(E.completeTask(data([fresh]), fresh.id, fresh.fields, ANA, NOW).data, fresh.id).status).toBe("done");
   });
+  it("takes delay remarks on open overdue tickets, kept at resolve", async () => {
+    const { authorizeWl } = await import("./authz");
+    const t = task({ status: "assigned", assignee: ANA, received: NOW - 100 * H });
+    const d = data([t]);
+    const r = E.setDelay(d, t.id, " Carrier slow ", NOW);
+    expect(get(r.data, t.id).delay).toBe("Carrier slow");
+    expect(E.setDelay(r.data, t.id, "", NOW).data.tasks[0].delay).toBeNull();
+    const ok = task({ status: "assigned", assignee: ANA, received: NOW - H });
+    expect(E.setDelay(data([ok]), ok.id, "x", NOW).message).toMatch(/isn't overdue/);
+    expect("action" in authorizeWl({ type: "setDelay", id: t.id, delay: "x" }, d, ANA)).toBe(true);
+    const other = d.people.find((p) => p.id !== ANA && !d.admins.includes(p.id) && !d.approvers.includes(p.id))!;
+    expect("error" in authorizeWl({ type: "setDelay", id: t.id, delay: "x" }, d, other.id)).toBe(true);
+  });
   it("counts open tickets by due day and system", () => {
     const over = task({ trade: "lcl", received: NOW - 100 * H }); // RCM, overdue
     const soon = task({ trade: "fewb", received: NOW - H }); // GPM, still due

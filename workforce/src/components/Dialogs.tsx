@@ -252,6 +252,55 @@ function HoldDialog({ id }: { id: string }) {
   );
 }
 
+function DelayDialog({ id }: { id: string }) {
+  const { run, setDialog, data } = useWorkload();
+  const t = data.tasks.find((x) => x.id === id);
+  const [delay, setDelay] = useState(t?.delay ?? "");
+  const close = () => setDialog(null);
+  return (
+    <Modal onClose={close} pad>
+      <div className="dialog-title" style={{ fontSize: 26 }}>
+        Delay remarks
+      </div>
+      <span style={{ fontSize: 13, color: "var(--color-neutral-700)" }}>
+        {id}
+        {t ? ` · ${t.title}` : ""}
+      </span>
+      <div className="field">
+        <label htmlFor="delay-text">Why is this ticket overdue?</label>
+        <textarea
+          id="delay-text"
+          className="input"
+          autoFocus
+          maxLength={500}
+          value={delay}
+          onChange={(e) => setDelay(e.target.value)}
+          placeholder="e.g. Waiting for the carrier to confirm the rates"
+          style={{ minHeight: 80 }}
+        />
+      </div>
+      <span style={{ fontSize: 13, color: "var(--color-neutral-700)" }}>Shown in the queue’s overdue list, and filled in when the ticket is resolved.</span>
+      <div className="dialog-actions" style={{ gap: 10 }}>
+        <button className="btn btn-secondary btn-40" onClick={close}>
+          Cancel
+        </button>
+        <Blueprint
+          as="button"
+          className="btn btn-primary btn-40"
+          style={{ padding: "0 18px" }}
+          disabled={delay.trim() === (t?.delay ?? "").trim()}
+          onClick={() => {
+            run({ type: "setDelay", id, delay });
+            close();
+          }}
+        >
+          Save remarks
+        </Blueprint>
+      </div>
+    </Modal>
+  );
+}
+
 function DoneDialog({ id }: { id: string }) {
   const { data, run, me, setDialog } = useWorkload();
   const t = data.tasks.find((x) => x.id === id);
@@ -564,6 +613,7 @@ export function Dialogs() {
   if (dialog.kind === "assist") return <AssistDialog offer={dialog.offer} />;
   if (dialog.kind === "task") return <TaskDialog key={dialog.id} id={dialog.id} />;
   if (dialog.kind === "hold") return <HoldDialog key={dialog.id} id={dialog.id} />;
+  if (dialog.kind === "delay") return <DelayDialog key={dialog.id} id={dialog.id} />;
   return <DoneDialog key={dialog.id} id={dialog.id} />;
 }
 

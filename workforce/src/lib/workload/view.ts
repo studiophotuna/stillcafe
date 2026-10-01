@@ -42,6 +42,10 @@ export interface TaskRowVM {
   onTime: boolean;
   /** Total time on hold, "" if never. */
   held: string;
+  /** Delay remarks (overdue tickets), "" if none. */
+  delay: string;
+  /** May add / edit delay remarks: an open overdue ticket, for its assignee, admins and leads. */
+  canDelay: boolean;
 }
 
 export function taskRow(d: WorkloadData, t: Task, me: number, isAdmin: boolean, now: number): TaskRowVM {
@@ -85,6 +89,8 @@ export function taskRow(d: WorkloadData, t: Task, me: number, isAdmin: boolean, 
       const ps = holdPeriods(t, now);
       return ps.length ? dur(ps.reduce((a, p) => a + ((p.to ?? now) - p.from), 0)) : "";
     })(),
+    delay: t.delay ?? "",
+    canDelay: od && (t.assignee === me || isAdmin || d.approvers.includes(me)),
   };
 }
 

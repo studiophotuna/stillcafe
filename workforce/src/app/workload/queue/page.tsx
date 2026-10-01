@@ -39,6 +39,8 @@ export default function QueuePage() {
   // Due / overdue board: open tickets in this unit; clicking a count shows just those.
   const board = dueBoard(data, data.tasks.filter((t) => t.status !== "done" && inUnit(t)), now);
   const [pick, setPick] = useState<{ ids: string[]; label: string } | null>(null);
+  // Overdue now without delay remarks (a row on the board).
+  const noRemarks = new Set(data.tasks.filter((t) => t.status !== "done" && inUnit(t) && !t.delay && isOverdue(t, data, now)).map((t) => t.id));
   const active = sortTasks(
     data.tasks.filter(
       (t) =>
@@ -90,6 +92,7 @@ export default function QueuePage() {
       {tab === "active" && (
         <DueBoard
           board={board}
+          noRemarks={noRemarks}
           pick={pick?.label ?? ""}
           onPick={(ids, label) => {
             setPick(pick?.label === label ? null : { ids, label });
@@ -148,7 +151,17 @@ export default function QueuePage() {
 }
 
 /** Days across, and for each system a Due row and an Overdue row; counts open the tickets. */
-function DueBoard({ board, pick, onPick }: { board: { cols: BoardCol[]; groups: BoardGroup[] }; pick: string; onPick: (ids: string[], label: string) => void }) {
+function DueBoard({
+  board,
+  noRemarks,
+  pick,
+  onPick,
+}: {
+  board: { cols: BoardCol[]; groups: BoardGroup[] };
+  noRemarks: Set<string>;
+  pick: string;
+  onPick: (ids: string[], label: string) => void;
+}) {
   const { cols, groups } = board;
   if (!groups.length) return null;
   const total = (k: "due" | "over") => cols.map((_, i) => groups.flatMap((g) => g[k][i]));
@@ -185,13 +198,24 @@ function DueBoard({ board, pick, onPick }: { board: { cols: BoardCol[]; groups: 
           </tr>
         );
       })}
+      {g.overNow.some((id) => noRemarks.has(id)) && (
+        <tr className="qb-row-rem" style={bold ? { fontWeight: 600 } : undefined}>
+          <td className="qb-lab">No delay remarks</td>
+          {cols.map((c, i) => (
+            <td key={c.key} className={"qb-c" + (c.today ? " qb-today" : "")}>
+              {c.future ? <span className="qb-zero">·</span> : cell(g.over[i].filter((id) => noRemarks.has(id)), `${g.name} · Overdue without remarks · ${c.label === "Today" ? "today" : c.sub}`, true)}
+            </td>
+          ))}
+          <td className="qb-c qb-tot">{cell(g.overNow.filter((id) => noRemarks.has(id)), `${g.name} · Overdue without remarks`, true)}</td>
+        </tr>
+      )}
     </>
   );
   return (
     <Blueprint as="section" className="panel tight scroll-x" style={{ gap: 8 }}>
       <div className="chart-head">
         <h2 className="h2">Due and overdue by day</h2>
-        <span className="small">Open tickets by due date · future Overdue (in italics) = still open and due by then, if not resolved · click a number to list them</span>
+        <span className="small">Open tickets by due date · future Overdue (in italics) = still open and due by then, if not resolved · click a number to list them, with their delay remarks</span>
       </div>
       <table className="table qb">
         <thead>

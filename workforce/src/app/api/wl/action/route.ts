@@ -7,7 +7,7 @@ import { runAction } from "@/lib/workload/server";
 export const dynamic = "force-dynamic";
 
 const TYPES = new Set<Action["type"]>([
-  "startWork", "startTask", "hold", "resume", "complete", "distribute", "setTrade",
+  "startWork", "startTask", "hold", "setDelay", "resume", "complete", "distribute", "setTrade",
   "setPriority", "setTaskType", "setReceived", "reviewCx", "assign", "checkMail", "importRows", "setSettings", "setFields", "away", "back", "endWork", "undoEnd", "decideOt",
 ]);
 

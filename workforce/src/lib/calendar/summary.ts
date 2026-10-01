@@ -8,7 +8,7 @@
  *   WFH - 15
  *   SL - 1
  */
-import { BUCKETS } from "./constants";
+import { BUCKETS, isLeader } from "./constants";
 import type { Cal } from "./engine";
 import type { CalPerson, Code, OrgNode } from "./types";
 
@@ -79,10 +79,10 @@ export function attendanceSummary(c: Cal, scope: string, date: string): SummaryB
 }
 
 /** The summary as plain text, ready to paste into a chat or email. */
-export const summaryText = (blocks: SummaryBlock[]) =>
+export const summaryText = (blocks: SummaryBlock[], sep = " ") =>
   blocks
     .map((b) =>
-      [`${b.name} ${b.withStatus}/${b.headcount}`]
+      [`${b.name}${sep}${b.withStatus}/${b.headcount}`]
         .concat(b.detail ? b.lines.map((l) => `${l.code} - ${l.n}${l.shifts ? ` (${l.shifts})` : ""}${l.pending ? ` (${l.pending} pending)` : ""}`) : [])
         .join("\n"),
     )
@@ -95,3 +95,41 @@ export const summaryTotals = (blocks: SummaryBlock[]) => {
   for (const b of teams) for (const l of b.lines) by[l.code] = (by[l.code] ?? 0) + l.n;
   return { withStatus: teams.reduce((a, b) => a + b.withStatus, 0), headcount: teams.reduce((a, b) => a + b.headcount, 0), by };
 };
+
+/**
+ * Blocks per team lead in `scope`: named after the lead's allocations ("INAS / LCL / Velocity"),
+ * covering the members assigned to them as approver, or (with no approver) allocated within the
+ * lead's scope. Leads with nobody under them are left out; leftover members go to "No lead".
+ */
+export function leadSummary(c: Cal, scope: string, date: string): (SummaryBlock & { lead?: string })[] {
+  const { O } = c;
+  const node = O.by[scope];
+  if (!node) return [];
+  const alive = (p: CalPerson) => c.alive(p, date) && (!p.hire || p.hire <= date);
+  const inScope = c.d.people.filter((p) => O.inN(p, scope) && alive(p));
+  const leads = inScope.filter((p) => p.level === "lead").sort((a, b) => a.name.localeCompare(b.name));
+  const leadIds = new Set(leads.map((l) => l.id));
+  // Each member's lead: their approver when that's a lead, else the lead allocated nearest above them.
+  const leadOf = (p: CalPerson) => {
+    if (p.approver !== undefined && leadIds.has(p.approver)) return p.approver;
+    let best: { id: number; d: number } | undefined;
+    for (const a of p.assign)
+      O.anc(a).forEach((x, d) => {
+        const l = leads.find((l) => l.assign.includes(x));
+        if (l && (!best || d < best.d)) best = { id: l.id, d };
+      });
+    return best?.id;
+  };
+  const members = inScope.filter((p) => !isLeader(p.level));
+  const own = new Map(members.map((p) => [p.id, leadOf(p)]));
+  const out: (SummaryBlock & { lead?: string })[] = [];
+  for (const l of leads) {
+    const ppl = members.filter((p) => own.get(p.id) === l.id);
+    if (!ppl.length) continue;
+    const name = l.assign.map((a) => O.by[a]?.name).filter(Boolean).join(" / ") || l.name;
+    out.push({ ...block(c, { ...node, id: "lead:" + l.id, name }, "system", ppl, date), lead: l.name });
+  }
+  const rest = members.filter((p) => own.get(p.id) === undefined);
+  if (out.length && rest.length) out.push(block(c, { ...node, id: "lead:none", name: "No lead" }, "system", rest, date));
+  return out;
+}

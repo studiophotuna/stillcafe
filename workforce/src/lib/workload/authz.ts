@@ -32,6 +32,10 @@ export function authorizeWl(a: Action, d: WorkloadData, me: number): { action: A
       if (x?.pid === me) return { error: "Someone else needs to approve your overtime." };
       return { action: { ...a, by: me } };
     }
+    case "setDelay": {
+      const t = d.tasks.find((x) => x.id === a.id);
+      return t && (t.assignee === me || admin || d.approvers.includes(me)) ? { action: a } : { error: "Only the assignee or a lead can add delay remarks." };
+    }
     case "hold": {
       const t = d.tasks.find((x) => x.id === a.id);
       return t && (t.assignee === me || admin) ? { action: a } : { error: "You can only set your own ticket to pending." };
