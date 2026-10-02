@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { Blueprint } from "@/components/ui";
 import { fmtY } from "@/lib/calendar/dates";
-import { attendanceSummary, leadSummary, summaryText, type SummaryBlock } from "@/lib/calendar/summary";
+import { attendanceSummary, leadSummary, summaryText, tlText, type SummaryBlock } from "@/lib/calendar/summary";
 import { useCalendar } from "@/lib/calendar/store";
 
 /**
@@ -67,7 +67,7 @@ export function AttendanceSummary({ scope, date0 }: { scope: string; date0: stri
                   {b.lead && <span className="small"> · {b.lead}</span>}
                 </span>
                 <strong>
-                  {b.withStatus}/{b.headcount}
+                  {b.present}/{b.headcount}
                 </strong>
               </div>
               {b.detail &&
@@ -80,6 +80,7 @@ export function AttendanceSummary({ scope, date0 }: { scope: string; date0: stri
                           {l.n}
                           {l.shifts && <span className="small"> ({l.shifts})</span>}
                           {l.pending ? <span className="small"> · {l.pending} pending</span> : null}
+                          {l.tl ? <span className="small">{tlText(l)}</span> : null}
                         </span>
                       </li>
                     ))}
@@ -95,9 +96,9 @@ export function AttendanceSummary({ scope, date0 }: { scope: string; date0: stri
       )}
       <span className="small">
         {by === "lead"
-          ? "By lead: each team lead’s members (their assigned approver, else the lead allocated above them), named after the lead’s allocations. "
+          ? "By lead: each team lead and their members (assigned approver, else the lead allocated above them), named after the lead’s allocations; “incl TL” marks the lead’s own status. "
           : ""}
-        With status / headcount: people with a schedule or leave that day out of everyone in the group. Midshift and GY in brackets are among those counts.
+        Present / headcount: people working that day (RTO, WFH, holiday duty, rest day OT) out of everyone in the group; leave is deducted but still listed. Midshift and GY in brackets are among those counts.
       </span>
     </Blueprint>
   );

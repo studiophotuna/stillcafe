@@ -705,16 +705,26 @@ describe("attendance summary, reports, payroll and approvers", async () => {
     const b = leadSummary(c, "rm", TODAY);
     const names = b.map((x) => x.name);
     expect(names).toEqual(expect.arrayContaining(["GPM", "EU", "RCM"]));
-    // Each member counts once: the blocks add up to the team's members (leaders aside).
+    // Each member counts once, plus each block's own lead; managers and directors aside.
     const team = attendanceSummary(c, "rm", TODAY)[0];
-    const leaders = d.people.filter((p) => ["lead", "manager", "director"].includes(p.level) && c.O.inN(p, "rm") && c.alive(p, TODAY));
-    expect(b.reduce((a, x) => a + x.headcount, 0)).toBe(team.headcount - leaders.length);
+    const above = d.people.filter((p) => ["manager", "director"].includes(p.level) && c.O.inN(p, "rm") && c.alive(p, TODAY));
+    expect(b.reduce((a, x) => a + x.headcount, 0)).toBe(team.headcount - above.length);
+    // The lead's own status line is marked; present counts only working codes.
+    for (const x of b.filter((x) => x.lead)) expect(x.lines.reduce((a, l) => a + l.tl, 0)).toBe(1);
+    for (const x of b) expect(x.present).toBe(x.lines.filter((l) => ["RTO", "WFH", "HDY", "RDOT"].includes(l.code)).reduce((a, l) => a + l.n, 0));
+    expect(summaryText(b, " - ")).toMatch(/ incl TL/);
     expect(summaryText(b, " - ").split("\n")[0]).toMatch(/ - \d+\/\d+$/);
     // An assigned approver who is a lead wins over allocation.
     const ana = d.people.find((p) => p.id === 0)!;
     ana.approver = 21;
+    // A lead on leave: deducted from present, still listed with "incl TL".
+    d.overrides[`21|${TODAY}`] = "VL";
     const b2 = leadSummary(new Cal(d, TODAY), "rm", TODAY);
-    expect(b2.find((x) => x.name === "EU")!.headcount).toBe(b.find((x) => x.name === "EU")!.headcount + 1);
+    const eu = b2.find((x) => x.name === "EU")!;
+    expect(eu.headcount).toBe(b.find((x) => x.name === "EU")!.headcount + 1);
+    expect(eu.lines.find((l) => l.code === "VL")).toMatchObject({ tl: 1 });
+    expect(summaryText([eu], " - ")).toMatch(/\nVL - \d+ incl TL/);
+    expect(eu.present).toBeLessThan(eu.headcount);
   });
   it("has count tiles for every report, and the schedule and summary reports", () => {
     const c = new Cal(fresh(), TODAY);

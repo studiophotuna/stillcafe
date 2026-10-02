@@ -65,21 +65,21 @@ export function buildReport(c: Cal, type: ReportType, scope: string, from: strin
     tiles.push({ k: "People", v: rows.length - 1 }, { k: "In office days", v: r }, { k: "WFH days", v: w }, { k: "Leave days", v: sum(10) }, { k: "Holiday duty days", v: sum(13) }, { k: "Office rate", v: r + w ? `${Math.round((r / (r + w)) * 100)}%` : "—", m: "in office ÷ (in office + WFH)" });
   }
   if (type === "summary") {
-    desc = "Per day, each team then each of its systems: people with a status out of the headcount, and how many are in office, WFH, on leave and so on. Midshift and GY count those on those shifts.";
+    desc = "Per day, each team then each of its systems: people working (RTO, WFH, holiday duty, rest day OT) out of the headcount, and how many are in office, WFH, on leave and so on. Midshift and GY count those on those shifts.";
     const K: Code[] = ["RTO", "WFH", "HDY", "RDOT", "SL", "VL", "EL", "HD", "BT", "RD", "HOL"];
-    rows.push(["Date", "Day", "Team", "System", "With status", "Headcount", ...K.map((k) => CODES[k].label), "Midshift (working)", "GY (working)"]);
+    rows.push(["Date", "Day", "Team", "System", "Present", "Headcount", ...K.map((k) => CODES[k].label), "Midshift (working)", "GY (working)"]);
     for (const d of dates.slice(0, 62)) {
       for (const b of attendanceSummary(c, scope, d)) {
         const n = (k: Code) => b.lines.find((l) => l.code === k)?.n ?? 0;
         const sh = (bk: string) => b.lines.reduce((a, l) => a + (Number(l.shifts.match(new RegExp("(\\d+) " + bk))?.[1]) || 0), 0);
-        rows.push([d, DOW_NAMES[dowOf(d)], b.level === "team" ? b.name : "", b.level === "system" ? b.name : "", b.withStatus, b.headcount, ...K.map(n), sh("Midshift"), sh("GY")]);
+        rows.push([d, DOW_NAMES[dowOf(d)], b.level === "team" ? b.name : "", b.level === "system" ? b.name : "", b.present, b.headcount, ...K.map(n), sh("Midshift"), sh("GY")]);
       }
     }
     const teamRows = rows.slice(1).filter((r) => r[2]);
     const col = (i: number) => teamRows.reduce((a, r) => a + (Number(r[i]) || 0), 0);
     tiles.push(
       { k: "Headcount", v: dates.length === 1 ? col(5) : `${col(5)}`, m: dates.length === 1 ? "people" : "person-days" },
-      { k: "With status", v: col(4) },
+      { k: "Present", v: col(4), m: "working; leave deducted" },
       { k: "In office", v: col(6) },
       { k: "WFH", v: col(7) },
       { k: "On leave", v: col(10) + col(11) + col(12) + col(13), m: "SL, VL, EL, half-day" },

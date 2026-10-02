@@ -199,7 +199,7 @@ tr.role-row > td { background: var(--role-bg); }
 .tag-amber { background: #fff4dc; color: #8a5300; border: 1px solid #e8b44a; }
 
 /* Attendance summary (Calendar dashboard) */
-.att-sum { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 10px; align-items: start; }
+.att-sum { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 10px; align-items: start; }
 .att-block { border: 1px solid var(--color-divider); border-radius: var(--radius-md); padding: 10px 12px; display: flex; flex-direction: column; gap: 6px; }
 .att-team { grid-column: 1 / -1; background: var(--color-accent-100); border-color: var(--color-accent-200); }
 .att-head { display: flex; justify-content: space-between; gap: 8px; font-weight: 600; color: var(--color-accent-800); }
@@ -230,3 +230,4 @@ tr.role-row > td { background: var(--role-bg); }
 .btn-link-sm { height: 28px; padding: 0 6px; font-size: 13px; margin-left: -6px; }
 .qb tr.qb-row-rem .qb-lab { font-size: 12px; padding-left: 18px; }
 .qb tr.qb-row-rem .qb-n { font-weight: 500; }
+.att-block li > span:last-child { text-align: right; }
