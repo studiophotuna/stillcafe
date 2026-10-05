@@ -69,16 +69,28 @@ export function attendanceSummary(c: Cal, scope: string, date: string): SummaryB
   const teams = node.type === "branch" ? [node] : node.type === "system" || node.type === "trade" ? [O.up(scope, "branch")!].filter(Boolean) : O.desc(scope, "branch");
   const alive = (p: CalPerson) => c.alive(p, date) && (!p.hire || p.hire <= date);
   const out: SummaryBlock[] = [];
+  // Each person counts once: in their first allocated team in scope, and within it their
+  // first allocated system (people allocated to several teams or systems aren't doubled).
+  const teamIds = new Set(teams.map((t) => t.id));
+  const homeTeam = (p: CalPerson) => O.branchesOf(p).find((b) => teamIds.has(b.id))?.id;
+  const homeSys = (p: CalPerson, t: string) => {
+    for (const a of p.assign) {
+      const sy = O.up(a, "system");
+      if (sy && sy.parent === t) return sy.id;
+    }
+    return undefined;
+  };
   for (const t of teams) {
-    const tp = c.d.people.filter((p) => O.inN(p, t.id) && alive(p));
+    const tp = c.d.people.filter((p) => homeTeam(p) === t.id && alive(p));
     if (!tp.length) continue;
     const tb = block(c, t, "team", tp, date);
-    const subs = O.kids(t.id, "system")
-      .map((sy) => ({ sy, sp: tp.filter((p) => O.inN(p, sy.id)) }))
+    const systems = O.kids(t.id, "system");
+    const subs = systems
+      .map((sy) => ({ sy, sp: tp.filter((p) => homeSys(p, t.id) === sy.id) }))
       .filter((x) => x.sp.length)
       .map(({ sy, sp }) => block(c, sy, "system", sp, date));
     // People allocated to the team but no system, so the systems add up to the team.
-    const rest = tp.filter((p) => !O.kids(t.id, "system").some((sy) => O.inN(p, sy.id)));
+    const rest = tp.filter((p) => homeSys(p, t.id) === undefined);
     if (subs.length && rest.length) subs.push(block(c, { ...t, id: t.id + ":none", name: "No system" }, "system", rest, date));
     out.push({ ...tb, detail: !subs.length }, ...subs);
   }

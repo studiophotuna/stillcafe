@@ -699,6 +699,19 @@ describe("attendance summary, reports, payroll and approvers", async () => {
     expect(t.split("\n")[0]).toMatch(/^Rate Management \d+\/\d+$/);
     expect(t).toMatch(/\nRTO - \d+/);
   });
+  it("counts people allocated to several teams or systems once", () => {
+    const d = fresh();
+    const p1 = d.people.find((p) => p.id === 1)!;
+    p1.assign = ["inas", "lcl"]; // GPM and RCM
+    const c = new Cal(d, TODAY);
+    const all = attendanceSummary(c, "bss", TODAY);
+    const teams = all.filter((b) => b.level === "team");
+    const alive = d.people.filter((p) => c.alive(p, TODAY) && (!p.hire || p.hire <= TODAY) && c.O.branchesOf(p).length);
+    // Ana is in Rate Management and Customer Service: counted once overall.
+    expect(teams.reduce((a, b) => a + b.headcount, 0)).toBe(alive.length);
+    const rm = attendanceSummary(c, "rm", TODAY);
+    expect(rm.slice(1).reduce((a, b) => a + b.headcount, 0)).toBe(rm[0].headcount);
+  });
   it("summarises a day per team lead's scope", () => {
     const d = fresh();
     const c = new Cal(d, TODAY);
