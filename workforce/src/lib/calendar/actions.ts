@@ -9,10 +9,15 @@ import { Cal, evState, logsDecision, logsSubmit } from "./engine";
 import { allocProblem, hcTeamOf, mkOrg, primaryTeamOf, teamDefaults, withHcChange, type Org } from "./org";
 import { planOrgImport, type OrgRow } from "./orgImport";
 import { applyUpload, checkUpload, type UploadMode, type UploadRow } from "./uploads";
-import type { CalPerson, AppLinks, HcTag,
+import type { CalPerson, AppLinks, HcTag, KpiEntry, KpiIssue,
   BcpEvent, BcpStatus, CalendarData, Code, Holiday, LeaveRequest, Level, NodeType, NotifLog, OrgNode, Shift,
 } from "./types";
 import type { ReadyKey } from "./constants";
+
+/** Tracker entry changes: a string or number sets it, null clears it. */
+export type KpiPatch = Partial<Record<"remark" | "otRemark", string | null> & Record<"util" | "prod" | "time" | "acc" | "reg" | "rd" | "hol", number | null>>;
+/** An accuracy issue as entered (id only when editing one). */
+export type IssueForm = Pick<KpiIssue, "team" | "date" | "desc" | "root" | "preventive" | "corrective"> & { id?: string; ticket?: string };
 
 export interface RequestForm {
   type: Code;
@@ -47,6 +52,9 @@ export type CalAction =
   | { type: "addPerson"; details: MemberDetails & { name: string; email: string }; level: Level; shift: string; adminHere?: boolean; bid: string; assign: string[] }
   | { type: "removeFromTeam"; pid: number; bid: string }
   | { type: "deleteMember"; pid: number; bid: string }
+  | { type: "setKpi"; team: string; period: string; patch: KpiPatch; actor: number }
+  | { type: "saveIssue"; issue: IssueForm; actor: number }
+  | { type: "deleteIssue"; id: string }
   | { type: "setResign"; pid: number; date: string | null }
   | { type: "saveShift"; orig: string | null; rec: Shift }
   | { type: "deleteShift"; id: string }
@@ -430,6 +438,66 @@ function applyInner(d: CalendarData, a: CalAction, today: string, now: number): 
       if (p.schedPeriod === "week" || p.schedPeriod === "month") patch.schedPeriod = p.schedPeriod;
       if (!c.O.by[a.id] || !Object.keys(patch).length) return { data: d };
       return { data: setNode(d, a.id, patch), message: "Saved." };
+    }
+    case "setKpi": {
+      // OT / KPI trackers: remarks (up to 1,000 characters) and entered figures for a team and period.
+      if (!c.O.by[a.team] || !/^\d{4}-(W\d{2}|\d{2})$/.test(a.period)) return { data: d };
+      const k = `${a.team}|${a.period}`;
+      const cur: KpiEntry = { ...(d.kpi?.[k] ?? {}) };
+      const PCT = ["util", "prod", "time", "acc"] as const;
+      const HRS = ["reg", "rd", "hol"] as const;
+      for (const [key, v] of Object.entries(a.patch) as [keyof KpiPatch, string | number | null][]) {
+        if (key === "remark" || key === "otRemark") {
+          const t = typeof v === "string" ? v.trim().slice(0, 1000) : "";
+          if (t) cur[key] = t;
+          else delete cur[key];
+        } else if ((PCT as readonly string[]).includes(key) || (HRS as readonly string[]).includes(key)) {
+          if (v === null || v === "") delete cur[key];
+          else {
+            const n = Number(v);
+            const max = (PCT as readonly string[]).includes(key) ? 1000 : 5000;
+            if (!Number.isFinite(n) || n < 0 || n > max) return { data: d, error: (PCT as readonly string[]).includes(key) ? "Enter a % from 0 to 1000." : "Enter overtime hours from 0." };
+            cur[key] = Math.round(n * 100) / 100;
+          }
+        }
+      }
+      cur.by = a.actor;
+      cur.at = today;
+      const kpi = { ...(d.kpi ?? {}) };
+      if (Object.keys(cur).every((x) => x === "by" || x === "at")) delete kpi[k];
+      else kpi[k] = cur;
+      return { data: { ...d, kpi }, message: "Saved." };
+    }
+    case "saveIssue": {
+      const f = a.issue;
+      const t = (s: unknown, n: number) => (typeof s === "string" ? s.trim().slice(0, n) : "");
+      if (!c.O.by[f.team] || c.O.by[f.team].type !== "branch") return { data: d, error: "Choose a team." };
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(f.date ?? "") || f.date > today) return { data: d, error: "Enter the date it happened (not in the future)." };
+      const issue: KpiIssue = {
+        id: f.id ?? `I${Math.max(0, d.seq) + 1}-${now.toString(36)}`,
+        team: f.team,
+        date: f.date,
+        ...(t(f.ticket, 60) ? { ticket: t(f.ticket, 60) } : {}),
+        desc: t(f.desc, 2000),
+        root: t(f.root, 2000),
+        preventive: t(f.preventive, 2000),
+        corrective: t(f.corrective, 2000),
+        by: a.actor,
+        at: today,
+      };
+      if (!issue.desc) return { data: d, error: "Describe the issue." };
+      const list = d.issues ?? [];
+      const old = f.id ? list.find((x) => x.id === f.id) : undefined;
+      if (f.id && !old) return { data: d };
+      return {
+        data: { ...d, issues: old ? list.map((x) => (x.id === f.id ? { ...issue, by: old.by, at: old.at } : x)) : list.concat(issue) },
+        message: old ? "Issue updated." : "Issue logged.",
+      };
+    }
+    case "deleteIssue": {
+      const list = d.issues ?? [];
+      if (!list.some((x) => x.id === a.id)) return { data: d };
+      return { data: { ...d, issues: list.filter((x) => x.id !== a.id) }, message: "Issue deleted." };
     }
     case "setBilled": {
       // Headcount report: billed FTE for a person in a team for some months (null = back to the default).

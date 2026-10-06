@@ -25,13 +25,16 @@ const ROUTES: { href: string; access: Access }[] = [
   { href: "/calendar/admin/holidays", access: "anyAdmin" },
   { href: "/calendar/admin/reports", access: "anyAdmin" },
   { href: "/calendar/admin/headcount", access: "anyAdmin" },
+  { href: "/calendar/admin/ot-tracker", access: "leader" },
+  { href: "/calendar/admin/kpi-tracker", access: "leader" },
+  { href: "/calendar/admin/accuracy", access: "leader" },
 ];
 
 /** Views that show the Department › Tower › Team › System › Trade bar. */
-const UNIT_BAR = ["/calendar", "/calendar/admin", "/calendar/management", "/calendar/dashboard", "/calendar/bcp", "/calendar/admin/approvals", "/calendar/admin/members", "/calendar/admin/schedules", "/calendar/admin/settings"];
+const UNIT_BAR = ["/calendar", "/calendar/admin", "/calendar/management", "/calendar/dashboard", "/calendar/bcp", "/calendar/admin/approvals", "/calendar/admin/members", "/calendar/admin/schedules", "/calendar/admin/settings", "/calendar/admin/ot-tracker", "/calendar/admin/kpi-tracker", "/calendar/admin/accuracy"];
 const SUB_SEL = ["/calendar", "/calendar/admin/members", "/calendar/admin/schedules", "/calendar/dashboard"];
 /** Views that can show every team in a tower or department ("All towers" / "All teams"). */
-const MULTI = ["/calendar", "/calendar/admin", "/calendar/dashboard", "/calendar/admin/approvals", "/calendar/admin/members", "/calendar/admin/schedules"];
+const MULTI = ["/calendar", "/calendar/admin", "/calendar/dashboard", "/calendar/admin/approvals", "/calendar/admin/members", "/calendar/admin/schedules", "/calendar/admin/ot-tracker", "/calendar/admin/kpi-tracker", "/calendar/admin/accuracy"];
 
 export function CalShell({ children }: { children: React.ReactNode }) {
   const s = useCalendar();

@@ -7,7 +7,11 @@ import { WORKING } from "../calendar/constants";
 import { addDays } from "../calendar/dates";
 import type { Code } from "../calendar/types";
 import { dayKey } from "./clock";
-import { visibleTeams } from "../calendar/authz";
+import { rightsOf, visibleTeams } from "../calendar/authz";
+import { isLeader } from "../calendar/constants";
+import type { WlStats } from "../calendar/trackers";
+import type { OrgNode } from "../calendar/types";
+import { trackerStats } from "./metrics";
 import { billedFor, workloadPricers, holidaysFor, orgFor, peopleFromCalendar, workloadAdmins, workloadApprovers } from "./people";
 import { applyAction, type Action } from "./actions";
 import type { WorkloadData } from "./engine";
@@ -51,19 +55,64 @@ async function teamContext(token: string, me: number, want?: string | null): Pro
   const mine = c.people.get(me) ? c.O.branchesOf(c.person(me)) : [];
   const team = want || teams.find((t) => mine.includes(t))?.id || teams[0]?.id;
   if (!team) throw new ForbiddenError("You aren’t in a team yet. Ask your admin to allocate you in Calendar › Members.");
+  return { team, c, ctx: ctxOf(c, team, teams) };
+}
+
+/** A team's people, admins and org from the Calendar. */
+function ctxOf(c: Cal, team: string, teams: OrgNode[]): FromCal {
   return {
-    team,
-    c,
-    ctx: {
-      people: peopleFromCalendar(c, Date.now(), team),
-      admins: workloadAdmins(c, team),
-      approvers: workloadApprovers(c, team),
-      org: orgFor(c, team, teams),
-      holidays: holidaysFor(c, team),
-      hc: billedFor(c, team),
-      pricers: workloadPricers(c, team),
-    },
+    people: peopleFromCalendar(c, Date.now(), team),
+    admins: workloadAdmins(c, team),
+    approvers: workloadApprovers(c, team),
+    org: orgFor(c, team, teams),
+    holidays: holidaysFor(c, team),
+    hc: billedFor(c, team),
+    pricers: workloadPricers(c, team),
   };
+}
+
+/** The days each person was scheduled to work in a period (Calendar: in office, from home or holiday duty). */
+function workDaysOf(c: Cal, people: { id: number }[], team: string, from: number, to: number) {
+  const today = dayKey(Date.now());
+  const last = [dayKey(to - 1), today].sort()[0];
+  const workDays: Record<number, string[]> = {};
+  for (const p of people) {
+    const cp = c.people.get(p.id);
+    if (!cp) continue;
+    const days: string[] = [];
+    for (let k = dayKey(from), g = 0; k <= last && g < 400; k = addDays(k, 1), g++) {
+      if (cp.hire && k < cp.hire) continue;
+      const x = c.raw(cp, k, team);
+      if (WORKING.includes(x.code as Code) && !x.pending) days.push(k);
+    }
+    workDays[p.id] = days;
+  }
+  return workDays;
+}
+
+/**
+ * OT / KPI trackers: Workload figures for a period for every team the person can open that
+ * uses Workload (teams that never opened it are left out). Leads, managers, directors and admins.
+ */
+export async function trackerStatsAll(token: string, me: number, from: number, to: number): Promise<Record<string, WlStats>> {
+  const c = new Cal(await getCalendar(token), dayKey(Date.now()));
+  const p = c.people.get(me);
+  const r = rightsOf(c, me);
+  if (!p || !(isLeader(p.level) || r.anyAdmin)) throw new ForbiddenError("Only leads, managers, directors and admins can see the trackers.");
+  const teams = visibleTeams(c, me);
+  const out: Record<string, WlStats> = {};
+  await Promise.all(
+    teams.map(async (t) => {
+      const ctx = ctxOf(c, t.id, teams);
+      const s = await load(token, t.id, ctx);
+      if (!s) return;
+      const { data, error } = await db().rpc("workforce_activities", { p_token: token, p_team: t.id, p_since: from });
+      if (error) throw new Error(error.message);
+      const activities = ((data ?? []) as RawActivity[]).filter((a) => a.start < to).map(({ version: _v, ...a }) => a);
+      out[t.id] = trackerStats(s.data, { from, to, now: Date.now(), workDays: workDaysOf(c, ctx.people, t.id, from, to), activities });
+    }),
+  );
+  return out;
 }
 
 async function load(token: string, team: string, ctx: FromCal): Promise<Snapshot | null> {
@@ -199,20 +248,7 @@ export async function getOvertime(token: string, me: number, want: string | null
 export async function getPeriod(token: string, me: number, want: string | null, from: number, to: number) {
   const { team, ctx, c } = await teamContext(token, me, want);
   if (!ctx.admins.includes(me) && !ctx.approvers.includes(me)) throw new ForbiddenError("Only Workload admins and leads can see the dashboard.");
-  const today = dayKey(Date.now());
-  const last = [dayKey(to - 1), today].sort()[0];
-  const workDays: Record<number, string[]> = {};
-  for (const p of ctx.people) {
-    const cp = c.people.get(p.id);
-    if (!cp) continue;
-    const days: string[] = [];
-    for (let k = dayKey(from), g = 0; k <= last && g < 400; k = addDays(k, 1), g++) {
-      if (cp.hire && k < cp.hire) continue;
-      const x = c.raw(cp, k, team);
-      if (WORKING.includes(x.code as Code) && !x.pending) days.push(k);
-    }
-    workDays[p.id] = days;
-  }
+  const workDays = workDaysOf(c, ctx.people, team, from, to);
   const { data, error } = await db().rpc("workforce_activities", { p_token: token, p_team: team, p_since: from });
   if (error) throw new Error(error.message);
   const activities = ((data ?? []) as RawActivity[]).filter((a) => a.start < to).map(({ version: _v, ...a }) => a);

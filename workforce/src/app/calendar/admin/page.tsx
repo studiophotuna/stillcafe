@@ -34,8 +34,10 @@ const ABOUT: Record<string, string> = {
   "/workload/admin/sla": "SLA by priority and task types",
   "/workload/admin/targets": "Working time and productivity targets",
   "/workload/admin/fields": "Fields on each ticket",
-  "/workload/admin/business":
-    "Fixed billing against unit pricing; agreed rates",
+  "/workload/admin/business": "Fixed billing against unit pricing; agreed rates",
+  "/calendar/admin/ot-tracker": "Weekly and monthly overtime per team, with remarks",
+  "/calendar/admin/kpi-tracker": "Utilization, productivity, timeliness and accuracy per team",
+  "/calendar/admin/accuracy": "Issues with root cause, preventive and corrective actions",
 };
 
 /** The Admin area's home: every admin function, grouped, with what's waiting. */

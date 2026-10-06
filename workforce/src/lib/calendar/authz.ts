@@ -4,6 +4,7 @@
  * system admin) manage org, shifts, holidays and BCP events.
  */
 import { canDecide } from "./approvals";
+import { canTrack } from "./trackers";
 import type { CalAction } from "./actions";
 import type { Cal } from "./engine";
 import { isNodeAdmin } from "./org";
@@ -115,6 +116,17 @@ export function authorizeCal(a: CalAction, c: Cal, me: number): { action: CalAct
       return ok(r.teamAdmin(a.bid));
     case "removeFromTeam":
       return ok(r.teamAdmin(a.bid) && a.pid !== me);
+    case "setKpi":
+      return ok(canTrack(c, me, a.team), { ...a, actor: me });
+    case "saveIssue": {
+      // Editing: also the team the issue was logged for.
+      const old = a.issue.id ? (c.d.issues ?? []).find((x) => x.id === a.issue.id) : undefined;
+      return ok(canTrack(c, me, a.issue.team) && (!old || canTrack(c, me, old.team)), { ...a, actor: me });
+    }
+    case "deleteIssue": {
+      const old = (c.d.issues ?? []).find((x) => x.id === a.id);
+      return ok(!!old && canTrack(c, me, old.team));
+    }
     case "deleteMember": {
       // Only someone this admin fully manages: every team they're in is one this admin
       // runs (a team admin can't delete a person other teams still have), never themselves.

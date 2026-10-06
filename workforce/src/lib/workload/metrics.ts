@@ -161,3 +161,20 @@ export function teamPeriod(d: WorkloadData, rows: PersonPeriod[], tasks: Task[],
 
 /** Task type name for exports and tables ("Standard" for requests without one). */
 export const typeLabel = (d: Pick<WorkloadData, "settings">, t: Task) => (t.ttype ? (taskTypeOf(d.settings, t)?.name ?? "Deleted type") : "Standard");
+
+/**
+ * A team's figures for the OT and KPI trackers: utilization, productivity and timeliness as on
+ * the dashboard, tickets resolved, and approved overtime in hours by kind (End work: regular,
+ * rest day OT, holiday duty).
+ */
+export function trackerStats(d: WorkloadData, x: PeriodInput) {
+  const rows = d.people.map((p) => personPeriod(d, p, x));
+  const team = teamPeriod(d, rows, d.tasks, x);
+  const ot = { reg: 0, rd: 0, hol: 0 };
+  for (const a of x.activities) {
+    if (a.kind !== "end" || a.otStatus !== "approved" || a.start < x.from || a.start >= x.to) continue;
+    ot[a.otKind === "holiday" ? "hol" : a.otKind === "restday" ? "rd" : "reg"] += a.otMin / 60;
+  }
+  const h = (n: number) => Math.round(n * 100) / 100;
+  return { util: team.util, prod: team.prod, time: team.time, done: team.done, reg: h(ot.reg), rd: h(ot.rd), hol: h(ot.hol) };
+}

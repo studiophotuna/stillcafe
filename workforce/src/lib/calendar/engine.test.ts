@@ -1031,3 +1031,87 @@ describe("pricing is for managers and above", async () => {
     expect(workloadAdmins(c, "rm").filter((id) => c.person(id).level === "lead").every((id) => !pr.includes(id))).toBe(true);
   });
 });
+
+describe("OT and KPI trackers", async () => {
+  const T = await import("./trackers");
+  const { authorizeCal } = await import("./authz");
+  it("uses ISO weeks and calendar months", () => {
+    expect(T.isoWeekOf("2026-10-01")).toBe("2026-W40");
+    expect(T.isoWeekOf("2026-09-28")).toBe("2026-W40");
+    expect(T.isoWeekOf("2026-09-27")).toBe("2026-W39");
+    expect(T.isoWeekOf("2026-01-01")).toBe("2026-W01");
+    expect(T.isoWeekOf("2027-01-01")).toBe("2026-W53");
+    expect(T.isoWeekOf("2024-12-30")).toBe("2025-W01");
+    expect(T.periodRange("2026-W40")).toEqual(["2026-09-28", "2026-10-04"]);
+    expect(T.periodRange("2026-09")).toEqual(["2026-09-01", "2026-09-30"]);
+    expect(T.periodLabel("2026-W40")).toBe("Wk 40 · 28 Sep – 4 Oct 2026");
+    expect(T.recentWeeks("2026-09-24", 2)).toEqual(["2026-W39", "2026-W38"]);
+  });
+
+  it("works out HC, PTO (half days 0.5), working hours and OT %", () => {
+    const d = fresh();
+    const rm = d.nodes.find((n) => n.id === "rm")!;
+    const c0 = new Cal(d, TODAY);
+    const base = T.hcPto(c0, "rm", "2026-09-28", "2026-10-04");
+    // One approved VL day and one approved half day for Ana in week 40.
+    const req = (id: string, type: "VL" | "HD", start: string) => ({ id, pid: ANA, type, start, end: start, half: "AM" as const, reason: "", created: TODAY, approvals: { rm: "approved" as const, cs: "approved" as const } });
+    const d2 = { ...d, requests: d.requests.filter((q) => q.pid !== ANA).concat([req("x1", "VL", "2026-09-29"), req("x2", "HD", "2026-09-30")] as never) };
+    const c = new Cal(d2, TODAY);
+    const { hc, pto } = T.hcPto(c, "rm", "2026-09-28", "2026-10-04");
+    expect(hc).toBe(base.hc);
+    expect(pto - T.hcPto(new Cal({ ...d, requests: d.requests.filter((q) => q.pid !== ANA) }, TODAY), "rm", "2026-09-28", "2026-10-04").pto).toBe(1.5);
+    const row = T.otRow(c, rm, "2026-W40", { util: 90, prod: 100, time: 95, done: 50, reg: 10, rd: 6, hol: 4 });
+    expect(row.hours).toBe(hc * 40 - pto * 8);
+    expect(row).toMatchObject({ reg: 10, rd: 6, hol: 4, total: 20, src: "workload" });
+    expect(row.pct).toBeCloseTo(Math.round((20 / row.hours) * 1000) / 10);
+    expect(row.pctNoHol).toBeCloseTo(Math.round((16 / row.hours) * 1000) / 10);
+    // Entered overtime replaces Workload's; totals add up and work the % out again.
+    const d3 = run(d2, { type: "setKpi", team: "rm", period: "2026-W40", patch: { reg: 12, rd: 0, otRemark: "Month-end volume" }, actor: SAM }).data;
+    const r3 = T.otRow(new Cal(d3, TODAY), rm, "2026-W40", { util: 90, prod: 100, time: 95, done: 50, reg: 10, rd: 6, hol: 4 });
+    expect(r3).toMatchObject({ reg: 12, rd: 0, hol: 0, total: 12, src: "manual", remark: "Month-end volume" });
+    const tot = T.otTotal([row, r3]);
+    expect(tot).toMatchObject({ total: 32, hours: row.hours * 2 });
+    expect(tot.pct).toBeCloseTo(Math.round((32 / (row.hours * 2)) * 1000) / 10);
+  });
+
+  it("KPIs come from Workload or are entered; accuracy counts the issues logged", () => {
+    const d = fresh();
+    const rm = d.nodes.find((n) => n.id === "rm")!;
+    const wl = { util: 104, prod: 120, time: 98, done: 200, reg: 0, rd: 0, hol: 0 };
+    // Two issues in week 40 and one in week 41: only week 40's count.
+    const x = { ...d, issues: [0, 1, 2].map((i) => ({ id: "i" + i, team: "rm", date: ["2026-09-29", "2026-09-30", "2026-10-05"][i], desc: "Wrong rate", root: "", preventive: "", corrective: "", by: SAM, at: TODAY })) };
+    const row = T.kpiRow(new Cal(x, TODAY), rm, "2026-W40", wl);
+    expect(row).toMatchObject({ util: 104, prod: 120, time: 98, issues: 2, done: 200, acc: 99, src: "workload" });
+    const y = run(x, { type: "setKpi", team: "rm", period: "2026-W40", patch: { util: 95.5, acc: 100, remark: "Low volume" }, actor: SAM }).data;
+    expect(T.kpiRow(new Cal(y, TODAY), rm, "2026-W40", wl)).toMatchObject({ util: 95.5, prod: 120, acc: 100, src: "manual", remark: "Low volume" });
+    // A team without Workload shows only what's entered.
+    expect(T.kpiRow(new Cal(y, TODAY), rm, "2026-W40")).toMatchObject({ util: 95.5, prod: null, time: null, acc: 100 });
+    // Clearing a figure goes back to Workload's.
+    const z = run(y, { type: "setKpi", team: "rm", period: "2026-W40", patch: { util: null, acc: null }, actor: SAM }).data;
+    expect(T.kpiRow(new Cal(z, TODAY), rm, "2026-W40", wl)).toMatchObject({ util: 104, acc: 99, remark: "Low volume" });
+  });
+
+  it("issues need a description, a team and a past date; leads and above log them", () => {
+    const d = fresh();
+    expect(run(d, { type: "saveIssue", issue: { team: "rm", date: TODAY, desc: " ", root: "", preventive: "", corrective: "" }, actor: SAM }).error).toMatch(/Describe/);
+    expect(run(d, { type: "saveIssue", issue: { team: "rm", date: "2099-01-01", desc: "x", root: "", preventive: "", corrective: "" }, actor: SAM }).error).toMatch(/future/);
+    const o = run(d, { type: "saveIssue", issue: { team: "rm", date: TODAY, ticket: "RM-1", desc: "Wrong rate", root: "r", preventive: "p", corrective: "c" }, actor: SAM });
+    expect(o.data.issues).toHaveLength(1);
+    expect(o.data.issues![0]).toMatchObject({ team: "rm", ticket: "RM-1", desc: "Wrong rate", by: SAM });
+    const id = o.data.issues![0].id;
+    const ed = run(o.data, { type: "saveIssue", issue: { id, team: "rm", date: TODAY, desc: "Wrong rate (EU)", root: "r", preventive: "p", corrective: "c" }, actor: SAM }).data;
+    expect(ed.issues).toHaveLength(1);
+    expect(ed.issues![0]).toMatchObject({ desc: "Wrong rate (EU)", by: SAM });
+    expect(run(ed, { type: "deleteIssue", id }).data.issues).toEqual([]);
+    // Members can't; the team's lead can.
+    const c = new Cal(o.data, TODAY);
+    const lead = c.d.people.find((p) => p.level === "lead" && c.O.inN(p, "rm"))!;
+    const form = { team: "rm", date: TODAY, desc: "x", root: "", preventive: "", corrective: "" };
+    expect("error" in authorizeCal({ type: "saveIssue", issue: form, actor: ANA }, c, ANA)).toBe(true);
+    expect("error" in authorizeCal({ type: "setKpi", team: "rm", period: "2026-W39", patch: { remark: "x" }, actor: ANA }, c, ANA)).toBe(true);
+    expect("action" in authorizeCal({ type: "saveIssue", issue: form, actor: 0 }, c, lead.id)).toBe(true);
+    expect("action" in authorizeCal({ type: "setKpi", team: "rm", period: "2026-W39", patch: { remark: "x" }, actor: 0 }, c, SAM)).toBe(true);
+    expect("action" in authorizeCal({ type: "deleteIssue", id }, c, lead.id)).toBe(true);
+    expect("error" in authorizeCal({ type: "deleteIssue", id }, c, ANA)).toBe(true);
+  });
+});

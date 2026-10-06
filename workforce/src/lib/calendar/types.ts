@@ -176,6 +176,40 @@ export interface NotifLog {
   att?: string[];
 }
 
+/** A team's tracker entry for a period: remarks, and figures for teams that don't use Workload. */
+export interface KpiEntry {
+  /** KPI tracker remarks. */
+  remark?: string;
+  /** OT tracker remarks (TL / managers). */
+  otRemark?: string;
+  /** Entered KPIs, % (they replace Workload's figures). */
+  util?: number;
+  prod?: number;
+  time?: number;
+  acc?: number;
+  /** Entered overtime, hours (replaces Workload's). */
+  reg?: number;
+  rd?: number;
+  hol?: number;
+  by?: number;
+  at?: string;
+}
+
+/** An accuracy issue: what went wrong on a ticket and what's done about it. */
+export interface KpiIssue {
+  id: string;
+  team: string;
+  /** When it happened (yyyy-mm-dd); sets the week / month it counts in. */
+  date: string;
+  ticket?: string;
+  desc: string;
+  root: string;
+  preventive: string;
+  corrective: string;
+  by: number;
+  at: string;
+}
+
 export interface CalendarData {
   people: CalPerson[];
   nodes: OrgNode[];
@@ -192,6 +226,10 @@ export interface CalendarData {
   checkins: Record<string, Record<number, Checkin>>;
   logs: NotifLog[];
   seq: number;
+  /** OT and KPI trackers: remarks and figures entered by leads, per team and period ("team|2026-W40" or "team|2026-09"). */
+  kpi?: Record<string, KpiEntry>;
+  /** Accuracy issues logged by leads (each counts as one error against the team's resolved tickets). */
+  issues?: KpiIssue[];
   /** Highest person id ever used, so a deleted person's id is never given to someone new. */
   pidSeq?: number;
   /** Headcount report: billed FTE overrides, "pid|teamId|yyyy-mm" → value. */

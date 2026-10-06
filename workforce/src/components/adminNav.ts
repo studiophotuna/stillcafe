@@ -48,6 +48,9 @@ export function adminSections(f: AdminFlags): NavSection[] {
       ? [
           { href: "/calendar/dashboard", icon: "dash" as const, label: "Attendance dashboard" },
           { href: "/calendar/management", icon: "mgmt" as const, label: "Management calendar" },
+          { href: "/calendar/admin/ot-tracker", icon: "targets" as const, label: "OT tracker" },
+          { href: "/calendar/admin/kpi-tracker", icon: "dash" as const, label: "KPI tracker" },
+          { href: "/calendar/admin/accuracy", icon: "check" as const, label: "Accuracy log" },
         ]
       : []),
     ...(f.anyAdmin
