@@ -1004,6 +1004,45 @@ describe("complexity", async () => {
     expect(authorizeWl({ type: "reviewCx", id: slow.id, by: 0 }, d, ANA)).toEqual({ error: "Only Workload admins can do that." });
   });
 
+  it("Edit ticket changes everything on a resolved ticket, with checks and history", () => {
+    const types = [{ id: "doc", name: "Doc review", sla: 2, trades: ["lcl"], keywords: [] }];
+    const t = task({ status: "done", assignee: ANA, received: at("08:00"), startedAt: at("09:00"), doneAt: at("10:00"), cx: { complex: 4 }, fields: { ticket: "1", contracts: 4 } });
+    const d = data([t], cxs({ taskTypes: types }));
+    const mate = d.people.find((p) => p.id !== ANA && p.trades.includes("lcl"))!;
+    const o = E.editDone(d, t.id, { ticket: "1-A" }, 23, at("16:00"), {
+      title: "Fixed title",
+      pr: "high",
+      ttype: "doc",
+      received: at("08:30"),
+      startedAt: at("09:15"),
+      doneAt: at("10:15"),
+      assignee: mate.id,
+      otMin: 15,
+      delay: "Waited for the carrier",
+      cx: { complex: 1, simple: 3 },
+    });
+    const x = get(o.data, t.id);
+    expect(x).toMatchObject({
+      title: "Fixed title", pr: "high", ttype: "doc", slaH: 2, received: at("08:30"), startedAt: at("09:15"), doneAt: at("10:15"),
+      assignee: mate.id, otMin: 15, ot: true, delay: "Waited for the carrier", cx: { simple: 3, complex: 1 },
+      fields: { ticket: "1-A", contracts: 4 }, cxReview: { verdict: "corrected", was: { complex: 4 } },
+    });
+    const h = x.history.at(-1)!.text;
+    for (const part of ["Title: t → Fixed title", "Priority: Normal → High", "Task type: Standard request → Doc review", `Resolved by: ${d.people.find((p) => p.id === ANA)!.name} → ${mate.name}`, "Complexity: 4 Complex → 3 Simple · 1 Complex", "Ticket no.: 1 → 1-A"])
+      expect(h).toContain(part);
+    // Checks: times in order, a known person and trade, a type used in the trade.
+    expect(E.editDone(d, t.id, {}, 23, at("16:00"), { startedAt: at("07:00") }).message).toMatch(/Started must be between/);
+    expect(E.editDone(d, t.id, {}, 23, at("16:00"), { doneAt: at("17:00") }).message).toMatch(/future/);
+    expect(E.editDone(d, t.id, {}, 23, at("16:00"), { assignee: 999 }).message).toMatch(/Choose who/);
+    expect(E.editDone(d, t.id, {}, 23, at("16:00"), { trade: "nope" }).message).toMatch(/Choose a trade/);
+    expect(E.editDone(d, t.id, {}, 23, at("16:00"), { ttype: "doc", trade: "eu" }).message).toMatch(/isn’t used/);
+    expect(E.editDone(d, t.id, {}, 23, at("16:00"), { title: "  " }).message).toMatch(/empty/);
+    // Unchanged values aren't changes; open tickets aren't edited here.
+    expect(E.editDone(d, t.id, {}, 23, at("16:00"), { title: "t", pr: "normal", received: at("08:00") }).message).toBe("Nothing changed.");
+    const open = task({ status: "in_progress", assignee: ANA, startedAt: at("09:00") });
+    expect(E.editDone(data([open], cxs()), open.id, {}, 23, at("16:00"), { title: "x" }).data.tasks[0]).toBe(open);
+  });
+
   it("lets an admin correct a resolved ticket's details, kept in its history", () => {
     const t = task({ status: "done", assignee: ANA, startedAt: at("09:00"), doneAt: at("10:00"), cx: { simple: 2 }, fields: { ticket: "1", carrier: "MSK", contracts: 2 } });
     const d = data([t], cxs());

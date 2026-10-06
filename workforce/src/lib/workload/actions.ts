@@ -15,6 +15,7 @@ import {
   completeTask,
   reviewCx,
   editDone,
+  type TicketEdit,
   distribute,
   holdTask,
   setDelay,
@@ -51,7 +52,7 @@ export type Action =
   | { type: "resume"; id: string; pid: number }
   | { type: "complete"; id: string; vals: Task["fields"]; pid: number; cx?: Record<string, number> | null; delay?: string | null }
   | { type: "reviewCx"; id: string; cx?: Record<string, number> | null; note?: string; by: number }
-  | { type: "editDone"; id: string; vals: Task["fields"]; by: number }
+  | { type: "editDone"; id: string; vals: Task["fields"]; by: number; edit?: TicketEdit }
   | { type: "away"; kind: ActivityKind; pid: number }
   | { type: "back"; pid: number }
   | { type: "endWork"; otMin: number; pid: number; split?: OtPart[] | null }
@@ -86,7 +87,7 @@ export function applyAction(d: WorkloadData, a: Action, now: number): Outcome {
     case "resume": return resumeTask(d, a.id, a.pid, now);
     case "complete": return completeTask(d, a.id, a.vals, a.pid, now, a.cx, a.delay);
     case "reviewCx": return reviewCx(d, a.id, a.by, now, a.cx, a.note);
-    case "editDone": return editDone(d, a.id, a.vals, a.by, now);
+    case "editDone": return editDone(d, a.id, a.vals, a.by, now, a.edit);
     case "away": return startAway(d, a.pid, a.kind, now);
     case "back": return backToWork(d, a.pid, now);
     case "endWork": return endWork(d, a.pid, a.otMin, now, a.split);

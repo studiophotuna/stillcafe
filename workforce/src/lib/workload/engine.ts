@@ -1297,28 +1297,112 @@ export function cxOver(d: Pick<WorkloadData, "settings">, t: Task): CxOver | nul
 export const cxQuestions = (d: WorkloadData) =>
   d.tasks.filter((t) => t.status === "done" && !t.cxReview && (cxCheck(d, t)?.flag || cxOver(d, t)?.flag)).sort((a, b) => (b.doneAt ?? 0) - (a.doneAt ?? 0));
 
+/** What an admin can change on a resolved ticket (Edit ticket); fields go in `vals`. */
+export interface TicketEdit {
+  title?: string;
+  trade?: string;
+  pr?: Priority;
+  /** Task type id, "" = standard request. */
+  ttype?: string;
+  received?: number;
+  startedAt?: number;
+  doneAt?: number;
+  /** Who resolved it. */
+  assignee?: number;
+  otMin?: number;
+  delay?: string;
+  /** Contracts by complexity level. */
+  cx?: Record<string, number> | null;
+}
+
 /**
- * Admin correction of a resolved ticket's details (e.g. one flagged as over-productive):
- * the field values, recorded in the history. The contracts field follows complexity counts.
+ * Admin correction of a resolved ticket (e.g. one flagged as over-productive): its title,
+ * trade, priority, task type, times, who resolved it, overtime, delay remarks, complexity
+ * and field values. Every change is recorded in the history; the SLA follows priority and
+ * task type, and the contracts field follows the complexity counts.
  */
-export function editDone(d: WorkloadData, id: string, vals: Task["fields"], by: number, now: number): Outcome {
+export function editDone(d: WorkloadData, id: string, vals: Task["fields"], by: number, now: number, e: TicketEdit = {}): Outcome {
   const t = d.tasks.find((x) => x.id === id);
   if (!t || t.status !== "done") return { data: d };
-  const cf = t.cx && cxTotal(t.cx) > 0 ? cxField(d) : undefined;
   const changes: string[] = [];
-  const next: Task["fields"] = { ...t.fields };
+  const no = (message: string): Outcome => ({ data: d, message });
+  let x: Task = { ...t };
+  const set = <K extends keyof Task>(k: K, v: Task[K], label: string, show: (v: Task[K]) => string) => {
+    if (v === t[k] || (v ?? "") === (t[k] ?? "")) return;
+    changes.push(`${label}: ${show(t[k])} → ${show(v)}`);
+    x = { ...x, [k]: v };
+  };
+  if (e.title !== undefined) {
+    const v = e.title.trim().slice(0, 300);
+    if (!v) return no("The title can’t be empty.");
+    set("title", v, "Title", (a) => String(a ?? "—"));
+  }
+  if (e.trade !== undefined) {
+    if (!d.org.trades.some((o) => o.id === e.trade)) return no("Choose a trade.");
+    set("trade", e.trade, "Trade", (a) => (a ? trPathOf(d.org, String(a)) : "—"));
+  }
+  if (e.pr !== undefined) {
+    if (!PR[e.pr]) return no("Choose a priority.");
+    set("pr", e.pr, "Priority", (a) => PR[a as Priority]?.[0] ?? "—");
+  }
+  if (e.ttype !== undefined) set("ttype", e.ttype, "Task type", (a) => (a ? ((d.settings.taskTypes ?? []).find((y) => y.id === a)?.name ?? "Removed type") : "Standard request"));
+  if (x.ttype && x.ttype !== t.ttype && !typesFor(d.settings, x.trade).some((y) => y.id === x.ttype)) return no("That task type isn’t used in this trade.");
+  if (x.ttype && x.trade !== t.trade && !typesFor(d.settings, x.trade).some((y) => y.id === x.ttype)) return no("The task type isn’t used in the new trade. Choose another one.");
+  const time = (a: unknown) => (typeof a === "number" ? fmtT(a) : "—");
+  for (const [k, label] of [["received", "Received"], ["startedAt", "Started"], ["doneAt", "Resolved"]] as const) {
+    const v = e[k];
+    if (v === undefined) continue;
+    if (!Number.isFinite(v)) return no(`${label}: enter a date and time.`);
+    set(k, v, label, time);
+  }
+  // Times are checked when one of them changes.
+  if (x.received !== t.received || x.startedAt !== t.startedAt || x.doneAt !== t.doneAt) {
+    if (x.doneAt! > now + 5 * M) return no("Resolved can’t be in the future.");
+    if (x.startedAt !== null && (x.startedAt < x.received || x.startedAt > x.doneAt!)) return no("Started must be between Received and Resolved.");
+    if (x.received > x.doneAt!) return no("Received must be before Resolved.");
+  }
+  if (e.assignee !== undefined) {
+    const p = personOf(d, e.assignee);
+    if (!p) return no("Choose who resolved it.");
+    set("assignee", e.assignee, "Resolved by", (a) => (a === null ? "—" : (personOf(d, a as number)?.name ?? "Former member")));
+  }
+  if (e.otMin !== undefined) {
+    const v = Math.round(e.otMin);
+    if (!(v >= 0 && v <= 16 * 60)) return no("Overtime must be 0 to 960 minutes.");
+    set("otMin", v, "Overtime", (a) => fmtMin(Number(a ?? 0)));
+    x = { ...x, ot: v > 0 };
+  }
+  if (e.delay !== undefined) {
+    const v = e.delay.trim().slice(0, 500);
+    set("delay", v || null, "Delay remarks", (a) => (a ? String(a) : "—"));
+  }
+  // The SLA follows priority and task type.
+  if (x.pr !== t.pr || (x.ttype ?? "") !== (t.ttype ?? "")) x = withSla(x, d.settings);
+  // Complexity: the counts, with the contracts field following them.
+  const cf = cxField(d);
+  if (e.cx !== undefined && cxOn(d.settings)) {
+    const next = e.cx ? cleanCx(d.settings, e.cx) : null;
+    if (cxText(d.settings, next) !== cxText(d.settings, t.cx)) {
+      changes.push(`Complexity: ${cxText(d.settings, t.cx) || "—"} → ${cxText(d.settings, next) || "—"}`);
+      x = { ...x, cx: next, cxReview: { by, at: now, verdict: "corrected", ...(t.cx ? { was: t.cx } : {}) } };
+      if (cf?.type === "number" && next) x = { ...x, fields: { ...x.fields, [cf.key]: cxTotal(next) } };
+    }
+  }
+  const fromCx = x.cx && cxTotal(x.cx) > 0 ? cf?.key : undefined;
+  const fields: Task["fields"] = { ...x.fields };
   for (const f of d.fields) {
-    if (!(f.key in vals) || f.key === cf?.key) continue;
+    if (!(f.key in vals) || f.key === fromCx) continue;
     const v = f.type === "number" ? (String(vals[f.key]).trim() === "" ? "" : Number(vals[f.key])) : String(vals[f.key] ?? "").trim();
-    if (f.type === "number" && v !== "" && !Number.isFinite(v as number)) return { data: d, message: `${f.label} must be a number.` };
+    if (f.type === "number" && v !== "" && !Number.isFinite(v as number)) return no(`${f.label} must be a number.`);
     if (String(t.fields[f.key] ?? "") === String(v)) continue;
     changes.push(`${f.label}: ${t.fields[f.key] ?? "—"} → ${v === "" ? "—" : v}`);
-    next[f.key] = v;
+    fields[f.key] = v;
   }
-  if (!changes.length) return { data: d, message: "Nothing changed." };
+  x = { ...x, fields };
+  if (!changes.length) return no("Nothing changed.");
   const who = personOf(d, by)?.name ?? "An admin";
   return {
-    data: patch(d, id, (x) => ({ ...x, fields: next, history: hist(x, now, `Details corrected by ${who} · ${changes.join("; ")}`) })),
+    data: patch(d, id, () => ({ ...x, history: hist(t, now, `Details corrected by ${who} · ${changes.join("; ")}`) })),
     message: `${id} updated.`,
   };
 }
