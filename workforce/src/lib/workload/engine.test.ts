@@ -113,12 +113,20 @@ describe("start work (FIFO)", () => {
     expect(get(o.data, next.id).status).toBe("new");
   });
 
-  it("allows several tasks in progress when the team turns one-at-a-time off", () => {
+  it("lets members pick several tasks in Members pick mode when allowed", async () => {
+    const { pickTask } = await import("./engine");
     const cur = task({ status: "in_progress", assignee: ANA, startedAt: NOW - M });
-    const next = task();
-    const o = startWork(data([cur, next], { oneAtATime: false }), ANA, NOW);
-    expect(get(o.data, next.id)).toMatchObject({ status: "in_progress", assignee: ANA });
-    expect(get(o.data, cur.id).status).toBe("in_progress");
+    const a = task();
+    const b = task();
+    // Off: picking does nothing.
+    expect(get(pickTask(data([cur, a], { mode: "self" }), a.id, ANA, NOW).data, a.id).status).toBe("new");
+    let d = data([cur, a, b], { mode: "self", multiPick: true });
+    d = pickTask(d, a.id, ANA, NOW).data;
+    d = pickTask(d, b.id, ANA, NOW).data;
+    expect(get(d, a.id)).toMatchObject({ status: "assigned", assignee: ANA });
+    expect(get(d, b.id)).toMatchObject({ status: "assigned", assignee: ANA });
+    // Still one in progress at a time.
+    expect(get(startWork(d, ANA, NOW).data, a.id).status).toBe("assigned");
   });
 
   it("does not give work to unavailable people unless the team allows it", () => {

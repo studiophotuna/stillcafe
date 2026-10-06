@@ -2,11 +2,11 @@
 import { H, dur, fmtS, fmtT } from "./clock";
 import { AV, PR, ST, trPathOf } from "./constants";
 import type { Action } from "./actions";
-import { blocked, canTake, cxCheck, cxOn, cxText, due, holdPeriods, isBusy, overdueMs, personOf, slaOf, slaText, taskTypeOf, waitingMs, taskWorkMs, ticketOf, type WorkloadData } from "./engine";
+import { canTake, cxCheck, cxOn, cxText, due, holdPeriods, isBusy, overdueMs, personOf, slaOf, slaText, taskTypeOf, waitingMs, taskWorkMs, ticketOf, type WorkloadData } from "./engine";
 import type { Task } from "./types";
 
 export interface RowAction {
-  kind: "take" | "start" | "resume" | "details";
+  kind: "take" | "pick" | "start" | "resume" | "details";
   id: string;
   label: string;
   disabled: boolean;
@@ -54,10 +54,12 @@ export function taskRow(d: WorkloadData, t: Task, me: number, isAdmin: boolean, 
   const od = t.status !== "done" && now > dueAt;
   const soon = !od && t.status !== "done" && dueAt - now < 2 * H;
   const meP = personOf(d, me) ?? { id: me, name: "", trades: [], avail: "available" as const, shift: "", shiftStart: 8 };
-  const busy = blocked(d, me);
+  const busy = isBusy(d.tasks, me);
   let action: RowAction | null = null;
   if (t.status === "new" && s.mode === "self" && canTake(d, meP, t))
-    action = { kind: "take", id: t.id, label: meP.trades.includes(t.trade) ? "Take" : "Help", disabled: busy };
+    action = s.multiPick
+      ? { kind: "pick", id: t.id, label: "Pick", disabled: false }
+      : { kind: "take", id: t.id, label: meP.trades.includes(t.trade) ? "Take" : "Help", disabled: busy };
   else if (t.assignee === me && t.status === "assigned") action = { kind: "start", id: t.id, label: "Start", disabled: busy };
   else if (t.assignee === me && t.status === "on_hold") action = { kind: "resume", id: t.id, label: "Resume", disabled: busy };
   else if (isAdmin && t.status !== "done") action = { kind: "details", id: t.id, label: "Details", disabled: false };
@@ -96,6 +98,7 @@ export function taskRow(d: WorkloadData, t: Task, me: number, isAdmin: boolean, 
 
 /** The action for a row button (details is handled by the caller). */
 export function rowAction(a: RowAction, me: number): Action {
+  if (a.kind === "pick") return { type: "pickTask", id: a.id, pid: me };
   return a.kind === "resume" ? { type: "resume", id: a.id, pid: me } : { type: "startTask", id: a.id, pid: me };
 }
 

@@ -24,6 +24,7 @@ import {
   setReceived,
   setTrade,
   startTask,
+  pickTask,
   startWork,
   type Outcome,
   type UploadRow,
@@ -34,6 +35,7 @@ import type { ActivityKind, OtPart, Priority, Settings, Task, TaskField } from "
 export type Action =
   | { type: "startWork"; pid: number; assist?: boolean }
   | { type: "startTask"; id: string; pid: number }
+  | { type: "pickTask"; id: string; pid: number }
   | { type: "hold"; id: string; reason: string }
   | { type: "setDelay"; id: string; delay: string }
   | { type: "resume"; id: string; pid: number }
@@ -56,13 +58,14 @@ export type Action =
   | { type: "setFields"; fields: TaskField[] };
 
 const SETTING_KEYS: (keyof Settings)[] = [
-  "mode", "order", "skipUnavail", "autoFeed", "oneAtATime", "sla", "mailbox", "mailTrade", "work", "targets", "memberTargets", "prodBasis", "uploaders", "staleDays", "ticketField", "slaWeekends", "slaHolidays", "taskTypes", "complexity",
+  "mode", "order", "skipUnavail", "autoFeed", "multiPick", "sla", "mailbox", "mailTrade", "work", "targets", "memberTargets", "prodBasis", "uploaders", "staleDays", "ticketField", "slaWeekends", "slaHolidays", "taskTypes", "complexity",
 ];
 
 export function applyAction(d: WorkloadData, a: Action, now: number): Outcome {
   switch (a.type) {
     case "startWork": return startWork(d, a.pid, now, !!a.assist);
     case "startTask": return startTask(d, a.id, a.pid, now);
+    case "pickTask": return pickTask(d, a.id, a.pid, now);
     case "hold": return holdTask(d, a.id, a.reason, now);
     case "setDelay": return setDelay(d, a.id, a.delay, now);
     case "resume": return resumeTask(d, a.id, a.pid, now);

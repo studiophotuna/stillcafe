@@ -58,21 +58,23 @@ export default function AllocationPage() {
               <option value="click">Member clicks Start work again</option>
             </select>
           </div>
-          <div className="field">
-            <label htmlFor="one">One task in progress at a time</label>
-            <select
-              id="one"
-              className="input"
-              value={s.oneAtATime === false ? "no" : "yes"}
-              onChange={(e) => {
-                set({ oneAtATime: e.target.value === "yes" });
-                toast("Saved.");
-              }}
-            >
-              <option value="yes">Yes: resolve or set to pending before starting another</option>
-              <option value="no">No: members can have several tasks in progress</option>
-            </select>
-          </div>
+          {s.mode === "self" && (
+            <div className="field">
+              <label htmlFor="multi">Members pick: tasks a member can pick</label>
+              <select
+                id="multi"
+                className="input"
+                value={s.multiPick ? "multi" : "one"}
+                onChange={(e) => {
+                  set({ multiPick: e.target.value === "multi" });
+                  toast("Saved.");
+                }}
+              >
+                <option value="one">One: Take starts the task right away</option>
+                <option value="multi">Several: Pick adds tasks to their list, then they start one at a time</option>
+              </select>
+            </div>
+          )}
           <div className="field">
             <label htmlFor="order">Task order</label>
             <select id="order" className="input" value={s.order} onChange={(e) => set({ order: e.target.value as OrderRule })}>

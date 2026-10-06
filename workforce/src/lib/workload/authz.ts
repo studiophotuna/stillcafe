@@ -19,6 +19,7 @@ export function authorizeWl(a: Action, d: WorkloadData, me: number): { action: A
   switch (a.type) {
     case "startWork":
     case "startTask":
+    case "pickTask":
     case "resume":
     case "complete":
     case "away":

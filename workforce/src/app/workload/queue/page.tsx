@@ -1,8 +1,8 @@
 "use client";
 
-import { Fragment, useState } from "react";
+import { Fragment, useEffect, useState } from "react";
 import { TaskTable } from "@/components/TaskTable";
-import { Blueprint } from "@/components/ui";
+import { Blueprint, Icon } from "@/components/ui";
 import { lc } from "@/lib/workload/constants";
 import { DateRangePicker } from "@/components/DateRangePicker";
 import { dayKey } from "@/lib/workload/clock";
@@ -163,7 +163,21 @@ function DueBoard({
   onPick: (ids: string[], label: string) => void;
 }) {
   const { cols, groups } = board;
+  // Closed by default; each viewer's choice is remembered in this browser.
+  const [open, setOpenState] = useState(false);
+  useEffect(() => {
+    try {
+      if (localStorage.getItem("wfm.dueBoard") === "open") setOpenState(true);
+    } catch {}
+  }, []);
+  const setOpen = (o: boolean) => {
+    setOpenState(o);
+    try {
+      localStorage.setItem("wfm.dueBoard", o ? "open" : "closed");
+    } catch {}
+  };
   if (!groups.length) return null;
+  const overNow = groups.reduce((a, g) => a + g.overNow.length, 0);
   const total = (k: "due" | "over") => cols.map((_, i) => groups.flatMap((g) => g[k][i]));
   const all: BoardGroup = { id: "all", name: "All systems", due: total("due"), over: total("over"), overNow: groups.flatMap((g) => g.overNow) };
   const cell = (ids: string[], label: string, over: boolean, proj = false) =>
@@ -214,9 +228,19 @@ function DueBoard({
   return (
     <Blueprint as="section" className="panel tight scroll-x" style={{ gap: 8 }}>
       <div className="chart-head">
-        <h2 className="h2">Due and overdue by day</h2>
-        <span className="small">Open tickets by due date · future Overdue (in italics) = still open and due by then, if not resolved · click a number to list them, with their delay remarks</span>
+        <button className="qb-toggle" onClick={() => setOpen(!open)} aria-expanded={open}>
+          <span style={{ display: "grid", transform: open ? "none" : "rotate(-90deg)" }}>
+            <Icon name="down" size={16} />
+          </span>
+          <h2 className="h2">Due and overdue by day</h2>
+        </button>
+        <span className="small">
+          {open
+            ? "Open tickets by due date · future Overdue (in italics) = still open and due by then, if not resolved · click a number to list them, with their delay remarks"
+            : `${overNow} overdue now · click to show the board`}
+        </span>
       </div>
+      {open && (
       <table className="table qb">
         <thead>
           <tr>
@@ -240,6 +264,7 @@ function DueBoard({
           {groups.length > 1 && rows(all, true)}
         </tbody>
       </table>
+      )}
     </Blueprint>
   );
 }

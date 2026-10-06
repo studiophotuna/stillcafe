@@ -131,16 +131,21 @@ export function leadSummary(c: Cal, scope: string, date: string): (SummaryBlock 
   const inScope = c.d.people.filter((p) => O.inN(p, scope) && alive(p));
   const leads = inScope.filter((p) => p.level === "lead").sort((a, b) => a.name.localeCompare(b.name));
   const leadIds = new Set(leads.map((l) => l.id));
-  // Each member's lead: their approver when that's a lead, else the lead allocated nearest above them.
+  // Each member's lead: their approver when that's a lead, else the one lead allocated nearest
+  // above them. When several leads are equally near (e.g. all allocated to the whole team),
+  // nobody is guessed: the member goes under "No lead" until they get an approver.
   const leadOf = (p: CalPerson) => {
     if (p.approver !== undefined && leadIds.has(p.approver)) return p.approver;
-    let best: { id: number; d: number } | undefined;
+    let bestD = Infinity;
+    let ids = new Set<number>();
     for (const a of p.assign)
       O.anc(a).forEach((x, d) => {
-        const l = leads.find((l) => l.assign.includes(x));
-        if (l && (!best || d < best.d)) best = { id: l.id, d };
+        const at = leads.filter((l) => l.assign.includes(x)).map((l) => l.id);
+        if (!at.length || d > bestD) return;
+        if (d < bestD) (bestD = d), (ids = new Set());
+        at.forEach((id) => ids.add(id));
       });
-    return best?.id;
+    return ids.size === 1 ? [...ids][0] : undefined;
   };
   const members = inScope.filter((p) => !isLeader(p.level));
   const own = new Map(members.map((p) => [p.id, leadOf(p)]));

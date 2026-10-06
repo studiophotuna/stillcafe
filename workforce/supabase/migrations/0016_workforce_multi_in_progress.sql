@@ -1,3 +1,3 @@
--- Teams can allow several tasks in progress per member (Settings.oneAtATime = false).
--- The app enforces one at a time when the setting is on, so the database no longer does.
-drop index if exists workforce.task_one_in_progress;
+-- One task in progress per member stays a database rule. Recreates the index for anyone who
+-- dropped it while multi in-progress was briefly an option (no-op otherwise).
+create unique index if not exists task_one_in_progress on workforce.task (team_id, assignee) where status = 'in_progress';
