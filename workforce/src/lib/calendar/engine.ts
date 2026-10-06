@@ -3,7 +3,7 @@
  * CalendarData. Shared by the browser (optimistic updates, rendering) and the
  * server (authoritative writes).
  */
-import { ANNUAL, CODES, OOO, POOL, WORKING, first } from "./constants";
+import { ANNUAL, CARRY_MAX, CODES, LEDGER_START, OOO, POOL, WORKING, first } from "./constants";
 import { dowOf, isWk, rng2, fmt, workdays } from "./dates";
 import { mkOrg, type Org } from "./org";
 import type { BcpEvent, CalPerson, CalendarData, Code, Holiday, LeaveRequest, NotifLog } from "./types";
@@ -83,7 +83,8 @@ export class Cal {
     return workdays(a, b, this.hols);
   }
   reqDays(q: Pick<LeaveRequest, "type" | "start" | "end">) {
-    return q.type === "HD" ? 0.5 : this.workdays(q.start, q.end);
+    // Maternity leave is counted in calendar days (RA 11210); other leave in working days.
+    return q.type === "HD" ? 0.5 : q.type === "ML" ? calDays(q.start, q.end) : this.workdays(q.start, q.end);
   }
 
   /**
@@ -118,15 +119,52 @@ export class Cal {
     return { code: wfh ? "WFH" : "RTO", wk, shift: this.shiftFor(p, d) };
   }
 
-  // ── balances (VL + SL share a pool; EL is separate; only fully approved requests count) ──
-  usedOf(p: CalPerson) {
-    return p.ytd + this.reqsOf(p.id).filter((q) => allApproved(q) && POOL.includes(q.type)).reduce((a, q) => a + this.reqDays(q), 0);
+  // ── balances, per calendar year (VL + SL share a pool; EL and solo parent leave are
+  // separate; only fully approved requests count, by the year they start) ──
+  get year() {
+    return Number(this.today.slice(0, 4));
   }
-  elUsedOf(p: CalPerson) {
-    return (p.ytdEl || 0) + this.reqsOf(p.id).filter((q) => allApproved(q) && q.type === "EL").reduce((a, q) => a + this.reqDays(q), 0);
+  private daysIn(p: CalPerson, codes: Code[], y: number) {
+    return this.reqsOf(p.id)
+      .filter((q) => allApproved(q) && codes.includes(q.type) && Number(q.start.slice(0, 4)) === y)
+      .reduce((a, q) => a + this.reqDays(q), 0);
   }
-  poolOf(p: CalPerson) {
-    return p.entitle + (p.carry || 0);
+  /** VL + SL for the year: the full entitlement, pro-rated in the hire year (unless an admin set it). */
+  entOf(p: CalPerson, y = this.year) {
+    const hy = hireYear(p);
+    if (hy > y) return 0;
+    if (hy === y) return p.entitleFirst ?? prorate(p.entitle, p.hire);
+    return p.entitle;
+  }
+  usedOf(p: CalPerson, y = this.year) {
+    return ((p.ytdYear ?? LEDGER_START) === y ? p.ytd || 0 : 0) + this.daysIn(p, POOL, y);
+  }
+  /** VL + SL carried into the year: as set by an admin for that year, else the automatic amount. */
+  carryOf(p: CalPerson, y = this.year): number {
+    return (p.carryYear ?? LEDGER_START) === y ? p.carry || 0 : this.carryAuto(p, y);
+  }
+  /** Automatic carry-over: last year's VL + SL left, up to CARRY_MAX (none before the app or in the hire year). */
+  carryAuto(p: CalPerson, y = this.year): number {
+    if (y <= LEDGER_START || hireYear(p) >= y) return 0;
+    return Math.min(CARRY_MAX, Math.max(0, this.poolOf(p, y - 1) - this.usedOf(p, y - 1)));
+  }
+  /** Whether this year's carry-over was set by an admin. */
+  carrySet(p: CalPerson, y = this.year) {
+    return (p.carryYear ?? LEDGER_START) === y;
+  }
+  poolOf(p: CalPerson, y = this.year) {
+    return this.entOf(p, y) + this.carryOf(p, y);
+  }
+  /** What carries into next year if nothing more is used. */
+  carryNext(p: CalPerson) {
+    return Math.min(CARRY_MAX, Math.max(0, this.poolOf(p) - this.usedOf(p)));
+  }
+  elUsedOf(p: CalPerson, y = this.year) {
+    return ((p.ytdYear ?? LEDGER_START) === y ? p.ytdEl || 0 : 0) + this.daysIn(p, ["EL"], y);
+  }
+  /** Solo parent leave used this year (7 working days a year). */
+  splUsedOf(p: CalPerson, y = this.year) {
+    return this.daysIn(p, ["SPL"], y);
   }
   /** Active on a date (not resigned before it). */
   alive(p: CalPerson, d: string) {
@@ -232,4 +270,16 @@ export function logsSubmit(c: Cal, q: LeaveRequest, at: string, adminBid: string
   });
 }
 
-
+/** Calendar days from a to b, both included. */
+export const calDays = (a: string, b: string) => Math.max(0, Math.round((Date.parse(b + "T00:00:00Z") - Date.parse(a + "T00:00:00Z")) / 864e5) + 1);
+const hireYear = (p: CalPerson) => (p.hire ? Number(p.hire.slice(0, 4)) : 0);
+/**
+ * VL + SL in the hire year: the yearly entitlement × months left (the hire month counts when
+ * they start on or before the 15th) ÷ 12, to the nearest half day.
+ */
+export function prorate(entitle: number, hire: string) {
+  const m = Number(hire.slice(5, 7));
+  const day = Number(hire.slice(8, 10));
+  const months = 12 - m + (day <= 15 ? 1 : 0);
+  return Math.round(((entitle * months) / 12) * 2) / 2;
+}

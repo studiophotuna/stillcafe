@@ -3,7 +3,7 @@
  * re-applied by the server (/api/cal/action) to the stored calendar.
  */
 import { fmtT } from "../workload/clock";
-import { ANNUAL, CODES, LEVELS, TYPE_L, first, isLeader } from "./constants";
+import { ANNUAL, CARRY_MAX, CODES, LAW, LEVELS, TYPE_L, first, isLeader } from "./constants";
 import { addDays, dowOf, fmtY, isWk, MONL } from "./dates";
 import { Cal, evState, logsDecision, logsSubmit } from "./engine";
 import { allocProblem, hcTeamOf, mkOrg, primaryTeamOf, teamDefaults, withHcChange, type Org } from "./org";
@@ -67,10 +67,16 @@ export interface MemberDetails {
   email?: string;
   hire?: string;
   entitle?: number;
+  /** VL + SL for the hire year; null = pro-rated automatically. */
+  entitleFirst?: number | null;
   elEnt?: number;
-  carry?: number;
+  /** This year's carry-over; null = automatic (last year's VL + SL left, up to 5). */
+  carry?: number | null;
+  /** VL + SL / EL used this year before the app. */
   ytd?: number;
   ytdEl?: number;
+  sex?: "F" | "M" | "";
+  soloParent?: boolean;
   /** Weekdays worked from home by default, 1 = Mon … 5 = Fri. */
   wfhDays?: number[];
   /** Headcount team when allocated to several teams ("" = the first allocation's team). */
@@ -89,9 +95,17 @@ function fixPrimary<T extends CalPerson>(O: Cal["O"], p: T): T {
   return (bs.length > 1 ? { ...rest, primaryTeam: bs[0].id } : rest) as T;
 }
 
+/** Cleaned details, as stored on the person. */
+type PersonPatch = Omit<MemberDetails, "carry" | "entitleFirst" | "sex"> & Partial<Pick<CalPerson, "carry" | "carryYear" | "ytdYear" | "entitleFirst" | "sex">>;
+
 /** Clean and validate details; returns an error message or the cleaned patch. */
-export function cleanDetails(d: CalendarData, m: MemberDetails, selfId: number | null): { error: string } | { patch: MemberDetails } {
-  const out: MemberDetails = {};
+export function cleanDetails(
+  d: CalendarData,
+  m: MemberDetails,
+  selfId: number | null,
+  year = new Date().getFullYear(),
+): { error: string } | { patch: PersonPatch } {
+  const out: PersonPatch = {};
   if (m.name !== undefined) {
     const n = m.name.trim().replace(/\s+/g, " ");
     if (!n) return { error: "Enter the person’s name." };
@@ -115,17 +129,23 @@ export function cleanDetails(d: CalendarData, m: MemberDetails, selfId: number |
   try {
     const e1 = num(m.entitle, 0, 60, "VL + SL entitlement");
     const e2 = num(m.elEnt, 0, 30, "Emergency leave");
-    const e3 = num(m.carry, 0, 5, "Carry-over");
+    const e3 = m.carry === null ? null : num(m.carry, 0, CARRY_MAX, "Carry-over");
     const e4 = num(m.ytd, 0, 60, "VL + SL already used");
     const e5 = num(m.ytdEl, 0, 30, "EL already used");
+    const e6 = m.entitleFirst === null ? null : num(m.entitleFirst, 0, 60, "VL + SL in the hire year");
     if (e1 !== undefined) out.entitle = e1;
     if (e2 !== undefined) out.elEnt = e2;
-    if (e3 !== undefined) out.carry = e3;
-    if (e4 !== undefined) out.ytd = e4;
-    if (e5 !== undefined) out.ytdEl = e5;
+    // Carry-over set by an admin applies to this year; null goes back to automatic.
+    if (e3 === null) (out.carry = 0), (out.carryYear = 0);
+    else if (e3 !== undefined) (out.carry = e3), (out.carryYear = year);
+    if (e4 !== undefined) (out.ytd = e4), (out.ytdYear = year);
+    if (e5 !== undefined) (out.ytdEl = e5), (out.ytdYear = year);
+    if (e6 !== undefined) out.entitleFirst = e6 ?? undefined;
   } catch (e) {
     return { error: (e as Error).message };
   }
+  if (m.sex !== undefined) out.sex = m.sex === "F" || m.sex === "M" ? m.sex : undefined;
+  if (m.soloParent !== undefined) out.soloParent = !!m.soloParent || undefined;
   if (m.wfhDays !== undefined) out.wfhDays = [...new Set(m.wfhDays.filter((x) => x >= 1 && x <= 5))].sort();
   if (typeof m.primaryTeam === "string") out.primaryTeam = m.primaryTeam;
   if (m.approver !== undefined) {
@@ -155,6 +175,25 @@ const setNode = (d: CalendarData, id: string, patch: Partial<OrgNode>): Calendar
   nodes: d.nodes.map((n) => (n.id === id ? { ...n, ...patch } : n)),
 });
 const plural = (n: number, w: string) => `${n} ${w}${n === 1 ? "" : "s"}`;
+
+/** Why a member can't request this maternity / paternity / solo parent leave, or "". */
+export function leaveRule(c: Cal, p: CalPerson, type: Code, n: number): string {
+  if (type === "ML") {
+    if (p.sex === "M") return "Maternity leave is for women. Ask an admin to check your profile.";
+    const max = p.soloParent ? LAW.mlSolo : LAW.ml;
+    if (n > max) return `Maternity leave is up to ${max} calendar days per delivery${p.soloParent ? " for solo parents" : ""}. For a longer leave, ask your admin.`;
+  }
+  if (type === "PL") {
+    if (p.sex === "F") return "Paternity leave is for men. Ask an admin to check your profile.";
+    if (n > LAW.pl) return `Paternity leave is up to ${LAW.pl} working days per delivery. Days transferred from maternity leave are added by an admin.`;
+  }
+  if (type === "SPL") {
+    if (!p.soloParent) return "Solo parent leave is for solo parents. Ask an admin to mark you as a solo parent.";
+    const left = LAW.spl - c.splUsedOf(p);
+    if (n > left) return `Solo parent leave is ${LAW.spl} working days a year; you have ${Math.max(0, left)} left.`;
+  }
+  return "";
+}
 
 /** Record a decision: one approval decides the whole request (any other team still pending follows it). */
 function decideOne(q: LeaveRequest, bid: string, st: "approved" | "declined", actor: number, at: string): LeaveRequest {
@@ -230,8 +269,14 @@ function applyInner(d: CalendarData, a: CalAction, today: string, now: number): 
     case "submitRequest": {
       const f = a.form;
       if (!c.people.has(a.pid) || !CODES[f.type] || f.type === "HOL" || f.type === "HDY") return { data: d };
-      const n = f.type === "HD" ? (c.workdays(f.start, f.start) ? 0.5 : 0) : c.workdays(f.start, f.end);
-      if (!n || (f.type !== "HD" && f.end < f.start)) return { data: d };
+      if (f.type !== "HD" && f.end < f.start) return { data: d };
+      const n = f.type === "HD" ? (c.workdays(f.start, f.start) ? 0.5 : 0) : c.reqDays(f);
+      if (!n) return { data: d };
+      // Maternity, paternity and solo parent leave: who may take them and how long (members' own
+      // requests; admins entering leave on the calendar can record longer, e.g. transferred days).
+      const who = c.person(a.pid);
+      const rule = leaveRule(c, who, f.type, n);
+      if (rule && !a.adminBid) return { data: d, error: rule };
       const { data, q } = createRequest(c, a.pid, f, a.adminBid, now);
       const p = c.person(a.pid);
       if (a.adminBid && q.approvals[a.adminBid] === "approved") return { data, message: `${CODES[f.type].label} recorded for ${first(p.name)}. Notifications sent.` };
@@ -474,15 +519,17 @@ function applyInner(d: CalendarData, a: CalAction, today: string, now: number): 
       if (!b || !LEVELS[a.level]) return { data: d, error: "Choose a role and team." };
       const bad = allocProblem(c.O, a.level, a.assign);
       if (bad) return { data: d, error: bad };
-      const cl = cleanDetails(d, { hire: today, entitle: 25, elEnt: 5, carry: 0, ytd: 0, ytdEl: 0, wfhDays: [], ...a.details }, null);
+      // Everyone gets 5 days of EL; VL + SL is pro-rated in the hire year; carry-over starts automatic.
+      const cl = cleanDetails(d, { hire: today, entitle: 25, elEnt: 5, carry: null, ytd: 0, ytdEl: 0, wfhDays: [], ...a.details }, null, Number(today.slice(0, 4)));
       if ("error" in cl) return { data: d, error: cl.error };
       if (!cl.patch.name || !cl.patch.email) return { data: d, error: "Enter the person’s name and email." };
       const id = Math.max(0, ...d.people.map((p) => p.id)) + 1;
       const person = {
         id, name: cl.patch.name, email: cl.patch.email, level: a.level, assign: [...new Set(a.assign)], pattern: "A" as const,
         shift: d.shifts.some((x) => x.id === a.shift) ? a.shift : d.shifts[0]?.id ?? "D", hire: cl.patch.hire!, resign: null,
-        ytd: cl.patch.ytd ?? 0, ytdEl: cl.patch.ytdEl ?? 0, carry: cl.patch.carry ?? 0, entitle: cl.patch.entitle ?? 25,
-        elEnt: cl.patch.elEnt ?? 5, wfhDays: cl.patch.wfhDays ?? [],
+        ytd: cl.patch.ytd ?? 0, ytdEl: cl.patch.ytdEl ?? 0, ytdYear: cl.patch.ytdYear, carry: cl.patch.carry ?? 0, carryYear: cl.patch.carryYear,
+        entitle: cl.patch.entitle ?? 25, entitleFirst: cl.patch.entitleFirst ?? undefined, elEnt: cl.patch.elEnt ?? 5, wfhDays: cl.patch.wfhDays ?? [],
+        sex: cl.patch.sex || undefined, soloParent: cl.patch.soloParent,
         primaryTeam: cl.patch.primaryTeam,
       };
       let next: CalendarData = { ...d, people: d.people.concat(fixPrimary(c.O, person)) };
@@ -495,7 +542,7 @@ function applyInner(d: CalendarData, a: CalAction, today: string, now: number): 
       if (!p || !b || !LEVELS[a.level]) return { data: d, error: "Choose a role and team." };
       const bad = allocProblem(c.O, a.level, a.assign);
       if (bad) return { data: d, error: bad };
-      const cl = cleanDetails(d, a.details ?? {}, a.pid);
+      const cl = cleanDetails(d, a.details ?? {}, a.pid, Number(today.slice(0, 4)));
       if ("error" in cl) return { data: d, error: cl.error };
       let next: CalendarData = {
         ...d,

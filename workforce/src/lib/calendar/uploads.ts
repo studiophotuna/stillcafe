@@ -194,7 +194,9 @@ export function applyUpload(c: Cal, mode: UploadMode, ok: CheckedUpload[]): Cale
           resign: null,
           entitle: a.ent,
           elEnt: a.el,
+          // A carry-over in the file applies to this year; blank = automatic.
           carry: a.carry,
+          carryYear: a.carry ? new Date().getFullYear() : 0,
         });
     }
     return { ...d, people };

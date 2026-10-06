@@ -5,7 +5,7 @@ import { useMemo, useState } from "react";
 import { Modal } from "@/components/Dialogs";
 import { Blueprint, Icon } from "@/components/ui";
 import {
-  ANNUAL, APPR_WORD, BCP_ST, BUCKETS, CI_DESC, CODES, HTYPE, LEVELS, LEVEL_RANK, OOO, POOL, REQ_TYPES, TYPE_L, first,
+  ANNUAL, CARRY_MAX, LAW, LEDGER_START, reqTypesFor, APPR_WORD, BCP_ST, BUCKETS, CI_DESC, CODES, HTYPE, LEVELS, LEVEL_RANK, OOO, POOL, TYPE_L, first,
 } from "@/lib/calendar/constants";
 import { DOW, addDays, daysInMonth, dowOf, fmt, isWk, fmtY, MONL, rng2 } from "@/lib/calendar/dates";
 import { downloadMembersTemplate, downloadScheduleTemplate, readCalendarUpload } from "@/lib/calendar/excel";
@@ -15,7 +15,8 @@ import { parseOrgText, planOrgImport } from "@/lib/calendar/orgImport";
 import { checkUpload, type UploadRow } from "@/lib/calendar/uploads";
 import { useCalView } from "@/lib/calendar/useCalView";
 import { rightsOf } from "@/lib/calendar/authz";
-import { EMAIL_RE, type SchedDay } from "@/lib/calendar/actions";
+import { EMAIL_RE, leaveRule, type SchedDay } from "@/lib/calendar/actions";
+import { prorate } from "@/lib/calendar/engine";
 import type { BcpStatus, Bucket, CalPerson, Code, HolidayType, Level } from "@/lib/calendar/types";
 import { Chip, Seg } from "./bits";
 
@@ -47,21 +48,31 @@ function RequestDialog({ date }: { date?: string }) {
     });
   const close = () => s.setDialog(null);
   const isHalf = f.type === "HD";
-  const nReq = isHalf ? (c.workdays(f.start, f.start) ? 0.5 : 0) : c.workdays(f.start, f.end);
+  const nReq = isHalf ? (c.workdays(f.start, f.start) ? 0.5 : 0) : f.end < f.start ? 0 : c.reqDays(f);
   const meP = v.meP;
   const remaining = c.poolOf(meP) - c.usedOf(meP);
   const elLeft = (meP.elEnt ?? 5) - c.elUsedOf(meP);
-  const left = POOL.includes(f.type) ? remaining - nReq : f.type === "EL" ? elLeft - nReq : null;
+  const splLeft = LAW.spl - c.splUsedOf(meP);
+  const left = POOL.includes(f.type) ? remaining - nReq : f.type === "EL" ? elLeft - nReq : f.type === "SPL" ? splLeft - nReq : null;
+  const bal = f.type === "EL" ? "emergency leave" : f.type === "SPL" ? "solo parent leave" : "VL + SL";
+  const unit = f.type === "ML" ? "calendar day" : "working day";
+  const rule = nReq ? leaveRule(c, meP, f.type, nReq) : "";
   const daysLine =
     nReq === 0
       ? "The dates you picked have no working days. Choose a weekday that isn’t a holiday."
-      : `${nReq} working day${nReq === 1 ? "" : "s"}` +
-        (left === null
-          ? " · doesn’t use your leave balance"
-          : left < 0
-            ? ` · this is more than your ${f.type === "EL" ? "emergency leave" : "VL + SL"} balance`
-            : ` · ${left}${f.type === "EL" ? " emergency leave" : " VL + SL"} days left after this`);
-  const routing = v.myBranches.map((b) => {
+      : rule ||
+        `${nReq} ${unit}${nReq === 1 ? "" : "s"}` +
+          (f.type === "ML"
+            ? ` · up to ${meP.soloParent ? LAW.mlSolo : LAW.ml} per delivery (${LAW.mlMiscarriage} for a miscarriage)`
+            : f.type === "PL"
+              ? ` · up to ${LAW.pl} per delivery, for the first 4 deliveries`
+              : left === null
+                ? " · doesn’t use your leave balance"
+                : left < 0
+                  ? ` · this is more than your ${bal} balance`
+                  : ` · ${left} ${bal} days left after this`);
+  // One approval: the first team in the profile.
+  const routing = v.myBranches.slice(0, 1).map((b) => {
     const n = s.data.people.filter((x) => x.id !== s.me && c.O.inN(x, b.id) && !(x.resign && x.resign < s.today)).length;
     const admins = (b.admins ?? []).map((i) => c.people.get(i)?.name).filter(Boolean);
     return {
@@ -85,7 +96,7 @@ function RequestDialog({ date }: { date?: string }) {
         <div className="field">
           <label htmlFor="rq-type">Type</label>
           <select id="rq-type" className="input" value={f.type} onChange={(e) => set("type", e.target.value)}>
-            {REQ_TYPES.map((k) => (
+            {reqTypesFor(meP).map((k) => (
               <option key={k} value={k}>
                 {CODES[k].label} ({k})
               </option>
@@ -136,7 +147,7 @@ function RequestDialog({ date }: { date?: string }) {
             Cancel
           </button>
           <PrimaryBtn
-            disabled={nReq === 0}
+            disabled={nReq === 0 || !!rule}
             onClick={() => {
               s.run({ type: "submitRequest", pid: s.me, form: f, adminBid: null, actor: s.me });
               close();
@@ -565,15 +576,21 @@ function MemberDialog({ pid: pid0 }: { pid: number | null }) {
   // A new member is a new person, or someone already in another team.
   const [who, setWho] = useState<"new" | "existing">("new");
   const [pid, setPid] = useState<number | null>(pid0);
+  type NumKey = "entitle" | "entitleFirst" | "elEnt" | "carry" | "ytd" | "ytdEl";
   const detailsOf = (p: CalPerson | null) => ({
     name: p?.name ?? "",
     email: p?.email ?? "",
     hire: p?.hire ?? s.today,
     entitle: String(p?.entitle ?? 25),
+    // Blank = automatic (pro-rated in the hire year; carry-over from last year's balance).
+    entitleFirst: p?.entitleFirst !== undefined ? String(p.entitleFirst) : "",
     elEnt: String(p?.elEnt ?? 5),
-    carry: String(p?.carry ?? 0),
-    ytd: String(p?.ytd ?? 0),
-    ytdEl: String(p?.ytdEl ?? 0),
+    carry: p && s.cal.carrySet(p) ? String(p.carry ?? 0) : "",
+    // "Used before the app" only for the year it was entered.
+    ytd: String(p && (p.ytdYear ?? LEDGER_START) === s.cal.year ? (p.ytd ?? 0) : 0),
+    ytdEl: String(p && (p.ytdYear ?? LEDGER_START) === s.cal.year ? (p.ytdEl ?? 0) : 0),
+    sex: (p?.sex ?? "") as "" | "F" | "M",
+    solo: !!p?.soloParent,
   });
   const wfhOf = (p: CalPerson | null) => p?.wfhDays ?? (p ? (p.pattern === "B" ? [4, 5] : [1, 2]) : []);
   const [f, setF] = useState(() => detailsOf(init));
@@ -601,7 +618,7 @@ function MemberDialog({ pid: pid0 }: { pid: number | null }) {
         return n;
       }),
     );
-  const setD = (k: keyof typeof f, val: string) => setF((x) => ({ ...x, [k]: val }));
+  const setD = (k: keyof typeof f, val: string | boolean) => setF((x) => ({ ...x, [k]: val }));
   const cands = s.data.people
     .filter((p) => !O.inN(p, v.bid) && !(p.resign && p.resign < s.today))
     .sort((a, b) => a.name.localeCompare(b.name));
@@ -614,13 +631,18 @@ function MemberDialog({ pid: pid0 }: { pid: number | null }) {
 
   // Same checks as the server, so problems show before saving.
   const email = f.email.trim().toLowerCase();
-  const nums: [keyof typeof f, string, number, number][] = [
+  const nums: [NumKey, string, number, number, boolean?][] = [
     ["entitle", "VL + SL entitlement", 0, 60],
+    ["entitleFirst", "VL + SL in the hire year", 0, 60, true],
     ["elEnt", "Emergency leave", 0, 30],
-    ["carry", "Carry-over", 0, 5],
+    ["carry", "Carry-over", 0, CARRY_MAX, true],
     ["ytd", "VL + SL already used", 0, 60],
     ["ytdEl", "EL already used", 0, 30],
   ];
+  // The automatic values, shown as placeholders (from the hire date and last year's balance).
+  const hireY = Number(f.hire.slice(0, 4));
+  const autoFirst = /^\d{4}-\d{2}-\d{2}$/.test(f.hire) ? prorate(Number(f.entitle) || 0, f.hire) : 0;
+  const autoCarry = init ? s.cal.carryAuto(init) : 0;
   const problem = !showDetails
     ? "Choose a person."
     : !f.name.trim()
@@ -631,8 +653,9 @@ function MemberDialog({ pid: pid0 }: { pid: number | null }) {
           ? "Someone already has that email."
           : !/^\d{4}-\d{2}-\d{2}$/.test(f.hire)
             ? "Enter the hire date."
-            : (nums.map(([k, l, lo, hi]) => {
+            : (nums.map(([k, l, lo, hi, blankOk]) => {
                 const n = Number(f[k]);
+                if (blankOk && f[k].trim() === "") return "";
                 return f[k].trim() === "" || !Number.isFinite(n) || n < lo || n > hi ? `${l} must be between ${lo} and ${hi}.` : "";
               }).find(Boolean) ??
               (!alloc.length || alloc.some((r) => !r.dept) ? `Choose ${allocNeeds(level)} for each allocation.` : allocProblem(s.cal.O, level, assign)));
@@ -652,10 +675,13 @@ function MemberDialog({ pid: pid0 }: { pid: number | null }) {
       email: f.email,
       hire: f.hire,
       entitle: Number(f.entitle),
+      entitleFirst: f.entitleFirst.trim() === "" ? null : Number(f.entitleFirst),
       elEnt: Number(f.elEnt),
-      carry: Number(f.carry),
+      carry: f.carry.trim() === "" ? null : Number(f.carry),
       ytd: Number(f.ytd),
       ytdEl: Number(f.ytdEl),
+      sex: f.sex,
+      soloParent: f.solo,
       wfhDays: wfh,
       primaryTeam: primary,
       approver: Number(approver) || 0,
@@ -670,10 +696,10 @@ function MemberDialog({ pid: pid0 }: { pid: number | null }) {
         {o.name}
       </option>
     ));
-  const numField = (k: keyof typeof f, label: string, hint?: string) => (
+  const numField = (k: NumKey, label: string, hint?: string, placeholder?: string) => (
     <div className="field">
       <label htmlFor={"mem-" + k}>{label}</label>
-      <input id={"mem-" + k} className="input" type="number" min={0} step={0.5} value={f[k]} disabled={existing} onChange={(e) => setD(k, e.target.value)} />
+      <input id={"mem-" + k} className="input" type="number" min={0} step={0.5} value={f[k]} placeholder={placeholder} disabled={existing} onChange={(e) => setD(k, e.target.value)} />
       {hint && <span className="small" style={{ fontSize: 12 }}>{hint}</span>}
     </div>
   );
@@ -800,14 +826,45 @@ function MemberDialog({ pid: pid0 }: { pid: number | null }) {
                 Admin of {v.branch.name}
               </label>
             </div>
-            {section("Leave balance this year")}
+            {section(`Leave balance ${s.cal.year}`)}
             <div style={grid}>
-              {numField("entitle", "VL + SL entitlement (days)")}
-              {numField("elEnt", "Emergency leave entitlement")}
-              {numField("carry", "Carried over (max 5)")}
+              {numField("entitle", "VL + SL a full year (days)", "Pro-rated in the hire year")}
+              {hireY === s.cal.year &&
+                numField(
+                  "entitleFirst",
+                  `VL + SL in ${hireY} (hire year)`,
+                  `Blank = automatic: ${autoFirst} days (${f.entitle || 0} × months left from the hire date ÷ 12; the hire month counts when they start by the 15th)`,
+                  `Automatic: ${autoFirst}`,
+                )}
+              {numField("elEnt", "Emergency leave entitlement", "Everyone gets 5 days a year")}
+              {numField(
+                "carry",
+                `Carried over into ${s.cal.year} (max ${CARRY_MAX})`,
+                `Blank = automatic: ${autoCarry} (VL + SL left from ${s.cal.year - 1}, up to ${CARRY_MAX})`,
+                `Automatic: ${autoCarry}`,
+              )}
               {numField("ytd", "VL + SL already used", "Taken this year before using the app")}
               {numField("ytdEl", "EL already used", "Taken this year before using the app")}
             </div>
+            {section("Maternity, paternity and solo parent leave")}
+            <div style={grid}>
+              <div className="field">
+                <label htmlFor="mem-sex">Sex</label>
+                <select id="mem-sex" className="input" value={f.sex} disabled={existing} onChange={(e) => setD("sex", e.target.value)}>
+                  <option value="">Not set (both shown)</option>
+                  <option value="F">Female · maternity leave</option>
+                  <option value="M">Male · paternity leave</option>
+                </select>
+              </div>
+              <label style={{ display: "flex", gap: 10, alignItems: "center", cursor: "pointer", alignSelf: "end", minHeight: 36 }}>
+                <input type="checkbox" className="check" checked={f.solo} disabled={existing} onChange={() => setD("solo", !f.solo)} />
+                Solo parent (solo parent leave; maternity leave 120 days)
+              </label>
+            </div>
+            <span className="small" style={{ fontSize: 12 }}>
+              Philippine law: maternity {LAW.ml} calendar days per delivery ({LAW.mlSolo} for solo parents, {LAW.mlMiscarriage} for a miscarriage); paternity{" "}
+              {LAW.pl} working days per delivery (first 4); solo parent {LAW.spl} working days a year.
+            </span>
           </>
         )}
         <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>

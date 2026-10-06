@@ -20,6 +20,9 @@ export const CODES: Record<Code, Chip & { label: string }> = {
   HDY: { label: "Holiday duty (OT)", bg: "var(--color-neutral-300)", fg: "var(--color-accent-800)", bd: "1px solid var(--color-accent-700)" },
   RD: { label: "Rest day", bg: "var(--color-neutral-200)", fg: "var(--color-neutral-700)", bd: T },
   RDOT: { label: "Rest day OT", bg: "var(--color-neutral-200)", fg: "var(--color-accent-800)", bd: "1px solid var(--color-accent-700)" },
+  ML: { label: "Maternity leave", bg: "#7a2e5b", fg: "#fff", bd: T },
+  PL: { label: "Paternity leave", bg: "#2e5b7a", fg: "#fff", bd: T },
+  SPL: { label: "Solo parent leave", bg: "#5b4a8a", fg: "#fff", bd: T },
 };
 export const CODE_KEYS = Object.keys(CODES) as Code[];
 /** Pending approval: amber with a dashed outline. */
@@ -35,12 +38,29 @@ export const BUCKETS: Record<Bucket, string> = { morning: "Morning", mid: "Midsh
 export const WORKING: Code[] = ["RTO", "WFH", "HDY", "RDOT"];
 export const OT_CODES: Code[] = ["HDY", "RDOT"];
 /** Out of office (drives Outlook reminders). */
-export const OOO: Code[] = ["VL", "SL", "EL", "HD", "BT"];
-/** Uses a leave balance. */
-export const ANNUAL: Code[] = ["VL", "SL", "EL", "HD"];
+export const OOO: Code[] = ["VL", "SL", "EL", "HD", "BT", "ML", "PL", "SPL"];
+/** Leave (uses a leave balance). */
+export const ANNUAL: Code[] = ["VL", "SL", "EL", "HD", "ML", "PL", "SPL"];
 /** Shares the VL + SL pool. */
 export const POOL: Code[] = ["VL", "SL", "HD"];
-export const REQ_TYPES: Code[] = ["VL", "SL", "EL", "HD", "BT", "WFH", "RTO"];
+export const REQ_TYPES: Code[] = ["VL", "SL", "EL", "HD", "BT", "WFH", "RTO", "ML", "PL", "SPL"];
+
+/**
+ * Leave rules (Philippine law), counted per request:
+ * - Maternity (RA 11210): 105 calendar days for a live birth, 120 for solo parents; 60 for a
+ *   miscarriage or emergency termination.
+ * - Paternity (RA 8187): 7 working days per delivery (first 4 deliveries of the spouse); up to
+ *   7 more when the mother transfers them from her maternity leave.
+ * - Solo parent (RA 11861): 7 working days a year.
+ */
+export const LAW = { ml: 105, mlSolo: 120, mlMiscarriage: 60, pl: 7, plTransfer: 7, spl: 7 };
+/** VL + SL carried into a new year: at most this many days. */
+export const CARRY_MAX = 5;
+/** The first year the app tracks: stored carry-over and "used before the app" apply to it. */
+export const LEDGER_START = 2026;
+/** Leave types a person can request (maternity for women, paternity for men, solo parent for solo parents; both when sex isn't set). */
+export const reqTypesFor = (p: { sex?: "F" | "M"; soloParent?: boolean }) =>
+  REQ_TYPES.filter((k) => (k === "ML" ? p.sex !== "M" : k === "PL" ? p.sex !== "F" : k === "SPL" ? !!p.soloParent : true));
 
 export const LEVELS: Record<Level, string> = {
   member: "Associate",

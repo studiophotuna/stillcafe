@@ -3,7 +3,7 @@ export type NodeType = "dept" | "tower" | "branch" | "system" | "trade";
 export type Level = "member" | "specialist" | "senior" | "lead" | "manager" | "director";
 export type ApprovalState = "approved" | "pending" | "declined";
 /** RDOT: rest day overtime (a weekend or rest day worked as overtime). */
-export type Code = "RTO" | "WFH" | "VL" | "SL" | "EL" | "HD" | "BT" | "HOL" | "HDY" | "RD" | "RDOT";
+export type Code = "RTO" | "WFH" | "VL" | "SL" | "EL" | "HD" | "BT" | "HOL" | "HDY" | "RD" | "RDOT" | "ML" | "PL" | "SPL";
 export type Bucket = "morning" | "mid" | "gy";
 export type HolidayType = "regular" | "special" | "company";
 export type BcpStatus = "wfh" | "office" | "aff_ok" | "aff_no" | "leave" | "none";
@@ -62,9 +62,21 @@ export interface CalPerson {
   /** VL+SL used this year before the app (from the Excel migration). */
   ytd: number;
   ytdEl: number;
+  /** VL + SL carried over, as set by an admin for `carryYear` (other years are automatic). */
   carry: number;
+  /** The year `carry` applies to; older data: the app's first year (LEDGER_START). */
+  carryYear?: number;
+  /** The year `ytd` / `ytdEl` apply to; older data: LEDGER_START. */
+  ytdYear?: number;
+  /** VL + SL a full year (pro-rated in the hire year). */
   entitle: number;
+  /** VL + SL for the hire year set by an admin (else pro-rated from `entitle`). */
+  entitleFirst?: number;
   elEnt: number;
+  /** For maternity / paternity leave (Philippine law). */
+  sex?: "F" | "M";
+  /** Solo parent: solo parent leave, and 15 more days of maternity leave. */
+  soloParent?: boolean;
   /** Weekdays (1 = Mon … 5 = Fri) worked from home by default; overrides `pattern`. */
   wfhDays?: number[];
   /** Full admin rights everywhere (set for the first administrator). */

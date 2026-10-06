@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { Modal } from "@/components/Dialogs";
 import { Blueprint, Icon } from "@/components/ui";
-import { LEVELS } from "@/lib/calendar/constants";
+import { LAW, LEVELS } from "@/lib/calendar/constants";
 import { leadersOf } from "@/lib/calendar/approvals";
 import { RoleFilter, RoleLegend, RoleTag } from "@/components/calendar/Roles";
 import { fmtY } from "@/lib/calendar/dates";
@@ -182,6 +182,7 @@ export default function MembersPage() {
                   </td>
                   <td className="nowrap">
                     VL/SL {pool - c.usedOf(p)} of {pool} · EL {(p.elEnt ?? 5) - c.elUsedOf(p)} of {p.elEnt ?? 5}
+                    {p.soloParent ? ` · SPL ${LAW.spl - c.splUsedOf(p)} of ${LAW.spl}` : ""}
                   </td>
                   <td>
                     <span className={"tag " + (gone ? "tag-neutral" : p.resign ? "tag-outline" : "tag-accent")}>

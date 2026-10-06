@@ -2,7 +2,7 @@
 
 import { Chip } from "@/components/calendar/bits";
 import { Blueprint } from "@/components/ui";
-import { APPR_TAG, APPR_WORD, CODES } from "@/lib/calendar/constants";
+import { APPR_TAG, APPR_WORD, CARRY_MAX, CODES, LAW } from "@/lib/calendar/constants";
 import { fmt, rng2 } from "@/lib/calendar/dates";
 import { anyPending } from "@/lib/calendar/engine";
 import { useCalendar } from "@/lib/calendar/store";
@@ -19,11 +19,23 @@ export default function MyRequestsPage() {
   const elLeft = (meP.elEnt ?? 5) - c.elUsedOf(meP);
   const pend = mine.filter(anyPending);
   const pendDays = pend.reduce((a, q) => a + c.reqDays(q), 0);
-  const year = Number(s.today.slice(0, 4));
+  const year = c.year;
+  const ent = c.entOf(meP);
+  const hired = meP.hire?.slice(0, 4) === String(year);
+  const carry = c.carryOf(meP);
   const balances = [
-    { k: "Vacation + sick leave left", v: remaining, m: `of ${c.poolOf(meP)} (${meP.entitle} for ${year} + ${meP.carry || 0} carried over from ${year - 1})` },
+    {
+      k: "Vacation + sick leave left",
+      v: remaining,
+      m:
+        `of ${c.poolOf(meP)} (${ent} for ${year}${hired && meP.entitleFirst === undefined ? `, pro-rated from ${meP.entitle} by your hire date` : ""}` +
+        ` + ${carry} carried over from ${year - 1}${c.carrySet(meP) ? "" : ", automatic"})`,
+    },
     { k: "Emergency leave left", v: elLeft, m: `of ${meP.elEnt ?? 5} for ${year} · separate from VL and SL` },
-    { k: `Carries into ${year + 1}`, v: Math.max(0, Math.min(5, remaining)), m: "Unused VL/SL, up to 5 days" },
+    { k: `Carries into ${year + 1}`, v: c.carryNext(meP), m: `Unused VL/SL, up to ${CARRY_MAX} days` },
+    ...(meP.soloParent ? [{ k: "Solo parent leave left", v: LAW.spl - c.splUsedOf(meP), m: `of ${LAW.spl} working days for ${year}` }] : []),
+    ...(meP.sex !== "M" ? [{ k: "Maternity leave", v: meP.soloParent ? LAW.mlSolo : LAW.ml, m: `calendar days per delivery (${LAW.mlMiscarriage} for a miscarriage)` }] : []),
+    ...(meP.sex !== "F" ? [{ k: "Paternity leave", v: LAW.pl, m: "working days per delivery, first 4 deliveries" }] : []),
     { k: "Awaiting approval", v: pendDays, m: `${pend.length} request(s) pending` },
   ];
   const bName = (k: string) => c.O.by[k]?.name ?? "Removed team";
@@ -31,7 +43,7 @@ export default function MyRequestsPage() {
     <>
       <div className="page-head">
         <h1>My requests</h1>
-        <span>Balances cover January to December {year}. Each team you belong to approves your requests separately.</span>
+        <span>Balances cover January to December {year}. If you’re in several teams, the first team in your profile approves your requests.</span>
       </div>
       <div className="grid-kpi" style={{ gridTemplateColumns: "repeat(auto-fit,minmax(220px,1fr))" }}>
         {balances.map((b) => (

@@ -12,7 +12,7 @@ import { BUCKETS, WORKING, isLeader } from "./constants";
 import type { Cal } from "./engine";
 import type { CalPerson, Code, OrgNode } from "./types";
 
-const ORDER: Code[] = ["RTO", "WFH", "HDY", "RDOT", "SL", "VL", "EL", "HD", "BT", "RD", "HOL"];
+const ORDER: Code[] = ["RTO", "WFH", "HDY", "RDOT", "SL", "VL", "EL", "HD", "BT", "RD", "HOL", "ML", "PL", "SPL"];
 
 export interface SummaryLine {
   code: Code;

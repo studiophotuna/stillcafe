@@ -133,6 +133,60 @@ describe("balances", () => {
   });
 });
 
+describe("leave entitlements (pro-rating, carry-over, Philippine law leave)", async () => {
+  const { prorate } = await import("./engine");
+  const { leaveRule } = await import("./actions");
+  it("pro-rates VL + SL in the hire year (hire month counts when starting by the 15th)", () => {
+    expect(prorate(25, "2026-09-10")).toBe(8.5); // Sep–Dec: 25 × 4 ÷ 12 = 8.33
+    expect(prorate(25, "2026-09-20")).toBe(6.5); // Oct–Dec: 6.25
+    expect(prorate(25, "2026-01-05")).toBe(25);
+    const d = fresh();
+    const ana = d.people.find((p) => p.id === ANA)!;
+    ana.hire = "2026-09-10";
+    ana.ytd = 0;
+    const c = new Cal(d, TODAY);
+    expect(c.entOf(c.person(ANA))).toBe(8.5);
+    ana.entitleFirst = 10; // set by an admin
+    expect(new Cal(d, TODAY).entOf(ana)).toBe(10);
+    // New members: EL 5, VL + SL pro-rated, carry-over automatic.
+    const o = run(fresh(), { type: "addPerson", details: { name: "New Hire", email: "new.hire@example.com", hire: "2026-09-01" }, level: "member", shift: "D", adminHere: false, bid: "rm", assign: ["lcl"] });
+    const nc = new Cal(o.data, TODAY);
+    const np = nc.person(o.newPersonId!);
+    expect([np.elEnt, nc.entOf(np), nc.carryOf(np)]).toEqual([5, 8.5, 0]);
+  });
+  it("carries last year's VL + SL left into the new year, up to 5, unless an admin set it", () => {
+    const d = fresh();
+    const ana = d.people.find((p) => p.id === ANA)!;
+    ana.hire = "2020-01-01";
+    ana.ytd = 18; // 2026: 25 − 18 = 7 left (no approved requests yet)
+    ana.carry = 0;
+    const next = new Cal(d, "2027-01-04");
+    expect(next.carryOf(ana)).toBe(5);
+    expect(next.carrySet(ana)).toBe(false);
+    ana.ytd = 23; // 2 left
+    expect(new Cal(d, "2027-01-04").carryOf(ana)).toBe(2);
+    Object.assign(ana, { carry: 4, carryYear: 2027 }); // admin override for 2027
+    expect(new Cal(d, "2027-01-04").carryOf(ana)).toBe(4);
+    // "Used before the app" counts only in its year.
+    expect(new Cal(d, "2027-01-04").usedOf(ana)).toBe(0);
+  });
+  it("maternity in calendar days, paternity and solo parent rules", () => {
+    const d = fresh();
+    const c = new Cal(d, TODAY);
+    const p = { ...c.person(ANA) };
+    expect(c.reqDays({ type: "ML", start: "2026-10-01", end: "2026-10-31" })).toBe(31);
+    expect(leaveRule(c, { ...p, sex: "F" }, "ML", 105)).toBe("");
+    expect(leaveRule(c, { ...p, sex: "F" }, "ML", 110)).toMatch(/up to 105/);
+    expect(leaveRule(c, { ...p, sex: "F", soloParent: true }, "ML", 120)).toBe("");
+    expect(leaveRule(c, { ...p, sex: "M" }, "ML", 10)).toMatch(/for women/);
+    expect(leaveRule(c, { ...p, sex: "M" }, "PL", 8)).toMatch(/up to 7/);
+    expect(leaveRule(c, p, "SPL", 1)).toMatch(/for solo parents/);
+    expect(leaveRule(c, { ...p, soloParent: true }, "SPL", 7)).toBe("");
+    const sp = run(d, { type: "submitRequest", pid: ANA, form: { type: "SPL", start: "2026-10-12", end: "2026-10-13", half: "AM", reason: "" }, adminBid: null, actor: ANA });
+    expect(sp.error).toMatch(/solo parents/);
+  });
+});
+
 describe("people and org", () => {
   it("resignation cancels later requests", () => {
     const d = fresh();
