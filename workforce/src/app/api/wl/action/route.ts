@@ -8,7 +8,7 @@ export const dynamic = "force-dynamic";
 
 const TYPES = new Set<Action["type"]>([
   "startWork", "startTask", "pickTask", "claimTask", "answerClaim", "cancelClaim", "hold", "setDelay", "resume", "complete", "distribute", "setTrade",
-  "setPriority", "setTaskType", "setReceived", "reviewCx", "assign", "checkMail", "importRows", "setSettings", "setFields", "away", "back", "endWork", "undoEnd", "decideOt",
+  "setPriority", "setTaskType", "setReceived", "reviewCx", "editDone", "assign", "checkMail", "importRows", "setSettings", "setFields", "away", "back", "endWork", "undoEnd", "decideOt",
 ]);
 
 /** Apply one Workload action as the signed-in person and return the saved data. */

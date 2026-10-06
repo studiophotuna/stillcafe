@@ -1144,9 +1144,17 @@ export interface CxCheck {
   expMs: number;
   /** Time actually worked on the ticket, ms. */
   actMs: number;
-  /** "slow": took much longer than the tagging suggests (maybe tagged too simple). */
-  flag: "slow" | null;
+  /** Productivity of the ticket: expected ÷ worked time, %. */
+  pct: number;
+  /**
+   * "slow": took much longer than the tagging suggests (maybe tagged too simple);
+   * "fast": done far quicker than expected (over-productive: check the tagging and details).
+   */
+  flag: "slow" | "fast" | null;
 }
+
+/** The over-productivity threshold in % (0 = off). */
+export const fastPct = (s: Settings) => Math.max(0, s.complexity?.fast ?? 200);
 
 /** Compare a done ticket's handling time with what its complexity tagging implies (every tagged level needs an average handling time). */
 export function cxCheck(d: WorkloadData, t: Task): CxCheck | null {
@@ -1161,12 +1169,40 @@ export function cxCheck(d: WorkloadData, t: Task): CxCheck | null {
   if (!exp) return null;
   const act = taskWorkMs(d, t, t.doneAt);
   const tol = Math.max(0, d.settings.complexity?.tol ?? 50) / 100;
-  return { expMs: exp, actMs: act, flag: act > exp * (1 + tol) ? "slow" : null };
+  const pct = act > 0 ? Math.round((exp / act) * 100) : 0;
+  const fast = fastPct(d.settings);
+  return { expMs: exp, actMs: act, pct, flag: act > exp * (1 + tol) ? "slow" : fast > 0 && act > 0 && pct >= fast ? "fast" : null };
 }
 
 /** Done tickets whose handling time doesn't match their complexity and that no admin has checked yet. */
 export const cxQuestions = (d: WorkloadData) =>
   d.tasks.filter((t) => t.status === "done" && !t.cxReview && cxCheck(d, t)?.flag).sort((a, b) => (b.doneAt ?? 0) - (a.doneAt ?? 0));
+
+/**
+ * Admin correction of a resolved ticket's details (e.g. one flagged as over-productive):
+ * the field values, recorded in the history. The contracts field follows complexity counts.
+ */
+export function editDone(d: WorkloadData, id: string, vals: Task["fields"], by: number, now: number): Outcome {
+  const t = d.tasks.find((x) => x.id === id);
+  if (!t || t.status !== "done") return { data: d };
+  const cf = t.cx && cxTotal(t.cx) > 0 ? cxField(d) : undefined;
+  const changes: string[] = [];
+  const next: Task["fields"] = { ...t.fields };
+  for (const f of d.fields) {
+    if (!(f.key in vals) || f.key === cf?.key) continue;
+    const v = f.type === "number" ? (String(vals[f.key]).trim() === "" ? "" : Number(vals[f.key])) : String(vals[f.key] ?? "").trim();
+    if (f.type === "number" && v !== "" && !Number.isFinite(v as number)) return { data: d, message: `${f.label} must be a number.` };
+    if (String(t.fields[f.key] ?? "") === String(v)) continue;
+    changes.push(`${f.label}: ${t.fields[f.key] ?? "—"} → ${v === "" ? "—" : v}`);
+    next[f.key] = v;
+  }
+  if (!changes.length) return { data: d, message: "Nothing changed." };
+  const who = personOf(d, by)?.name ?? "An admin";
+  return {
+    data: patch(d, id, (x) => ({ ...x, fields: next, history: hist(x, now, `Details corrected by ${who} · ${changes.join("; ")}`) })),
+    message: `${id} updated.`,
+  };
+}
 
 /** Admin check of a ticket's complexity: confirm it, or correct the counts (the productivity field follows). */
 export function reviewCx(d: WorkloadData, id: string, by: number, now: number, cx?: Record<string, number> | null, note = ""): Outcome {

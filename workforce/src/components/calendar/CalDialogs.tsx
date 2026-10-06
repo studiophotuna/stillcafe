@@ -5,7 +5,7 @@ import { useMemo, useState } from "react";
 import { Modal } from "@/components/Dialogs";
 import { Blueprint, Icon } from "@/components/ui";
 import {
-  ANNUAL, CARRY_MAX, LAW, LEDGER_START, reqTypesFor, APPR_WORD, BCP_ST, BUCKETS, CI_DESC, CODES, HTYPE, LEVELS, LEVEL_RANK, OOO, POOL, TYPE_L, first,
+  ANNUAL, CARRY_MAX, LAW, LEDGER_START, reqTypesFor, APPR_WORD, BCP_ST, BUCKETS, CI_DESC, CODES, HTYPE, LEVELS, LEVEL_RANK, OOO, POOL, TYPE_L, first, isLeader,
 } from "@/lib/calendar/constants";
 import { DOW, addDays, daysInMonth, dowOf, fmt, isWk, fmtY, MONL, rng2 } from "@/lib/calendar/dates";
 import { downloadMembersTemplate, downloadScheduleTemplate, readCalendarUpload } from "@/lib/calendar/excel";
@@ -600,7 +600,6 @@ function MemberDialog({ pid: pid0 }: { pid: number | null }) {
   const [hcFrom, setHcFrom] = useState(s.today.slice(0, 7));
   const [level, setLevel] = useState<Level>(init?.level ?? "member");
   const [shift, setShift] = useState(init?.shift ?? (s.data.shifts.some((x) => x.id === "D") ? "D" : s.data.shifts[0]?.id ?? "D"));
-  const [adminHere, setAdminHere] = useState(init ? (v.branch.admins ?? []).includes(init.id) : false);
   // Adding from a tower / department view: choose the tower and team in the allocation.
   const hereRow: AllocRow = v.multi
     ? { dept: v.dept.id, tower: v.span === "tower" ? v.tower.id : "", branch: "", system: "", trade: "" }
@@ -613,7 +612,6 @@ function MemberDialog({ pid: pid0 }: { pid: number | null }) {
     : (alloc.map((r) => r.branch).find(Boolean) ??
       v.scopeBranches.find((b) => alloc.some((r) => O.anc(b.id).includes(r.tower || r.dept)))?.id ??
       v.bid);
-  const teamName = O.by[teamId]?.name ?? v.branch.name;
   // Approver choices: the leaders of this team (and its tower / department), not the person.
   const approverOpts = leadersOf(s.cal, teamId).filter((x) => x.id !== pid);
   const close = () => s.setDialog(null);
@@ -697,8 +695,8 @@ function MemberDialog({ pid: pid0 }: { pid: number | null }) {
       primaryTeam: primary,
       approver: Number(approver) || 0,
     };
-    if (isNew && !existing) s.run({ type: "addPerson", details, level, shift, adminHere, bid: teamId, assign });
-    else s.run({ type: "saveMember", pid: pid!, level, shift, adminHere, bid: teamId, assign, isNew, details, hcFrom });
+    if (isNew && !existing) s.run({ type: "addPerson", details, level, shift, bid: teamId, assign });
+    else s.run({ type: "saveMember", pid: pid!, level, shift, bid: teamId, assign, isNew, details, hcFrom });
     close();
   };
   const opts = (l: { id: string; name: string }[]) =>
@@ -832,10 +830,6 @@ function MemberDialog({ pid: pid0 }: { pid: number | null }) {
                 </div>
                 <span className="small" style={{ fontSize: 12 }}>Other weekdays are in the office (RTO).</span>
               </div>
-              <label style={{ display: "flex", gap: 10, alignItems: "center", cursor: "pointer", alignSelf: "center", minHeight: 36 }}>
-                <input type="checkbox" className="check" checked={adminHere} onChange={() => setAdminHere(!adminHere)} />
-                Admin of {teamName}
-              </label>
             </div>
             {section(`Leave balance ${s.cal.year}`)}
             <div style={grid}>
@@ -1613,7 +1607,7 @@ function NodeAdminsDialog({ id }: { id: string }) {
   const close = () => s.setDialog(null);
   // Suggest people allocated here (directors and managers first), then everyone else.
   const cands = s.data.people
-    .filter((p) => !admins.includes(p.id) && !(p.resign && p.resign < s.today))
+    .filter((p) => isLeader(p.level) && !admins.includes(p.id) && !(p.resign && p.resign < s.today))
     .sort((a, b) => Number(O.inN(b, id)) - Number(O.inN(a, id)) || LEVEL_RANK[a.level] - LEVEL_RANK[b.level] || a.name.localeCompare(b.name));
   const kind = n.type === "dept" ? "department" : "tower";
   return (

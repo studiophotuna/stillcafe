@@ -14,7 +14,7 @@ export const canUpload = (d: WorkloadData, me: number) =>
 export function authorizeWl(a: Action, d: WorkloadData, me: number): { action: Action } | { error: string } {
   const admin = d.admins.includes(me);
   if (a.type === "importRows") return canUpload(d, me) ? { action: a } : { error: "Ask a Workload admin for upload access." };
-  if (a.type === "reviewCx") return admin ? { action: { ...a, by: me } } : { error: "Only Workload admins can do that." };
+  if (a.type === "reviewCx" || a.type === "editDone") return admin ? { action: { ...a, by: me } } : { error: "Only Workload admins can do that." };
   if (ADMIN_ONLY.includes(a.type)) return admin ? { action: a } : { error: "Only Workload admins can do that." };
   switch (a.type) {
     case "startWork":

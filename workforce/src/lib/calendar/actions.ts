@@ -41,10 +41,10 @@ export type CalAction =
   | { type: "importOrg"; dept: string; rows: OrgRow[] }
   | { type: "renameNode"; id: string; name: string }
   | { type: "deleteNode"; id: string }
-  | { type: "saveMember"; pid: number; level: Level; shift: string; adminHere: boolean; bid: string; assign: string[]; isNew: boolean; details?: MemberDetails; hcFrom?: string }
+  | { type: "saveMember"; pid: number; level: Level; shift: string; adminHere?: boolean; bid: string; assign: string[]; isNew: boolean; details?: MemberDetails; hcFrom?: string }
   | { type: "setHcHistory"; pid: number; history: HcTag[] }
   | { type: "bulkMembers"; pids: number[]; level?: Level; approver?: number; shift?: string; wfhDays?: number[] }
-  | { type: "addPerson"; details: MemberDetails & { name: string; email: string }; level: Level; shift: string; adminHere: boolean; bid: string; assign: string[] }
+  | { type: "addPerson"; details: MemberDetails & { name: string; email: string }; level: Level; shift: string; adminHere?: boolean; bid: string; assign: string[] }
   | { type: "removeFromTeam"; pid: number; bid: string }
   | { type: "setResign"; pid: number; date: string | null }
   | { type: "saveShift"; orig: string | null; rec: Shift }
@@ -462,6 +462,8 @@ function applyInner(d: CalendarData, a: CalAction, today: string, now: number): 
     case "addAdmin": {
       const b = c.O.by[a.id];
       if (!b || b.admins?.includes(a.pid)) return { data: d };
+      const ap = c.people.get(a.pid);
+      if (!ap || !isLeader(ap.level)) return { data: d, error: "Admins must be a team lead, manager or director." };
       return { data: setNode(d, a.id, { admins: (b.admins ?? []).concat(a.pid) }), message: `${c.person(a.pid).name} is now an admin of ${b.name}.` };
     }
     case "removeAdmin": {
@@ -549,8 +551,11 @@ function applyInner(d: CalendarData, a: CalAction, today: string, now: number): 
         people: d.people.map((x) => (x.id === a.pid ? fixPrimary(c.O, { ...x, ...cl.patch, assign: [...new Set(a.assign)], level: a.level, shift: a.shift || x.shift }) : x)),
       };
       const inHere = a.assign.some((x) => c.O.anc(x).includes(a.bid));
+      // Team admins are set in Team settings; without adminHere the member keeps their status here
+      // (while still allocated to the team).
+      const was = (b.admins ?? []).includes(a.pid);
       let na = (b.admins ?? []).filter((x) => x !== a.pid);
-      if (a.adminHere && inHere) na = na.concat(a.pid);
+      if ((a.adminHere ?? was) && inHere) na = na.concat(a.pid);
       if (na.join() !== (b.admins ?? []).join()) next = setNode(next, a.bid, { admins: na });
       return { data: next, message: p.name + (a.isNew ? " added." : " updated.") };
     }

@@ -2,7 +2,7 @@
 
 import { Chip, Seg } from "@/components/calendar/bits";
 import { Blueprint, Icon } from "@/components/ui";
-import { CODES, CODE_KEYS, LEVELS, POOL } from "@/lib/calendar/constants";
+import { CODES, CODE_KEYS, LEVELS, POOL, isLeader } from "@/lib/calendar/constants";
 import { roleAdminsOf } from "@/lib/calendar/org";
 import { useCalendar } from "@/lib/calendar/store";
 import { useCalView } from "@/lib/calendar/useCalView";
@@ -20,7 +20,7 @@ export default function SettingsPage() {
   const byRole = [...new Set(s.cal.O.anc(b.id).flatMap((n) => roleAdminsOf(s.cal.O, n)))].map((i) => s.cal.people.get(i)).filter((p) => !!p);
   const set = (patch: TeamPatch) => s.run({ type: "teamSettings", id: b.id, patch });
   const cands = s.data.people
-    .filter((p) => s.cal.O.inN(p, b.id) && !admins.includes(p.id) && !(p.resign && p.resign < s.today))
+    .filter((p) => isLeader(p.level) && s.cal.O.inN(p, b.id) && !admins.includes(p.id) && !(p.resign && p.resign < s.today))
     .sort((x, y) => x.name.localeCompare(y.name));
   const check = (label: string, desc: string, on: boolean, key: keyof Pick<OrgNode, "notifyAdmin" | "notifyUser" | "invite">) => (
     <label className="rule">
@@ -98,7 +98,7 @@ export default function SettingsPage() {
               <option value="">Add an admin…</option>
               {cands.map((p) => (
                 <option key={p.id} value={p.id}>
-                  {p.name}
+                  {p.name} · {LEVELS[p.level]}
                 </option>
               ))}
             </select>

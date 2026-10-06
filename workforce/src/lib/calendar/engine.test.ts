@@ -492,6 +492,15 @@ describe("department and tower admins", async () => {
     const other = d.requests.find((q) => q.pid !== ANA && q.approvals.rm === "pending")!;
     expect("action" in authorizeCal({ type: "decide", rid: other.id, bid: "rm", st: "approved", actor: ANA }, c, ANA)).toBe(true);
   });
+  it("only makes leaders admins, and editing a member keeps their admin status", () => {
+    expect(run(fresh(), { type: "addAdmin", id: "rm", pid: ANA }).error).toMatch(/team lead, manager or director/);
+    const d = run(fresh(), { type: "addAdmin", id: "bss", pid: SAM }).data;
+    const rm = d.nodes.find((n) => n.id === "rm")!.admins ?? [];
+    const keep = rm.find((id) => id !== SAM) ?? rm[0];
+    const kp = d.people.find((p) => p.id === keep)!;
+    const after = run(d, { type: "saveMember", pid: keep, level: kp.level, shift: kp.shift, bid: "rm", assign: kp.assign, isNew: false }).data;
+    expect(after.nodes.find((n) => n.id === "rm")!.admins).toEqual(rm);
+  });
   it("lets a department or tower lose its last admin, not a team", () => {
     let d = run(fresh(), { type: "addAdmin", id: "bss", pid: SAM }).data;
     d = run(d, { type: "removeAdmin", id: "bss", pid: SAM }).data;

@@ -919,8 +919,14 @@ describe("complexity", async () => {
     const d = data([slow, ok, fast], cxs());
     expect(E.cxCheck(d, slow)).toMatchObject({ expMs: 90 * M, actMs: 4 * H, flag: "slow" });
     expect(E.cxCheck(d, ok)!.flag).toBeNull();
-    expect(E.cxCheck(d, fast)!.flag).toBeNull(); // quicker than expected isn't questioned
-    expect(E.cxQuestions(d).map((t) => t.id)).toEqual([slow.id]);
+    // 2 h expected, done in 10 min: 1200% productivity, flagged as very fast (default 200%).
+    expect(E.cxCheck(d, fast)).toMatchObject({ pct: 1200, flag: "fast" });
+    expect(E.cxCheck(d, ok)!.pct).toBe(90);
+    expect(E.cxQuestions(d).map((t) => t.id).sort()).toEqual([slow.id, fast.id].sort());
+    // The threshold is the admin's: 0 turns it off; above the ticket's productivity it isn't flagged.
+    expect(E.cxCheck(data([fast], cxs({ complexity: { on: true, levels, tol: 50, fast: 0 } })), fast)!.flag).toBeNull();
+    expect(E.cxCheck(data([fast], cxs({ complexity: { on: true, levels, tol: 50, fast: 1500 } })), fast)!.flag).toBeNull();
+    expect(E.cxCheck(data([fast], cxs({ complexity: { on: true, levels, tol: 50, fast: 1200 } })), fast)!.flag).toBe("fast");
     // Confirm one, correct the other: both leave the list; the correction updates the contracts.
     const c1 = E.reviewCx(d, fast.id, 23, at("16:00")).data;
     expect(get(c1, fast.id).cxReview).toMatchObject({ by: 23, verdict: "ok" });
@@ -929,6 +935,18 @@ describe("complexity", async () => {
     expect(E.cxQuestions(c2)).toEqual([]);
     // Only admins may check it.
     expect(authorizeWl({ type: "reviewCx", id: slow.id, by: 0 }, d, ANA)).toEqual({ error: "Only Workload admins can do that." });
+  });
+
+  it("lets an admin correct a resolved ticket's details, kept in its history", () => {
+    const t = task({ status: "done", assignee: ANA, startedAt: at("09:00"), doneAt: at("10:00"), cx: { simple: 2 }, fields: { ticket: "1", carrier: "MSK", contracts: 2 } });
+    const d = data([t], cxs());
+    const o = E.editDone(d, t.id, { ticket: "1", carrier: "CMA", contracts: 9 }, 23, at("16:00"));
+    const x = get(o.data, t.id);
+    expect(x.fields).toMatchObject({ carrier: "CMA", contracts: 2 }); // contracts follow the complexity counts
+    expect(x.history.at(-1)!.text).toMatch(/^Details corrected by .+ · Carrier: MSK → CMA$/);
+    expect(E.editDone(d, t.id, { carrier: "MSK" }, 23, at("16:00")).message).toBe("Nothing changed.");
+    expect(E.editDone(data([working("09:00")], cxs()), "nope", {}, 23, at("16:00")).data.tasks).toHaveLength(1);
+    expect(authorizeWl({ type: "editDone", id: t.id, vals: {}, by: 0 }, d, ANA)).toEqual({ error: "Only Workload admins can do that." });
   });
 });
 
