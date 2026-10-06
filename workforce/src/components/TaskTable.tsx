@@ -96,7 +96,7 @@ export function TaskTable({ rows, variant }: { rows: TaskRowVM[]; variant: "mine
               <td>
                 {r.action && (
                   <button
-                    className="btn btn-secondary btn-36"
+                    className="btn btn-secondary btn-36 nowrap"
                     disabled={r.action.disabled}
                     onClick={() => {
                       const a = r.action!;

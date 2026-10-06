@@ -2,11 +2,11 @@
 import { H, dur, fmtS, fmtT } from "./clock";
 import { AV, PR, ST, trPathOf } from "./constants";
 import type { Action } from "./actions";
-import { canTake, cxCheck, cxOn, cxText, due, holdPeriods, isBusy, overdueMs, personOf, slaOf, slaText, taskTypeOf, waitingMs, taskWorkMs, ticketOf, type WorkloadData } from "./engine";
+import { canClaim, canTake, cxCheck, cxOn, cxText, due, holdPeriods, isBusy, overdueMs, personOf, slaOf, slaText, taskTypeOf, waitingMs, taskWorkMs, ticketOf, type WorkloadData } from "./engine";
 import type { Task } from "./types";
 
 export interface RowAction {
-  kind: "take" | "pick" | "start" | "resume" | "details";
+  kind: "take" | "pick" | "start" | "resume" | "details" | "claim" | "unclaim";
   id: string;
   label: string;
   disabled: boolean;
@@ -63,6 +63,12 @@ export function taskRow(d: WorkloadData, t: Task, me: number, isAdmin: boolean, 
   else if (t.assignee === me && t.status === "assigned") action = { kind: "start", id: t.id, label: "Start", disabled: busy };
   else if (t.assignee === me && t.status === "on_hold") action = { kind: "resume", id: t.id, label: "Resume", disabled: busy };
   else if (isAdmin && t.status !== "done") action = { kind: "details", id: t.id, label: "Details", disabled: false };
+  // Someone else's task in my trades: ask to take it (they decide).
+  else if (t.claim?.by === me && t.assignee !== me && t.status !== "done") action = { kind: "unclaim", id: t.id, label: "Withdraw request", disabled: false };
+  else if (canClaim(d, meP, t))
+    action = t.claim
+      ? { kind: "claim", id: t.id, label: "Requested", disabled: true }
+      : { kind: "claim", id: t.id, label: "Ask to take", disabled: false };
   const p = personOf(d, t.assignee);
   return {
     id: t.id,
@@ -99,6 +105,8 @@ export function taskRow(d: WorkloadData, t: Task, me: number, isAdmin: boolean, 
 /** The action for a row button (details is handled by the caller). */
 export function rowAction(a: RowAction, me: number): Action {
   if (a.kind === "pick") return { type: "pickTask", id: a.id, pid: me };
+  if (a.kind === "claim") return { type: "claimTask", id: a.id, pid: me };
+  if (a.kind === "unclaim") return { type: "cancelClaim", id: a.id, pid: me };
   return a.kind === "resume" ? { type: "resume", id: a.id, pid: me } : { type: "startTask", id: a.id, pid: me };
 }
 

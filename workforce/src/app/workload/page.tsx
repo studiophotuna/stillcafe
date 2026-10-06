@@ -1,11 +1,12 @@
 "use client";
 
+import Link from "next/link";
 import { EmailBox } from "@/components/Dialogs";
 import { TaskTable } from "@/components/TaskTable";
 import { Blueprint, Icon, Kpi, PageHead, pct } from "@/components/ui";
 import { dur } from "@/lib/workload/clock";
 import { AV, trPathOf } from "@/lib/workload/constants";
-import { AWAY, awayLabel, basisUnit, typeTargets, canWork, currentAway, doneToday, endedToday, fmtMin, helpQueue, missingRequired, ownQueue, personMetrics, sortTasks } from "@/lib/workload/engine";
+import { personOf, AWAY, awayLabel, basisUnit, typeTargets, canWork, currentAway, doneToday, endedToday, fmtMin, helpQueue, missingRequired, ownQueue, personMetrics, sortTasks } from "@/lib/workload/engine";
 import { fmtT } from "@/lib/workload/clock";
 import { TaskTimer } from "@/components/WorkloadBits";
 import { useWorkload } from "@/lib/workload/store";
@@ -54,11 +55,11 @@ export default function MyWorkPage() {
     : [{ k: "Waiting in queue", v: data.tasks.filter((t) => t.status === "new").length, m: "all trades" }];
 
   const assignedMine = sortTasks(data.tasks.filter((t) => t.assignee === me.id && (t.status === "assigned" || t.status === "on_hold")), data);
-  // Members pick: own trades; when those are empty, other trades (same system first, then the team) to help with.
-  const own = s.mode === "self" ? ownQueue(data, me) : [];
-  const help = s.mode === "self" && !own.length && me.trades.length ? helpQueue(data, me).map((x) => x.t) : [];
-  const pickable = own.length ? own : help;
-  const myList = assignedMine.concat(pickable);
+  // Only my own tasks here; tasks to pick are in the Queue.
+  const myList = assignedMine;
+  const waitingToPick = s.mode === "self" ? ownQueue(data, me).length || (me.trades.length ? helpQueue(data, me).length : 0) : 0;
+  // Others asking to take one of my tasks.
+  const claims = data.tasks.filter((t) => t.assignee === me.id && t.claim && t.status !== "done");
   const unavailable = !canWork(me, s);
   const hasAssigned = assignedMine.some((t) => t.status === "assigned");
 
@@ -76,9 +77,9 @@ export default function MyWorkPage() {
   } else if (s.mode === "fifo")
     idleText = `Click Start work to get the next task in ${trades}. You get one task at a time, highest priority and oldest first.`;
   else if (s.mode === "self")
-    idleText = s.multiPick
-      ? `Pick tasks from the list below to put them on your list (you can pick several), then start them one at a time. Only tasks in ${trades} are shown.`
-      : `Pick a task from the list below. Only tasks in ${trades} are shown.`;
+    idleText =
+      (waitingToPick ? `${waitingToPick} task${waitingToPick === 1 ? "" : "s"} waiting. ` : "Nothing is waiting right now. ") +
+      (s.multiPick ? "Pick tasks from the Queue (you can pick several), then start them here one at a time." : "Take a task from the Queue to start it.");
   else
     idleText = hasAssigned
       ? "You have tasks assigned to you. Click Start work to begin the next one."
@@ -104,6 +105,23 @@ export default function MyWorkPage() {
           <Kpi key={k.k} {...k} />
         ))}
       </div>
+
+      {claims.map((t) => (
+        <Blueprint as="section" key={t.id} className="panel status-bar claim-bar">
+          <span>
+            <strong>{personOf(data, t.claim!.by)?.name ?? "A teammate"} wants to take {t.id}</strong> · {t.title}
+            {t.status === "in_progress" ? " (in progress)" : ""}. Let them take it, or keep it?
+          </span>
+          <div className="row" style={{ gap: 6 }}>
+            <button className="btn btn-secondary btn-36" onClick={() => run({ type: "answerClaim", id: t.id, ok: false, pid: me.id })}>
+              Keep it
+            </button>
+            <Blueprint as="button" className="btn btn-primary btn-36" style={{ padding: "0 16px" }} onClick={() => run({ type: "answerClaim", id: t.id, ok: true, pid: me.id })}>
+              Let them take it
+            </Blueprint>
+          </div>
+        </Blueprint>
+      ))}
 
       {onTeam && hol && (
         <Blueprint as="section" className="panel status-bar holiday-bar">
@@ -255,24 +273,22 @@ export default function MyWorkPage() {
             <h2>{idleTitle}</h2>
             <span>{idleText}</span>
           </div>
-          {showStart && (
+          {showStart ? (
             <Blueprint as="button" className="btn btn-primary btn-lg" disabled={unavailable || !!away || !!ended} onClick={() => run({ type: "startWork", pid: me.id })}>
               <Icon name="play" size={20} />
               Start work
             </Blueprint>
-          )}
+          ) : s.mode === "self" && me.trades.length > 0 ? (
+            <Link className="btn btn-primary btn-lg" href="/workload/queue">
+              Go to Queue
+            </Link>
+          ) : null}
         </Blueprint>
       )}
 
       {myList.length > 0 && (
         <section className="panel" style={{ padding: 0, gap: 8 }}>
-          <h2 className="h2">
-            {s.mode !== "self"
-              ? "Assigned to you and pending"
-              : help.length
-                ? "Your trades are clear — help with other trades (your system first)"
-                : "Assigned to you and available to pick"}
-          </h2>
+          <h2 className="h2">Assigned to you and pending</h2>
           <Blueprint className="scroll-x">
             <TaskTable variant="mine" rows={myList.map((t) => taskRow(data, t, me.id, false, now))} />
           </Blueprint>

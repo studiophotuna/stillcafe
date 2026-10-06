@@ -142,6 +142,27 @@ describe("start work (FIFO)", () => {
     expect(act.awayMs).toBe(0); // idle stays in the time available
   });
 
+  it("lets a member ask for a teammate's task; the assignee lets them take it or keeps it", async () => {
+    const { claimTask, answerClaim, cancelClaim } = await import("./engine");
+    const { authorizeWl } = await import("./authz");
+    const mate = data([]).people.find((p) => p.id !== ANA && p.trades.includes("lcl"))!;
+    const t = task({ status: "in_progress", assignee: ANA, startedAt: NOW - M });
+    let d = data([t]);
+    // Members can't hand a task over (no transfer action); a teammate in the trade asks for it.
+    d = claimTask(d, t.id, mate.id, NOW).data;
+    expect(get(d, t.id).claim).toEqual({ by: mate.id, at: NOW });
+    expect(claimTask(d, t.id, ANA, NOW).message).toMatch(/someone else has/);
+    // Only the assignee answers.
+    expect(answerClaim(d, t.id, true, mate.id, NOW).data).toBe(d);
+    const kept = answerClaim(d, t.id, false, ANA, NOW).data;
+    expect(get(kept, t.id)).toMatchObject({ assignee: ANA, status: "in_progress", claim: null });
+    const moved = answerClaim(d, t.id, true, ANA, NOW).data;
+    expect(get(moved, t.id)).toMatchObject({ assignee: mate.id, status: "assigned", startedAt: null, claim: null });
+    expect(get(cancelClaim(d, t.id, mate.id, NOW).data, t.id).claim).toBeNull();
+    // The claim acts are always as the signed-in member.
+    expect(authorizeWl({ type: "answerClaim", id: t.id, ok: true, pid: mate.id }, d, ANA)).toEqual({ action: { type: "answerClaim", id: t.id, ok: true, pid: ANA } });
+  });
+
   it("does not give work to unavailable people unless the team allows it", () => {
     const t = task({ trade: "eu" });
     expect(get(startWork(data([t]), ELI, NOW).data, t.id).status).toBe("new");

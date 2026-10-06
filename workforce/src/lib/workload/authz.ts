@@ -20,6 +20,9 @@ export function authorizeWl(a: Action, d: WorkloadData, me: number): { action: A
     case "startWork":
     case "startTask":
     case "pickTask":
+    case "claimTask":
+    case "answerClaim":
+    case "cancelClaim":
     case "resume":
     case "complete":
     case "away":

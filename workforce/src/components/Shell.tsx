@@ -41,9 +41,11 @@ export function Shell({ children }: { children: React.ReactNode }) {
   }, [blocked, router]);
 
   const openQ = data.tasks.filter((t) => t.status === "new").length;
+  // Requests from teammates to take one of my tasks.
+  const myClaims = data.tasks.filter((t) => t.assignee === me.id && t.claim && t.status !== "done").length;
   const cxQs = isAdmin ? cxQuestions(data).length : 0;
   const nav: NavItem[] = [
-    { href: "/workload", icon: "my", label: "My work" },
+    { href: "/workload", icon: "my", label: "My work", badge: myClaims },
     { href: "/workload/queue", icon: "queue", label: "Queue", badge: openQ },
     { href: "/workload/history", icon: "reports", label: "Task history" },
     ...(isAdmin ? [{ href: "/workload/dashboard", icon: "dash" as const, label: "Dashboard" }] : []),

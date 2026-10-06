@@ -138,6 +138,8 @@ export interface Task {
   cxReview?: CxReview | null;
   /** Why it was late: required when a ticket is resolved after its due time. */
   delay?: string | null;
+  /** Another member asking to take this task (the assignee lets them, or keeps it). */
+  claim?: { by: number; at: number } | null;
 }
 
 /** A complexity level: its own daily target (put first) and average handling time per contract. */

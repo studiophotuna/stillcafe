@@ -235,6 +235,58 @@ export function pickTask(d: WorkloadData, id: string, pid: number, now: number):
   };
 }
 
+/**
+ * Taking a task someone else has (e.g. picked by mistake): members can't hand tasks over,
+ * but another member of the trade can ask for it; the assignee then lets them take it or
+ * keeps it. Admins can still reassign directly.
+ */
+export const canClaim = (d: WorkloadData, me: Person, t: Task) =>
+  t.assignee !== null && t.assignee !== me.id && (t.status === "assigned" || t.status === "in_progress" || t.status === "on_hold") && me.trades.includes(t.trade);
+
+export function claimTask(d: WorkloadData, id: string, pid: number, now: number): Outcome {
+  const me = personOf(d, pid);
+  const t = d.tasks.find((x) => x.id === id);
+  if (!me || !t || !canClaim(d, me, t)) return { data: d, message: "You can ask only for open tasks in your trades that someone else has." };
+  if (t.claim && t.claim.by !== pid) return { data: d, message: `${personOf(d, t.claim.by)?.name ?? "Someone"} has already asked for ${id}.` };
+  if (t.claim) return { data: d };
+  const who = personOf(d, t.assignee)?.name ?? "the assignee";
+  return {
+    data: patch(d, id, (x) => ({ ...x, claim: { by: pid, at: now }, history: hist(x, now, `${me.name} asked to take this from ${who}`) })),
+    message: `Asked ${who}. ${id} moves to you if they agree.`,
+  };
+}
+
+export function answerClaim(d: WorkloadData, id: string, ok: boolean, pid: number, now: number): Outcome {
+  const t = d.tasks.find((x) => x.id === id);
+  if (!t?.claim || t.assignee !== pid || t.status === "done") return { data: d };
+  const to = personOf(d, t.claim.by);
+  const me = personOf(d, pid);
+  if (!ok || !to)
+    return {
+      data: patch(d, id, (x) => ({ ...x, claim: null, history: hist(x, now, `${me?.name ?? "The assignee"} kept this task`) })),
+      message: `You kept ${id}.`,
+    };
+  // Moves to them, waiting for them to start it (time already worked stays in the history).
+  return {
+    data: patch(d, id, (x) => ({
+      ...x,
+      assignee: to.id,
+      status: "assigned",
+      startedAt: null,
+      hold: "",
+      claim: null,
+      history: hist(x, now, `${me?.name ?? "The assignee"} let ${to.name} take this task`),
+    })),
+    message: `${id} moved to ${to.name}.`,
+  };
+}
+
+export function cancelClaim(d: WorkloadData, id: string, pid: number, now: number): Outcome {
+  const t = d.tasks.find((x) => x.id === id);
+  if (!t?.claim || t.claim.by !== pid) return { data: d };
+  return { data: patch(d, id, (x) => ({ ...x, claim: null, history: hist(x, now, "Request to take withdrawn") })), message: "Request withdrawn." };
+}
+
 /** Delay remarks on an open overdue ticket (shown in the queue; kept when it's resolved). */
 export function setDelay(d: WorkloadData, id: string, delay: string, now: number): Outcome {
   const t = d.tasks.find((x) => x.id === id);
@@ -422,7 +474,7 @@ export function setTaskType(d: WorkloadData, id: string, ttype: string, now: num
 export function assignTask(d: WorkloadData, id: string, pid: number | null, now: number): Outcome {
   if (pid === null)
     return {
-      data: patch(d, id, (x) => ({ ...x, assignee: null, status: "new", history: hist(x, now, "Returned to queue") })),
+      data: patch(d, id, (x) => ({ ...x, assignee: null, status: "new", claim: null, history: hist(x, now, "Returned to queue") })),
     };
   const p = personOf(d, pid);
   if (!p) return { data: d };
@@ -430,6 +482,7 @@ export function assignTask(d: WorkloadData, id: string, pid: number | null, now:
     data: patch(d, id, (x) => ({
       ...x,
       assignee: p.id,
+      claim: null, // an admin's reassignment settles any request to take it
       // An in-progress task moves to the new person as "assigned" so they never hold two at once.
       status: x.status === "on_hold" ? "on_hold" : "assigned",
       history: hist(x, now, "Assigned to " + p.name),
