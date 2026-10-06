@@ -5,7 +5,6 @@ import { useEffect, useState } from "react";
 import { Blueprint } from "@/components/ui";
 import { fmtT, nowMs } from "@/lib/workload/clock";
 import { awayLabel, currentAway, fmtMin, staleTasks, taskWorkMs, ticketOf } from "@/lib/workload/engine";
-import { periodLabel, shiftPeriod, type PeriodKind } from "@/lib/workload/period";
 import { useWorkload } from "@/lib/workload/store";
 
 /** Current time, re-rendering every second (for running timers). */
@@ -26,47 +25,6 @@ export const clock = (ms: number) => {
   const ss = String(s % 60).padStart(2, "0");
   return h ? `${h}:${mm}:${ss}` : `${mm}:${ss}`;
 };
-
-/** Day / Week / Month / All selector with previous-next arrows. */
-export function PeriodNav({
-  kind,
-  anchor,
-  onChange,
-  kinds = ["day", "week", "month", "all"],
-}: {
-  kind: PeriodKind;
-  anchor: number;
-  onChange: (kind: PeriodKind, anchor: number) => void;
-  kinds?: PeriodKind[];
-}) {
-  const now = nowMs();
-  const L: Record<PeriodKind, string> = { day: "Day", week: "Week", month: "Month", year: "Year", all: "All dates" };
-  return (
-    <div className="period-nav">
-      <select aria-label="Period" className="input" value={kind} onChange={(e) => onChange(e.target.value as PeriodKind, anchor)} style={{ width: "auto" }}>
-        {kinds.map((k) => (
-          <option key={k} value={k}>
-            {L[k]}
-          </option>
-        ))}
-      </select>
-      {kind !== "all" && (
-        <>
-          <button className="btn btn-secondary btn-icon" aria-label="Previous" onClick={() => onChange(kind, shiftPeriod(kind, anchor, -1))}>
-            ‹
-          </button>
-          <span className="label">{periodLabel(kind, anchor, now)}</span>
-          <button className="btn btn-secondary btn-icon" aria-label="Next" onClick={() => onChange(kind, shiftPeriod(kind, anchor, 1))}>
-            ›
-          </button>
-          <button className="btn btn-ghost" onClick={() => onChange(kind, now)}>
-            Today
-          </button>
-        </>
-      )}
-    </div>
-  );
-}
 
 /**
  * While a member is on a break, lunch, meeting, ad hoc or training: a pop-up with a

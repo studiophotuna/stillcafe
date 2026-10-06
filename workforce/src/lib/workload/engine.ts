@@ -6,7 +6,7 @@
 import { H, M, TZ_OFFSET_H, addHours, dayKey, fmtT, localHour, spanMs, weekend } from "./clock";
 import { CARRIERS, PR, fieldOptions, lc, sysName, trPathOf } from "./constants";
 import { SAMPLE_MAIL } from "./seed";
-import type { Activity, ActivityKind, OtPart, Person, Priority, Settings, Task, TaskField, TaskType, WlOrg } from "./types";
+import type { Activity, ActivityKind, CxLevel, OtPart, Person, Priority, Settings, Task, TaskField, TaskType, WlOrg } from "./types";
 
 export interface WorkloadData {
   tasks: Task[];
@@ -120,6 +120,9 @@ export function sortTasks(list: Task[], c: SlaCtx): Task[] {
  */
 export const canWork = (p: Person, s: Settings) => !s.skipUnavail || p.avail === "available" || (p.avail === "offshift" && !!p.onToday);
 export const isBusy = (tasks: Task[], pid: number) => tasks.some((t) => t.assignee === pid && t.status === "in_progress");
+/** Whether the member must finish (or set pending) their task before starting another. */
+export const oneAtATime = (s: Settings) => s.oneAtATime !== false;
+export const blocked = (d: Pick<WorkloadData, "tasks" | "settings">, pid: number) => oneAtATime(d.settings) && isBusy(d.tasks, pid);
 
 const hist = (t: Task, at: number, text: string) => [...t.history, { at, text }];
 const patch = (d: WorkloadData, id: string, fn: (t: Task) => Task): WorkloadData => ({
@@ -185,11 +188,11 @@ const helping = (d: WorkloadData, me: Person, t: Task) =>
  * "Start work": the member's next assigned task, or in FIFO mode the next waiting
  * task in their own trades. When their trades are empty it offers work elsewhere
  * (same system first, then the team) and takes it only once they agree (`assist`).
- * One task in progress at a time.
+ * One task in progress at a time, unless the team allows several.
  */
 export function startWork(d: WorkloadData, pid: number, now: number, assist = false): Outcome {
   const me = personOf(d, pid);
-  if (!me || isBusy(d.tasks, pid)) return { data: d };
+  if (!me || blocked(d, pid)) return { data: d };
   const stop = notWorking(d, pid, now);
   if (stop) return { data: d, message: stop };
   if (!canWork(me, d.settings)) return { data: d, message: "You’re marked unavailable, so tasks aren’t given to you." };
@@ -208,7 +211,7 @@ export function startWork(d: WorkloadData, pid: number, now: number, assist = fa
 export function startTask(d: WorkloadData, id: string, pid: number, now: number): Outcome {
   const me = personOf(d, pid);
   const t = d.tasks.find((x) => x.id === id);
-  if (!me || !t || isBusy(d.tasks, pid)) return { data: d };
+  if (!me || !t || blocked(d, pid)) return { data: d };
   const stop = notWorking(d, pid, now);
   if (stop) return { data: d, message: stop };
   const take = d.settings.mode === "self" && canTake(d, me, t);
@@ -218,6 +221,19 @@ export function startTask(d: WorkloadData, id: string, pid: number, now: number)
   return { data: begin(d, id, me, now, note), message: take ? `Started ${id}${note}.` : undefined };
 }
 
+/** Delay remarks on an open overdue ticket (shown in the queue; kept when it's resolved). */
+export function setDelay(d: WorkloadData, id: string, delay: string, now: number): Outcome {
+  const t = d.tasks.find((x) => x.id === id);
+  if (!t || t.status === "done") return { data: d };
+  if (now <= due(t, d)) return { data: d, message: `${id} isn't overdue yet.` };
+  const why = String(delay ?? "").trim().slice(0, 500);
+  if ((t.delay ?? "") === why) return { data: d };
+  return {
+    data: patch(d, id, (x) => ({ ...x, delay: why || null, history: hist(x, now, why ? `Delay remarks: ${why}` : "Delay remarks cleared") })),
+    message: why ? `Delay remarks saved for ${id}.` : `Delay remarks cleared for ${id}.`,
+  };
+}
+
 export function holdTask(d: WorkloadData, id: string, reason: string, now: number): Outcome {
   const r = reason.trim();
   if (!r) return { data: d };
@@ -225,7 +241,7 @@ export function holdTask(d: WorkloadData, id: string, reason: string, now: numbe
     data: patch(d, id, (x) =>
       x.status === "in_progress" ? { ...x, status: "on_hold", hold: r, history: hist(x, now, "On hold: " + r) } : x,
     ),
-    message: "On hold. You can start another task.",
+    message: "Pending. You can start another ticket.",
   };
 }
 
@@ -233,7 +249,7 @@ export function resumeTask(d: WorkloadData, id: string, pid: number, now: number
   const stop = notWorking(d, pid, now);
   if (stop) return { data: d, message: stop };
   const t = d.tasks.find((x) => x.id === id);
-  if (!t || t.assignee !== pid || t.status !== "on_hold" || isBusy(d.tasks, pid)) return { data: d };
+  if (!t || t.assignee !== pid || t.status !== "on_hold" || blocked(d, pid)) return { data: d };
   return { data: patch(d, id, (x) => ({ ...x, status: "in_progress", history: hist(x, now, "Resumed") })) };
 }
 
@@ -246,14 +262,36 @@ export const fmtMin = (m: number) => (m >= 60 ? `${Math.floor(m / 60)} h${m % 60
  * Mark done (required fields must be filled — they may be blank when uploaded), then
  * auto-feed the next task if the team uses it. Overtime is reported at End work.
  */
-export function completeTask(d: WorkloadData, id: string, vals: Task["fields"], pid: number, now: number): Outcome {
+export function completeTask(d: WorkloadData, id: string, vals: Task["fields"], pid: number, now: number, cx?: Record<string, number> | null, delay?: string | null): Outcome {
   const t = d.tasks.find((x) => x.id === id);
   if (!t || t.status !== "in_progress" || t.assignee !== pid) return { data: d };
+  // Resolving after the due time needs delay remarks.
+  const late = now > due(t, d);
+  const why = typeof delay === "string" ? delay.trim().slice(0, 500) : "";
+  if (late && !why) return { data: d, message: `${id} is overdue. Enter delay remarks to resolve it.` };
+  // Complexity: the contracts by level; with a number field as the productivity basis, it's their total.
+  let counts: Record<string, number> | null = null;
+  if (cxOn(d.settings)) {
+    counts = cleanCx(d.settings, cx);
+    if (!counts) return { data: d, message: `Enter how many contracts of each complexity ${id} had.` };
+    const f = cxField(d);
+    if (f) vals = { ...vals, [f.key]: cxTotal(counts) };
+  }
   const miss = missingRequired(d.fields, vals);
-  if (miss.length) return { data: d, message: `Fill in ${miss.join(", ")} before marking ${id} done.` };
-  const done = patch(d, id, (x) => ({ ...x, status: "done", doneAt: now, fields: { ...vals }, history: hist(x, now, "Done") }));
+  if (miss.length) return { data: d, message: `Fill in ${miss.join(", ")} before resolving ${id}.` };
+  const note = counts ? ` · ${cxText(d.settings, counts)}` : "";
+  const done = patch(d, id, (x) => ({
+    ...x,
+    status: "done",
+    doneAt: now,
+    fields: { ...vals },
+    ...(counts ? { cx: counts, cxReview: null } : {}),
+    ...(late ? { delay: why } : {}),
+    history: hist(x, now, "Done" + note + (late ? ` · Delay: ${why}` : "")),
+  }));
   const s = d.settings;
-  const feed = s.autoFeed && (s.mode === "fifo" || done.tasks.some((x) => x.assignee === pid && x.status === "assigned"));
+  // With several tasks allowed, don't feed another while they still have one in progress.
+  const feed = s.autoFeed && !isBusy(done.tasks, pid) && (s.mode === "fifo" || done.tasks.some((x) => x.assignee === pid && x.status === "assigned"));
   if (feed) {
     const n = startWork(done, pid, now);
     const rest = n.message && !n.ask ? " " + n.message.replace(/^Done\. /, "") : "";
@@ -603,7 +641,7 @@ export function output(d: Pick<WorkloadData, "fields" | "settings">, done: Task[
 
 /** Whether productivity is weighted by task type targets (counting tasks, and a type has a target). */
 export const typeTargets = (d: Pick<WorkloadData, "fields" | "settings">) =>
-  !basisField(d) && (d.settings.taskTypes ?? []).some((t) => (t.target ?? 0) > 0);
+  (!basisField(d) && (d.settings.taskTypes ?? []).some((t) => (t.target ?? 0) > 0)) || cxLevels(d.settings).some((l) => (l.target ?? 0) > 0);
 
 /**
  * How much of a full day's work the done tasks make. Counting tasks: each task of a type
@@ -611,19 +649,35 @@ export const typeTargets = (d: Pick<WorkloadData, "fields" | "settings">) =>
  * reviews of 4 plus 1 Booking of 2 = 1.25 days). With a field as the basis: output ÷ target.
  */
 export function dayShare(d: Pick<WorkloadData, "fields" | "settings">, done: Task[], target: number) {
-  if (basisField(d)) return { share: target > 0 ? output(d, done) / target : 0, mix: "", any: false };
+  const f = basisField(d);
+  const levels = cxLevels(d.settings);
+  // Distinct values of a field (e.g. tickets): output ÷ target.
+  if (f && f.type !== "number") return { share: target > 0 ? output(d, done) / target : 0, mix: "", any: false };
   const groups = new Map<string, { name: string; n: number; of: number }>();
   let share = 0;
   let any = false;
-  for (const t of done) {
-    const ty = taskTypeOf(d.settings, t);
-    const of = ty && (ty.target ?? 0) > 0 ? ty.target! : target;
-    if (ty && (ty.target ?? 0) > 0) any = true;
-    if (of > 0) share += 1 / of;
-    const key = ty && (ty.target ?? 0) > 0 ? ty.id : "";
-    const g = groups.get(key) ?? { name: key ? ty!.name : "standard", n: 0, of };
-    g.n++;
+  const add = (key: string, name: string, n: number, of: number) => {
+    if (of > 0) share += n / of;
+    const g = groups.get(key) ?? { name, n: 0, of };
+    g.n += n;
     groups.set(key, g);
+  };
+  for (const t of done) {
+    const ty = f ? undefined : taskTypeOf(d.settings, t);
+    const typed = !!ty && (ty.target ?? 0) > 0;
+    const base = typed ? ty!.target! : target;
+    // Complexity first: each contract counts 1 ÷ its level's target (or the task's usual target).
+    if (levels.length && t.cx && cxTotal(t.cx) > 0) {
+      for (const l of levels) {
+        const n = t.cx[l.id] ?? 0;
+        if (!n) continue;
+        if ((l.target ?? 0) > 0) any = true;
+        add("cx:" + l.id, l.name, n, (l.target ?? 0) > 0 ? l.target! : base);
+      }
+      continue;
+    }
+    if (typed) any = true;
+    add(typed ? ty!.id : "", typed ? ty!.name : f ? f.label.toLowerCase() : "standard", f ? Number(t.fields[f.key]) || 0 : 1, base);
   }
   const mix = [...groups.values()].map((g) => `${g.n} ${g.name}${g.of ? " of " + g.of : ""}`).join(" · ");
   return { share, mix, any };
@@ -682,7 +736,9 @@ export function personMetrics(d: WorkloadData, p: Person, now: number): PersonMe
   const { share, mix, any } = dayShare(d, done, target);
   // Overtime raises the day's target by the tasks that fit in it.
   const ot = otDays(s, target, otMinFor(d, p, now));
-  const exp = target > 0 || any ? fr + ot : 0;
+  // Holiday duty and rest days aren't scheduled days: only the overtime is expected.
+  const dayPart = p.otDay ? 0 : fr;
+  const exp = target > 0 || any ? dayPart + ot : 0;
   return {
     otTarget: Math.round(ot * target * 100) / 100,
     otDays: ot,
@@ -695,7 +751,7 @@ export function personMetrics(d: WorkloadData, p: Person, now: number): PersonMe
     away: act.away,
     done: done.length,
     target,
-    tgt: tgt + ot * target,
+    tgt: (p.otDay ? 0 : tgt) + ot * target,
     avail,
     handle,
     onTime,
@@ -757,6 +813,23 @@ export function backToWork(d: WorkloadData, pid: number, now: number): Outcome {
   return { data: { ...d, activities: closeAway(d.activities, pid, now) }, message: `Back to work after ${fmtMin(Math.round((now - cur.start) / 60000))} ${awayLabel(cur.kind).toLowerCase()}.` };
 }
 
+/**
+ * Minutes that can be reported as overtime now: on holiday duty or a rest day worked,
+ * everything since the member first started today (up to 16 h); otherwise the time past the shift.
+ */
+export function otAvailMin(d: Pick<WorkloadData, "tasks" | "activities" | "settings">, p: Person, now: number) {
+  if (!p.otDay) return pastShiftMin(p, d.settings, now);
+  const today = dayKey(now);
+  const starts = d.tasks
+    .filter((t) => t.assignee === p.id && t.startedAt && dayKey(t.startedAt) === today)
+    .map((t) => t.startedAt!)
+    .concat(d.activities.filter((a) => a.pid === p.id && a.kind !== "end" && dayKey(a.start) === today).map((a) => a.start));
+  if (!starts.length) return 0;
+  return Math.max(0, Math.min(16 * 60, Math.round((now - Math.min(...starts)) / M)));
+}
+
+export const OT_KIND: Record<"holiday" | "restday", string> = { holiday: "Holiday duty", restday: "Rest day OT" };
+
 /** Minutes worked past the end of today's shift so far (0 during or before the shift). */
 export function pastShiftMin(p: Person, s: Settings, now: number) {
   const e = (localHour(now) - p.shiftStart + 24) % 24;
@@ -771,12 +844,13 @@ export function pastShiftMin(p: Person, s: Settings, now: number) {
 export function endWork(d: WorkloadData, pid: number, otMin: number, now: number, split?: OtPart[] | null): Outcome {
   const me = personOf(d, pid);
   if (!me || endedToday(d, pid, now)) return { data: d };
-  if (isBusy(d.tasks, pid)) return { data: d, message: "Finish your task or put it on hold before you end work." };
-  const ot = Math.max(0, Math.min(Math.round(Number(otMin) || 0), pastShiftMin(me, d.settings, now)));
+  if (isBusy(d.tasks, pid)) return { data: d, message: "Resolve your ticket or set it to pending before you end work." };
+  const avail = otAvailMin(d, me, now);
+  const ot = Math.max(0, Math.min(Math.round(Number(otMin) || 0), avail));
   // The breakdown must use this team's processes and task types and add up to the overtime.
   let parts: OtPart[] | null = null;
   // Processes: the member's own, plus other trades they worked tasks in after the shift.
-  const procs = otProcesses(d, me, pastShiftMin(me, d.settings, now), now);
+  const procs = otProcesses(d, me, avail, now);
   if (ot && split?.length && asksOtSplit(d.settings, procs)) {
     const clean = split
       .map((x) => ({ trade: String(x.trade ?? ""), ttype: x.ttype ? String(x.ttype) : "", min: Math.round(Number(x.min) || 0) }))
@@ -793,10 +867,10 @@ export function endWork(d: WorkloadData, pid: number, otMin: number, now: number
     }
     parts = [...merged.values()];
   } else if (ot && procs.length === 1 && !asksOtSplit(d.settings, procs)) parts = [{ trade: procs[0].id, min: ot }];
-  const end = newActivity(pid, "end", now, { otMin: ot, otStatus: ot ? "pending" : null, otSplit: parts });
+  const end = newActivity(pid, "end", now, { otMin: ot, otStatus: ot ? "pending" : null, otSplit: parts, otKind: ot && me.otDay ? me.otDay : null });
   return {
     data: { ...d, activities: closeAway(d.activities, pid, now).concat(end) },
-    message: ot ? `Work ended. ${fmtMin(ot)} overtime sent for approval.` : "Work ended. See you next shift.",
+    message: ot ? `Work ended. ${fmtMin(ot)} ${me.otDay ? OT_KIND[me.otDay].toLowerCase() : "overtime"} sent for approval.` : "Work ended. See you next shift.",
   };
 }
 
@@ -843,7 +917,7 @@ export function otDays(s: Settings, target: number, otMin: number) {
 export function otMinFor(d: WorkloadData, p: Person, now: number) {
   const e = endedToday(d, p.id, now);
   if (e) return e.otStatus === "declined" ? 0 : e.otMin;
-  const past = pastShiftMin(p, d.settings, now);
+  const past = otAvailMin(d, p, now);
   const working = d.tasks.some((t) => t.assignee === p.id && (t.status === "in_progress" || (t.doneAt !== null && t.doneAt > now - past * M)));
   return past && working ? past : 0;
 }
@@ -928,6 +1002,87 @@ export function holdPeriods(t: Task, now: number): { from: number; to: number | 
     out.push({ from: h.at, to, reason: h.text.replace(/^On hold:?\s*/, "") || t.hold });
   });
   return out;
+}
+
+// ── complexity ──
+
+/** The team's complexity levels when complexity is switched on, else none. */
+export const cxLevels = (s: Settings): CxLevel[] => (s.complexity?.on ? s.complexity.levels.filter((l) => l.name.trim()) : []);
+export const cxOn = (s: Settings) => cxLevels(s).length > 0;
+/** The number field that holds the ticket's total contracts: the one chosen, else the productivity field when it's a number. */
+export function cxField(d: Pick<WorkloadData, "fields" | "settings">) {
+  const k = d.settings.complexity?.field;
+  if (k === "") return undefined;
+  const f = k ? d.fields.find((x) => x.key === k && x.type === "number") : undefined;
+  if (f) return f;
+  const b = basisField(d);
+  return b?.type === "number" ? b : undefined;
+}
+export const cxTotal = (cx: Record<string, number> | null | undefined) => Object.values(cx ?? {}).reduce((a, n) => a + n, 0);
+/** "1 Simple · 2 Complex". */
+export const cxText = (s: Settings, cx: Record<string, number> | null | undefined) =>
+  cxLevels(s)
+    .filter((l) => cx?.[l.id])
+    .map((l) => `${cx![l.id]} ${l.name}`)
+    .join(" · ") || "—";
+/** Whole contracts per known level, or null when there are none. */
+export function cleanCx(s: Settings, cx: Record<string, unknown> | null | undefined): Record<string, number> | null {
+  const out: Record<string, number> = {};
+  for (const l of cxLevels(s)) {
+    const n = Math.round(Number(cx?.[l.id]) || 0);
+    if (n > 0) out[l.id] = Math.min(n, 999);
+  }
+  return cxTotal(out) > 0 ? out : null;
+}
+
+export interface CxCheck {
+  /** Expected handling time from the levels' average handling times, ms. */
+  expMs: number;
+  /** Time actually worked on the ticket, ms. */
+  actMs: number;
+  /** "slow": took much longer than the tagging suggests (maybe tagged too simple). */
+  flag: "slow" | null;
+}
+
+/** Compare a done ticket's handling time with what its complexity tagging implies (every tagged level needs an average handling time). */
+export function cxCheck(d: WorkloadData, t: Task): CxCheck | null {
+  const levels = cxLevels(d.settings);
+  if (!levels.length || !t.cx || t.status !== "done" || !t.startedAt || !t.doneAt) return null;
+  let exp = 0;
+  for (const [id, n] of Object.entries(t.cx)) {
+    const l = levels.find((x) => x.id === id);
+    if (!l || !((l.aht ?? 0) > 0)) return null;
+    exp += n * l.aht! * M;
+  }
+  if (!exp) return null;
+  const act = taskWorkMs(d, t, t.doneAt);
+  const tol = Math.max(0, d.settings.complexity?.tol ?? 50) / 100;
+  return { expMs: exp, actMs: act, flag: act > exp * (1 + tol) ? "slow" : null };
+}
+
+/** Done tickets whose handling time doesn't match their complexity and that no admin has checked yet. */
+export const cxQuestions = (d: WorkloadData) =>
+  d.tasks.filter((t) => t.status === "done" && !t.cxReview && cxCheck(d, t)?.flag).sort((a, b) => (b.doneAt ?? 0) - (a.doneAt ?? 0));
+
+/** Admin check of a ticket's complexity: confirm it, or correct the counts (the productivity field follows). */
+export function reviewCx(d: WorkloadData, id: string, by: number, now: number, cx?: Record<string, number> | null, note = ""): Outcome {
+  const t = d.tasks.find((x) => x.id === id);
+  if (!t || t.status !== "done" || !cxOn(d.settings)) return { data: d };
+  const next = cx ? cleanCx(d.settings, cx) : null;
+  if (cx && !next) return { data: d, message: "Enter at least one contract." };
+  const changed = !!next && cxText(d.settings, next) !== cxText(d.settings, t.cx);
+  const who = personOf(d, by)?.name ?? "an admin";
+  const f = cxField(d);
+  const review = { by, at: now, verdict: changed ? ("corrected" as const) : ("ok" as const), ...(note.trim() ? { note: note.trim().slice(0, 300) } : {}), ...(changed && t.cx ? { was: t.cx } : {}) };
+  return {
+    data: patch(d, id, (x) => ({
+      ...x,
+      ...(changed ? { cx: next, ...(f?.type === "number" ? { fields: { ...x.fields, [f.key]: cxTotal(next) } } : {}) } : {}),
+      cxReview: review,
+      history: hist(x, now, changed ? `Complexity corrected by ${who}: ${cxText(d.settings, t.cx)} → ${cxText(d.settings, next)}` : `Complexity confirmed by ${who}`),
+    })),
+    message: changed ? `${id}: complexity corrected.` : `${id}: complexity confirmed.`,
+  };
 }
 
 /** Time a task was worked: start to finish (or now), minus time on hold and the member's time away. */

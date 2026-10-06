@@ -34,7 +34,7 @@ export function UploadTasks() {
     <Blueprint as="section" className="panel">
       <h2 className="h2">Upload tasks</h2>
       <span className="note">
-        The template follows this team’s task fields (Admin › Task fields). Columns marked * can be left blank here but must be filled in before a task is marked done. Received is when the request actually came in (date and time); the due time counts from it, or from the upload if left blank. System, Trade, Priority and list fields have drop-downs.{" "}
+        The template follows this team’s task fields (Admin › Task fields). Columns marked * can be left blank here but must be filled in before a ticket is resolved. Received is when the request actually came in (date and time); the due time counts from it, or from the upload if left blank. System, Trade, Priority and list fields have drop-downs.{" "}
         {data.settings.taskTypes?.length
           ? "Task type sets the SLA (Admin › SLA & task types); leave it blank to detect it from the title’s keywords, or to use the standard SLA."
           : ""}

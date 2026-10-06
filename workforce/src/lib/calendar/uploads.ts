@@ -143,7 +143,7 @@ export function checkUpload(c: Cal, mode: UploadMode, rows: UploadRow[], bid: st
           : shv && !shf
             ? `Shift “${shv}” isn’t in the shift list`
             : (code ? !CODES[code as Code] || code === "HOL" : !shf)
-              ? "Give a Code (RTO, WFH, RD, VL, SL, EL, HD, BT, HDY) or a Shift"
+              ? "Give a Code (RTO, WFH, RD, RDOT, VL, SL, EL, HD, BT, HDY) or a Shift"
               : p.resign && date > p.resign
                 ? "After their last day"
                 : "";

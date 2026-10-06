@@ -10,11 +10,11 @@ import { useCalendar } from "@/lib/calendar/store";
 import { useCalView } from "@/lib/calendar/useCalView";
 import { CalDialogs, IssuedPasswords } from "./CalDialogs";
 
-type Access = "all" | "leader" | "teamAdmin" | "anyAdmin";
+type Access = "all" | "leader" | "approver" | "teamAdmin" | "anyAdmin";
 const ROUTES: { href: string; access: Access }[] = [
   { href: "/calendar/management", access: "leader" },
   { href: "/calendar/dashboard", access: "leader" },
-  { href: "/calendar/admin/approvals", access: "teamAdmin" },
+  { href: "/calendar/admin/approvals", access: "approver" },
   { href: "/calendar/admin/members", access: "teamAdmin" },
   { href: "/calendar/admin/settings", access: "teamAdmin" },
   { href: "/calendar/admin/shifts", access: "anyAdmin" },
@@ -36,7 +36,7 @@ export function CalShell({ children }: { children: React.ReactNode }) {
   const { O } = s.cal;
 
   const allowed = (a: Access) =>
-    a === "all" || (a === "leader" ? v.isLeader || v.anyAdmin : a === "teamAdmin" ? v.isAdmin : v.anyAdmin);
+    a === "all" || (a === "leader" ? v.isLeader || v.anyAdmin : a === "approver" ? v.canApprove || v.isAdmin : a === "teamAdmin" ? v.isAdmin : v.anyAdmin);
   const route = ROUTES.find((r) => path === r.href);
   const blocked = !!route && !allowed(route.access);
   useEffect(() => {
@@ -56,9 +56,9 @@ export function CalShell({ children }: { children: React.ReactNode }) {
     { href: "/calendar/notifications", icon: "bell", label: "Notifications" },
   ];
   const adminNav: NavItem[] = [
+    ...(v.canApprove || v.isAdmin ? [{ href: "/calendar/admin/approvals", icon: "approvals" as const, label: "Approvals", badge: v.pendingCount }] : []),
     ...(v.isAdmin
       ? [
-          { href: "/calendar/admin/approvals", icon: "approvals" as const, label: "Approvals", badge: v.pendingCount },
           { href: "/calendar/admin/members", icon: "members" as const, label: "Members" },
           { href: "/calendar/admin/settings", icon: "settings" as const, label: "Settings" },
         ]
@@ -139,7 +139,7 @@ export function CalShell({ children }: { children: React.ReactNode }) {
   return (
     <AppFrame
       module="calendar"
-      top={<SideAction label="Request leave" icon="plus" onClick={() => s.setDialog({ kind: "request" })} />}
+      top={<SideAction label="Request" icon="plus" onClick={() => s.setDialog({ kind: "request" })} />}
       nav={nav}
       adminNav={adminNav}
       user={{

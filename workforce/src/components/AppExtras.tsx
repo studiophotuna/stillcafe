@@ -167,6 +167,7 @@ interface Notices {
   leave: { id: string; label: string; start: string; end: string }[];
   ot: { id: string; otMin: number; day: string }[];
   links: { leave: string; ot: string };
+  payroll?: { date: string; days: number; note: string } | null;
 }
 const fmtDay = (d: string) =>
   new Date(d + "T00:00:00Z").toLocaleDateString("en-GB", {
@@ -357,6 +358,66 @@ export function HolidayPrompt() {
         <button className="btn btn-ghost" style={{ alignSelf: "center" }} onClick={() => setLater(true)}>
           Ask me later
         </button>
+      </Blueprint>
+    </div>
+  );
+}
+
+const LS_PAY = "wfm.payroll.seen";
+
+/**
+ * Payroll cut-off announcement: a pop-up for everyone from 2 days before each cut-off
+ * (days set by a system admin in Organization › App links). Dismissed once a day.
+ */
+export function PayrollNotice() {
+  const [p, setP] = useState<Notices["payroll"]>(null);
+  const [seen, setSeen] = useState(true);
+  useEffect(() => {
+    const today = new Date(Date.now() + 8 * 3600_000).toISOString().slice(0, 10);
+    fetch("/api/me/notices", { cache: "no-store" })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((j) => {
+        if (!j) return;
+        let pay: Notices["payroll"] = j.payroll ?? null;
+        // Sample data: cut-offs on the 10th and 25th.
+        if (j.demo) {
+          const now = new Date(Date.now() + 8 * 3600_000);
+          const y = now.getUTCFullYear();
+          const m = now.getUTCMonth();
+          const d = now.getUTCDate();
+          const cut = [10, 25].map((x) => new Date(Date.UTC(y, m, x))).find((x) => x.getUTCDate() >= d) ?? new Date(Date.UTC(y, m + 1, 10));
+          const days = Math.round((cut.getTime() - Date.UTC(y, m, d)) / 86_400_000);
+          pay = days <= 2 ? { date: cut.toISOString().slice(0, 10), days, note: "" } : null;
+        }
+        setP(pay);
+        if (pay) setSeen(read<string>(LS_PAY, "") === pay.date + "|" + today);
+      })
+      .catch(() => {});
+  }, []);
+  if (!p || seen) return null;
+  const close = () => {
+    const today = new Date(Date.now() + 8 * 3600_000).toISOString().slice(0, 10);
+    write(LS_PAY, p.date + "|" + today);
+    setSeen(true);
+  };
+  const when = p.days === 0 ? "today" : p.days === 1 ? "tomorrow" : `in ${p.days} days`;
+  return (
+    <div className="away-pop" role="dialog" aria-modal="true" aria-label="Payroll cut-off">
+      <Blueprint className="away-card" style={{ alignItems: "stretch", textAlign: "left", width: "min(460px, calc(100% - 32px))" }}>
+        <span className="small" style={{ textTransform: "uppercase", letterSpacing: "0.1em", color: "var(--color-accent-700)" }}>
+          Announcement
+        </span>
+        <div className="dialog-title" style={{ fontSize: 24 }}>
+          Payroll cut-off {when}
+        </div>
+        <span>
+          The payroll cut-off is on <strong>{fmtDay(p.date)}</strong>
+          {p.days === 0 ? " (today)" : ""}. Make sure your leave, overtime and schedule changes are filed and approved before then.
+        </span>
+        {p.note && <span className="small">{p.note}</span>}
+        <Blueprint as="button" className="btn btn-primary btn-40" style={{ alignSelf: "flex-end", padding: "0 18px" }} onClick={close}>
+          Got it
+        </Blueprint>
       </Blueprint>
     </div>
   );

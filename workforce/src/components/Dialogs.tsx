@@ -2,8 +2,8 @@
 
 import { useEffect, useState } from "react";
 import { fieldOptions, trPathOf } from "@/lib/workload/constants";
-import { nowMs } from "@/lib/workload/clock";
-import { fmtMin, missingRequired, pastShiftMin, type AssistOffer, slaText, otProcesses, suggestOtSplit, asksOtSplit, typesFor } from "@/lib/workload/engine";
+import { fmtT, nowMs } from "@/lib/workload/clock";
+import { due, fmtMin, oneAtATime, missingRequired, otAvailMin, OT_KIND, type AssistOffer, slaText, otProcesses, suggestOtSplit, asksOtSplit, typesFor, cxLevels, cxTotal, cxField } from "@/lib/workload/engine";
 import { useWorkload } from "@/lib/workload/store";
 import type { Priority, Task, OtPart } from "@/lib/workload/types";
 import { assignOptions, taskDetail } from "@/lib/workload/view";
@@ -66,7 +66,7 @@ function TaskDialog({ id }: { id: string }) {
   const close = () => setDialog(null);
   const canAdmin = isAdmin && t.status !== "done";
   const canResume = t.assignee === me.id && t.status === "on_hold";
-  const busy = data.tasks.some((x) => x.assignee === me.id && x.status === "in_progress");
+  const busy = oneAtATime(data.settings) && data.tasks.some((x) => x.assignee === me.id && x.status === "in_progress");
   return (
     <Modal onClose={close} width={820}>
       <div className="dialog-scroll">
@@ -214,7 +214,7 @@ function HoldDialog({ id }: { id: string }) {
   return (
     <Modal onClose={close} pad>
       <div className="dialog-title" style={{ fontSize: 26 }}>
-        Put on hold
+        Pending
       </div>
       <div className="field">
         <label htmlFor="hold-reason">What are you waiting for?</label>
@@ -229,7 +229,7 @@ function HoldDialog({ id }: { id: string }) {
         />
       </div>
       <span style={{ fontSize: 13, color: "var(--color-neutral-700)" }}>
-        The task stays yours. You can start another task while this one is on hold.
+        The ticket stays yours. You can start another ticket while this one is pending.
       </span>
       <div className="dialog-actions" style={{ gap: 10 }}>
         <button className="btn btn-secondary btn-40" onClick={close}>
@@ -245,7 +245,56 @@ function HoldDialog({ id }: { id: string }) {
             close();
           }}
         >
-          Put on hold
+          Set to pending
+        </Blueprint>
+      </div>
+    </Modal>
+  );
+}
+
+function DelayDialog({ id }: { id: string }) {
+  const { run, setDialog, data } = useWorkload();
+  const t = data.tasks.find((x) => x.id === id);
+  const [delay, setDelay] = useState(t?.delay ?? "");
+  const close = () => setDialog(null);
+  return (
+    <Modal onClose={close} pad>
+      <div className="dialog-title" style={{ fontSize: 26 }}>
+        Delay remarks
+      </div>
+      <span style={{ fontSize: 13, color: "var(--color-neutral-700)" }}>
+        {id}
+        {t ? ` · ${t.title}` : ""}
+      </span>
+      <div className="field">
+        <label htmlFor="delay-text">Why is this ticket overdue?</label>
+        <textarea
+          id="delay-text"
+          className="input"
+          autoFocus
+          maxLength={500}
+          value={delay}
+          onChange={(e) => setDelay(e.target.value)}
+          placeholder="e.g. Waiting for the carrier to confirm the rates"
+          style={{ minHeight: 80 }}
+        />
+      </div>
+      <span style={{ fontSize: 13, color: "var(--color-neutral-700)" }}>Shown in the queue’s overdue list, and filled in when the ticket is resolved.</span>
+      <div className="dialog-actions" style={{ gap: 10 }}>
+        <button className="btn btn-secondary btn-40" onClick={close}>
+          Cancel
+        </button>
+        <Blueprint
+          as="button"
+          className="btn btn-primary btn-40"
+          style={{ padding: "0 18px" }}
+          disabled={delay.trim() === (t?.delay ?? "").trim()}
+          onClick={() => {
+            run({ type: "setDelay", id, delay });
+            close();
+          }}
+        >
+          Save remarks
         </Blueprint>
       </div>
     </Modal>
@@ -256,19 +305,77 @@ function DoneDialog({ id }: { id: string }) {
   const { data, run, me, setDialog } = useWorkload();
   const t = data.tasks.find((x) => x.id === id);
   const [vals, setVals] = useState<Task["fields"]>(() => ({ ...(t?.fields ?? {}) }));
+  // Complexity: contracts per level; with a number field as the productivity basis, that field is their total.
+  const levels = cxLevels(data.settings);
+  const [delay, setDelay] = useState(t?.delay ?? "");
+  const [cx, setCx] = useState<Record<string, string>>(() => Object.fromEntries(levels.map((l) => [l.id, t?.cx?.[l.id] ? String(t.cx[l.id]) : ""])));
   if (!t) return null;
   const close = () => setDialog(null);
-  const miss = missingRequired(data.fields, vals);
+  const counts = Object.fromEntries(levels.map((l) => [l.id, Math.max(0, Math.round(Number(cx[l.id]) || 0))]));
+  const total = cxTotal(counts);
+  const bf = levels.length > 0 ? cxField(data) : undefined;
+  const fromCx = !!bf;
+  const eff = fromCx ? { ...vals, [bf!.key]: total || "" } : vals;
+  // Resolving after the due time: delay remarks are required.
+  const late = nowMs() > due(t, data);
+  const miss = missingRequired(data.fields, eff)
+    .concat(levels.length && !total ? ["contracts by complexity"] : [])
+    .concat(late && !delay.trim() ? ["delay remarks"] : []);
   return (
     <Modal onClose={close} width={520}>
       <div className="dialog-scroll" style={{ gap: 12, padding: 20 }}>
         <div className="dialog-title" style={{ fontSize: 26 }}>
-          Mark done
+          Resolve ticket
         </div>
         <span className="muted">
           {t.id} · {t.title}
         </span>
+        {late && (
+          <div className="field">
+            <label htmlFor="done-delay">Delay remarks *</label>
+            <textarea
+              id="done-delay"
+              className="input"
+              value={delay}
+              maxLength={500}
+              onChange={(e) => setDelay(e.target.value)}
+              placeholder="Why is it late? e.g. Waited for the carrier’s rate sheet"
+              style={{ minHeight: 70 }}
+            />
+            <span className="small" style={{ color: "var(--color-accent-800)" }}>
+              This ticket is past its due time (due {fmtT(due(t, data))}).
+            </span>
+          </div>
+        )}
+        {levels.length > 0 && (
+          <div className="ot-split">
+            <strong>Contracts by complexity *</strong>
+            <span className="small">How many contracts of each complexity this ticket had, e.g. 1 Simple and 2 Complex. Each counts toward its own target.</span>
+            <div style={{ display: "grid", gridTemplateColumns: `repeat(${Math.min(levels.length, 4)}, 1fr)`, gap: 10 }}>
+              {levels.map((l) => (
+                <div className="field" key={l.id}>
+                  <label htmlFor={"cx-" + l.id}>{l.name}</label>
+                  <input
+                    id={"cx-" + l.id}
+                    className="input"
+                    type="number"
+                    min={0}
+                    step={1}
+                    value={cx[l.id] ?? ""}
+                    placeholder="0"
+                    onChange={(e) => setCx((x) => ({ ...x, [l.id]: e.target.value }))}
+                  />
+                </div>
+              ))}
+            </div>
+            <span className="small">
+              {total} contract{total === 1 ? "" : "s"}
+              {fromCx ? ` · ${bf!.label} is set to this total` : ""}
+            </span>
+          </div>
+        )}
         {data.fields.map((f) => {
+          if (fromCx && f.key === bf!.key) return null;
           const fid = "done-" + f.key;
           const val = String(vals[f.key] ?? "");
           const set = (v: string) => setVals((x) => ({ ...x, [f.key]: v }));
@@ -310,10 +417,10 @@ function DoneDialog({ id }: { id: string }) {
             disabled={miss.length > 0}
             onClick={() => {
               close();
-              run({ type: "complete", id, vals, pid: me.id });
+              run({ type: "complete", id, vals: eff, pid: me.id, ...(levels.length ? { cx: counts } : {}), ...(late ? { delay } : {}) });
             }}
           >
-            Mark done
+            Resolve ticket
           </Blueprint>
         </div>
       </div>
@@ -369,7 +476,8 @@ function AssistDialog({ offer }: { offer: AssistOffer }) {
 function EndWorkDialog() {
   const { data, run, me, setDialog } = useWorkload();
   const [nowAt] = useState(() => nowMs());
-  const past = pastShiftMin(me, data.settings, nowAt);
+  // Holiday duty / rest day: all time worked today; otherwise the time past the shift.
+  const past = otAvailMin(data, me, nowAt);
   const [h, setH] = useState(() => String(Math.floor(past / 60)));
   const [m, setM] = useState(() => String(past % 60));
   const close = () => setDialog(null);
@@ -397,16 +505,22 @@ function EndWorkDialog() {
         {past > 0 ? (
           <div className="banner" style={{ display: "flex", flexDirection: "column", gap: 8 }}>
             <strong>
-              You’re {fmtMin(past)} past your shift ({me.shift}).
+              {me.otDay
+                ? `${OT_KIND[me.otDay]}: all ${fmtMin(past)} you worked today counts as overtime.`
+                : `You’re ${fmtMin(past)} past your shift (${me.shift}).`}
             </strong>
-            <span style={{ fontSize: 13.5 }}>How much overtime did you work? It goes to an admin or lead for approval. Enter 0 if none.</span>
+            <span style={{ fontSize: 13.5 }}>
+              {me.otDay
+                ? `Today is ${me.otDay === "holiday" ? "a holiday you’re on duty" : "a rest day"}, so it goes to an admin or lead for approval as ${OT_KIND[me.otDay].toLowerCase()}. Adjust it if needed.`
+                : "How much overtime did you work? It goes to an admin or lead for approval. Enter 0 if none."}
+            </span>
             <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
               <input aria-label="Overtime hours" className="input" type="number" min={0} value={h} onChange={(e) => setH(e.target.value)} style={{ width: 80 }} />
               <span>h</span>
               <input aria-label="Overtime minutes" className="input" type="number" min={0} max={59} value={m} onChange={(e) => setM(e.target.value)} style={{ width: 80 }} />
               <span>min</span>
             </div>
-            {tooMuch && <span style={{ fontSize: 12.5, color: "var(--color-accent-800)" }}>That’s more than the {fmtMin(past)} since your shift ended.</span>}
+            {tooMuch && <span style={{ fontSize: 12.5, color: "var(--color-accent-800)" }}>That’s more than the {fmtMin(past)} {me.otDay ? "you worked today" : "since your shift ended"}.</span>}
           </div>
         ) : null}
         {past > 0 && askSplit ? (
@@ -499,6 +613,7 @@ export function Dialogs() {
   if (dialog.kind === "assist") return <AssistDialog offer={dialog.offer} />;
   if (dialog.kind === "task") return <TaskDialog key={dialog.id} id={dialog.id} />;
   if (dialog.kind === "hold") return <HoldDialog key={dialog.id} id={dialog.id} />;
+  if (dialog.kind === "delay") return <DelayDialog key={dialog.id} id={dialog.id} />;
   return <DoneDialog key={dialog.id} id={dialog.id} />;
 }
 

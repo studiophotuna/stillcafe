@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { applyCalAction } from "./actions";
 import { Cal, evState } from "./engine";
-import { buildReport, toCsv } from "./reports";
+import { REPORT_TYPES, buildReport, toCsv } from "./reports";
 import { initialCalendar } from "./seed";
 import { checkUpload } from "./uploads";
 import type { CalendarData } from "./types";
@@ -161,7 +161,7 @@ describe("uploads", () => {
     expect(chk[0].skip).toBe(true);
     expect(chk.slice(1).map((x) => x.msg)).toEqual([
       "Recorded as approved leave",
-      "Give a Code (RTO, WFH, RD, VL, SL, EL, HD, BT, HDY) or a Shift",
+      "Give a Code (RTO, WFH, RD, RDOT, VL, SL, EL, HD, BT, HDY) or a Shift",
       "Person not found",
       "Shift Midshift 12:00–21:00",
     ]);
@@ -354,7 +354,8 @@ describe("department and tower admins", async () => {
     expect(r.teamAdmin("cs")).toBe(false); // other tower
     expect(r.adminOf(15)).toBe(true); // Leo, in Rate Management
     expect(visibleTeams(c, ANA).map((b) => b.id).sort()).toEqual(["cs", "rm"]);
-    expect("action" in authorizeCal({ type: "decide", rid: "x", bid: "rm", st: "approved", actor: ANA }, c, ANA)).toBe(true);
+    const other = d.requests.find((q) => q.pid !== ANA && q.approvals.rm === "pending")!;
+    expect("action" in authorizeCal({ type: "decide", rid: other.id, bid: "rm", st: "approved", actor: ANA }, c, ANA)).toBe(true);
   });
   it("lets a department or tower lose its last admin, not a team", () => {
     let d = run(fresh(), { type: "addAdmin", id: "bss", pid: SAM }).data;
@@ -657,5 +658,157 @@ describe("roles", async () => {
     expect(rows.some((r) => r.pid === ANA)).toBe(true);
     const rm = only.flatMap((t) => t.teams).find((tm) => tm.id === "rm")!;
     expect(rm.withTl[0].actual).toBe(rm.rows.filter((r) => r.months[0].actual).length);
+  });
+});
+
+describe("rest day overtime", async () => {
+  const { peopleFromCalendar } = await import("../workload/people");
+  const SAT = "2026-09-26";
+  it("tags a member's unscheduled weekend RDOT, not a weekday or a scheduled weekend", () => {
+    const r = run(fresh(), { type: "restDayWork", pid: ANA, date: SAT, actor: ANA });
+    expect(r.data.overrides[`${ANA}|${SAT}`]).toBe("RDOT");
+    expect(new Cal(r.data, TODAY).raw(r.data.people.find((p) => p.id === ANA)!, SAT, null).code).toBe("RDOT");
+    expect(run(fresh(), { type: "restDayWork", pid: ANA, date: "2026-09-25", actor: ANA }).data.overrides[`${ANA}|2026-09-25`]).toBeUndefined();
+    const sched = { ...fresh(), overrides: { [`${ANA}|${SAT}`]: "RTO" as const } };
+    expect(run(sched, { type: "restDayWork", pid: ANA, date: SAT, actor: ANA }).data.overrides[`${ANA}|${SAT}`]).toBe("RTO");
+  });
+  it("Workload treats an unscheduled weekend as a rest day they can work, and RDOT / RTO weekends accordingly", () => {
+    const at = Date.parse(`${SAT}T10:00:00+08:00`);
+    const d = fresh();
+    const ana = () => peopleFromCalendar(new Cal(d, SAT), at, "rm").find((p) => p.id === ANA)!;
+    expect(ana()).toMatchObject({ otDay: "restday", onToday: true, rdTag: true });
+    d.overrides[`${ANA}|${SAT}`] = "RDOT";
+    expect(ana()).toMatchObject({ otDay: "restday", onToday: true });
+    expect(ana().rdTag).toBeUndefined();
+    d.overrides[`${ANA}|${SAT}`] = "RTO"; // a regular weekend shift
+    expect(ana().otDay).toBeUndefined();
+  });
+});
+
+describe("attendance summary, reports, payroll and approvers", async () => {
+  const { attendanceSummary, leadSummary, summaryText } = await import("./summary");
+  const { nextCutoff, daysBetween } = await import("./dates");
+  it("summarises a day per team and system", () => {
+    const c = new Cal(fresh(), TODAY);
+    const b = attendanceSummary(c, "rm", TODAY);
+    expect(b[0]).toMatchObject({ name: "Rate Management", level: "team", detail: false });
+    expect(b.slice(1).every((x) => x.level === "system")).toBe(true);
+    const sys = b.slice(1);
+    expect(sys.reduce((a, x) => a + x.headcount, 0)).toBeGreaterThan(0);
+    const t = summaryText(b);
+    expect(t.split("\n")[0]).toMatch(/^Rate Management \d+\/\d+$/);
+    expect(t).toMatch(/\nRTO - \d+/);
+  });
+  it("counts people allocated to several teams or systems once", () => {
+    const d = fresh();
+    const p1 = d.people.find((p) => p.id === 1)!;
+    p1.assign = ["inas", "lcl"]; // GPM and RCM
+    const c = new Cal(d, TODAY);
+    const all = attendanceSummary(c, "bss", TODAY);
+    const teams = all.filter((b) => b.level === "team");
+    const alive = d.people.filter((p) => c.alive(p, TODAY) && (!p.hire || p.hire <= TODAY) && c.O.branchesOf(p).length);
+    // Ana is in Rate Management and Customer Service: counted once overall.
+    expect(teams.reduce((a, b) => a + b.headcount, 0)).toBe(alive.length);
+    const rm = attendanceSummary(c, "rm", TODAY);
+    expect(rm.slice(1).reduce((a, b) => a + b.headcount, 0)).toBe(rm[0].headcount);
+  });
+  it("summarises a day per team lead's scope", () => {
+    const d = fresh();
+    const c = new Cal(d, TODAY);
+    const b = leadSummary(c, "rm", TODAY);
+    const names = b.map((x) => x.name);
+    expect(names).toEqual(expect.arrayContaining(["GPM", "EU", "RCM"]));
+    // Each member counts once, plus each block's own lead; managers and directors aside.
+    const team = attendanceSummary(c, "rm", TODAY)[0];
+    const above = d.people.filter((p) => ["manager", "director"].includes(p.level) && c.O.inN(p, "rm") && c.alive(p, TODAY));
+    expect(b.reduce((a, x) => a + x.headcount, 0)).toBe(team.headcount - above.length);
+    // The lead's own status line is marked; present counts only working codes.
+    for (const x of b.filter((x) => x.lead)) expect(x.lines.reduce((a, l) => a + l.tl, 0)).toBe(1);
+    for (const x of b) expect(x.present).toBe(x.lines.filter((l) => ["RTO", "WFH", "HDY", "RDOT"].includes(l.code)).reduce((a, l) => a + l.n, 0));
+    expect(summaryText(b, " - ")).toMatch(/ incl TL/);
+    expect(summaryText(b, " - ").split("\n")[0]).toMatch(/ - \d+\/\d+$/);
+    // An assigned approver who is a lead wins over allocation.
+    const ana = d.people.find((p) => p.id === 0)!;
+    ana.approver = 21;
+    // A lead on leave: deducted from present, still listed with "incl TL".
+    d.overrides[`21|${TODAY}`] = "VL";
+    const b2 = leadSummary(new Cal(d, TODAY), "rm", TODAY);
+    const eu = b2.find((x) => x.name === "EU")!;
+    expect(eu.headcount).toBe(b.find((x) => x.name === "EU")!.headcount + 1);
+    expect(eu.lines.find((l) => l.code === "VL")).toMatchObject({ tl: 1 });
+    expect(summaryText([eu], " - ")).toMatch(/\nVL - \d+ incl TL/);
+    expect(eu.present).toBeLessThan(eu.headcount);
+  });
+  it("has count tiles for every report, and the schedule and summary reports", () => {
+    const c = new Cal(fresh(), TODAY);
+    for (const [type] of REPORT_TYPES) expect(buildReport(c, type, "bss", "2026-09-01", "2026-09-30").tiles.length).toBeGreaterThan(0);
+    const sch = buildReport(c, "schedule", "rm", "2026-09-21", "2026-09-27");
+    expect(sch.rows[0].slice(-7)).toHaveLength(7);
+    expect(sch.rows.slice(1).some((r) => String(r[6]).startsWith("RTO · ") || String(r[6]).startsWith("WFH · "))).toBe(true);
+    const sum = buildReport(c, "summary", "rm", TODAY, TODAY);
+    expect(sum.rows[1][2]).toBe("Rate Management");
+  });
+  it("finds the next payroll cut-off from the dates set", () => {
+    const dates = ["2026-10-27", "2026-09-15", "2026-09-30", "2026-10-13"];
+    expect(nextCutoff("2026-09-24", dates)).toBe("2026-09-30");
+    expect(nextCutoff("2026-10-01", dates)).toBe("2026-10-13");
+    expect(nextCutoff("2026-10-28", dates)).toBeNull();
+    expect(nextCutoff("2026-09-24", undefined)).toBeNull();
+    expect(daysBetween("2026-09-28", "2026-09-30")).toBe(2);
+  });
+  it("records who decided a request", () => {
+    const d = fresh();
+    const q = d.requests.find((x) => x.approvals.rm === "pending");
+    if (!q) return;
+    const r = run(d, { type: "decide", rid: q.id, bid: "rm", st: "approved", actor: SAM });
+    expect(r.data.requests.find((x) => x.id === q.id)!.decided?.rm?.by).toBe(SAM);
+  });
+});
+
+describe("approvals by leaders", async () => {
+  const { canDecide, approverOf, leadersOf } = await import("./approvals");
+  const { authorizeCal } = await import("./authz");
+  const form = { type: "VL" as const, start: "2026-10-12", end: "2026-10-12", half: "AM" as const, reason: "" };
+  it("team leads and above don't need approval; members follow the team's setting", () => {
+    const lead = run(fresh(), { type: "submitRequest", pid: 24, form, adminBid: null, actor: 24 }).data.requests[0];
+    expect(Object.values(lead.approvals).every((x) => x === "approved")).toBe(true); // a team lead in an approval team
+    const mem = run(fresh(), { type: "submitRequest", pid: ANA, form, adminBid: null, actor: ANA }).data.requests[0];
+    expect(mem.approvals).toMatchObject({ cs: "approved", rm: "pending" });
+  });
+  it("the assigned approver and the team's other leaders can decide; nobody decides their own", () => {
+    const d = fresh();
+    d.people = d.people.map((p) => (p.id === ANA ? { ...p, approver: 24 } : p));
+    const r = run(d, { type: "submitRequest", pid: ANA, form, adminBid: null, actor: ANA }).data;
+    const c = new Cal(r, TODAY);
+    const q = r.requests[0];
+    expect(approverOf(c, ANA)?.id).toBe(24);
+    expect(leadersOf(c, "rm").map((p) => p.id)).toEqual(expect.arrayContaining([24, 14, 23]));
+    expect(canDecide(c, 24, q, "rm")).toBe(true); // assigned approver (not an admin)
+    expect(canDecide(c, 14, q, "rm")).toBe(true); // another team lead
+    expect(canDecide(c, 8, q, "rm")).toBe(false); // an associate
+    expect(canDecide(c, ANA, q, "rm")).toBe(false);
+    expect("error" in authorizeCal({ type: "decide", rid: q.id, bid: "rm", st: "approved", actor: 24 }, c, 24)).toBe(false);
+    expect("error" in authorizeCal({ type: "decide", rid: q.id, bid: "rm", st: "approved", actor: 8 }, c, 8)).toBe(true);
+    // Saving a member: the approver must be a leader, not themselves.
+    const bad = run(r, { type: "saveMember", pid: ANA, level: "member", shift: "D", adminHere: false, bid: "rm", assign: ["lcl", "cs"], isNew: false, details: { approver: 8 } });
+    expect(bad.error).toMatch(/approver must be/);
+  });
+});
+
+describe("update several members at once", async () => {
+  const { authorizeCal } = await import("./authz");
+  it("changes only the fields given, skips roles that don't fit, and needs admin rights over everyone", () => {
+    const d = fresh();
+    const r = run(d, { type: "bulkMembers", pids: [ANA, 8, 15], approver: 24, shift: "N", wfhDays: [3] });
+    const got = (id: number) => r.data.people.find((p) => p.id === id)!;
+    expect([ANA, 8, 15].map((id) => [got(id).approver, got(id).shift, got(id).wfhDays])).toEqual([[24, "N", [3]], [24, "N", [3]], [24, "N", [3]]]);
+    expect(got(ANA).level).toBe(d.people.find((p) => p.id === ANA)!.level); // role kept
+    const lv = run(d, { type: "bulkMembers", pids: [ANA, 8], level: "specialist" });
+    expect([ANA, 8].map((id) => lv.data.people.find((p) => p.id === id)!.level)).toEqual(["specialist", "specialist"]);
+    expect(lv.message).toBe("2 members updated.");
+    expect(run(d, { type: "bulkMembers", pids: [ANA], approver: 8 }).error).toMatch(/team lead/);
+    const c = new Cal(d, TODAY);
+    expect("error" in authorizeCal({ type: "bulkMembers", pids: [15, 27] }, c, SAM)).toBe(true); // 27 is in another tower
+    expect("error" in authorizeCal({ type: "bulkMembers", pids: [15, 16] }, c, SAM)).toBe(false);
   });
 });

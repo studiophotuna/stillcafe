@@ -64,7 +64,12 @@ export function peopleFromCalendar(c: Cal, now: number, teamId: string): Person[
       if (OUT.includes(cell.code) && !cell.pending) avail = "leave";
       else if (!cell.code || !inShift) avail = "offshift";
       const hol = cell.code === "HOL" || cell.code === "HDY";
-      const onToday = hol ? !!workingOn(c.d.overrides[p.id + "|" + today]) : avail !== "leave" && !!cell.code;
+      // A weekend or rest day: with no schedule (or a rest day) they may still work it, as
+      // rest day overtime (RDOT); a weekend scheduled RTO / WFH is a regular day.
+      const restDay = cell.code === "RDOT" || cell.code === "RD" || (cell.wk && !cell.code);
+      if (restDay && cell.code !== "RDOT") avail = "offshift";
+      const onToday = hol ? !!workingOn(c.d.overrides[p.id + "|" + today]) : restDay || (avail !== "leave" && !!cell.code);
+      const otDay = hol && workingOn(c.d.overrides[p.id + "|" + today]) ? ("holiday" as const) : restDay && !hol ? ("restday" as const) : undefined;
       return {
         id: p.id,
         name: p.name,
@@ -73,6 +78,10 @@ export function peopleFromCalendar(c: Cal, now: number, teamId: string): Person[
         shift: sh ? `${sh.name} ${sh.start}–${sh.end}` : "—",
         shiftStart: Math.floor(start),
         onToday,
+        ...(otDay ? { otDay } : {}),
+        ...(p.approver && p.approver !== p.id ? { approver: p.approver } : {}),
+        // Working an unscheduled weekend / rest day: the Calendar gets tagged RDOT once they start.
+        ...(otDay === "restday" && cell.code !== "RDOT" ? { rdTag: true } : {}),
         ...(hol
           ? { holiday: { name: cell.note ?? "Holiday", date: today, working: workingOn(c.d.overrides[p.id + "|" + today]), answered: !!c.d.overrides[p.id + "|" + today] } }
           : {}),

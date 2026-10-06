@@ -3,6 +3,7 @@
  * manage their team's people, schedule and settings; admins of any team (or a
  * system admin) manage org, shifts, holidays and BCP events.
  */
+import { canDecide } from "./approvals";
 import type { CalAction } from "./actions";
 import type { Cal } from "./engine";
 import { isNodeAdmin } from "./org";
@@ -60,8 +61,10 @@ export function authorizeCal(a: CalAction, c: Cal, me: number): { action: CalAct
         return ok(!!p && r.teamAdmin(a.adminBid) && c.O.inN(p, a.adminBid), { ...a, actor: me });
       }
       return ok(c.people.has(me), { ...a, pid: me, actor: me });
-    case "decide":
-      return ok(r.teamAdmin(a.bid), { ...a, actor: me });
+    case "decide": {
+      const q = c.d.requests.find((x) => x.id === a.rid);
+      return ok(!!q && canDecide(c, me, q, a.bid), { ...a, actor: me });
+    }
     case "cancelRequest": {
       const q = c.d.requests.find((x) => x.id === a.rid);
       if (!q) return NO;
@@ -69,6 +72,10 @@ export function authorizeCal(a: CalAction, c: Cal, me: number): { action: CalAct
     }
     case "holidayWork":
       return ok(a.pid === me || r.adminOf(a.pid), { ...a, actor: me });
+    case "restDayWork":
+      return ok(a.pid === me || r.adminOf(a.pid), { ...a, actor: me });
+    case "bulkMembers":
+      return ok(a.pids.length > 0 && a.pids.every((pid) => r.adminOf(pid)));
     case "setHcHistory":
     case "setOverride":
     case "setShiftDay":

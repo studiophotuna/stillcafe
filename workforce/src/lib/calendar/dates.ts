@@ -54,3 +54,9 @@ export function toIso(v: unknown): string {
   if (m) return isoOf(+m[3], +m[1] - 1, +m[2]);
   return "";
 }
+
+/** The next payroll cut-off on or after `today` (yyyy-mm-dd) from the dates set, or null. */
+export const nextCutoff = (today: string, dates: string[] | undefined): string | null => [...(dates ?? [])].sort().find((d) => d >= today) ?? null;
+
+/** Whole days from a to b (yyyy-mm-dd). */
+export const daysBetween = (a: string, b: string) => Math.round((Date.parse(b + "T00:00:00Z") - Date.parse(a + "T00:00:00Z")) / 86_400_000);

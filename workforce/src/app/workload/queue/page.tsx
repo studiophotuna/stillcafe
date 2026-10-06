@@ -1,12 +1,14 @@
 "use client";
 
-import { useState } from "react";
+import { Fragment, useState } from "react";
 import { TaskTable } from "@/components/TaskTable";
 import { Blueprint } from "@/components/ui";
 import { lc } from "@/lib/workload/constants";
-import { PeriodNav } from "@/components/WorkloadBits";
+import { DateRangePicker } from "@/components/DateRangePicker";
+import { dayKey } from "@/lib/workload/clock";
+import { dueBoard, type BoardCol, type BoardGroup } from "@/lib/workload/dueBoard";
 import { isOverdue, sortTasks, ticketField, ticketOf } from "@/lib/workload/engine";
-import { periodRange, type PeriodKind } from "@/lib/workload/period";
+import { rangeMs, todayRange, type DateRange } from "@/lib/workload/period";
 import type { Task } from "@/lib/workload/types";
 import { useWorkload } from "@/lib/workload/store";
 import { useUnit } from "@/lib/workload/useUnit";
@@ -17,7 +19,7 @@ const STATUS_OPTS = [
   ["new", "In queue"],
   ["assigned", "Assigned"],
   ["in_progress", "In progress"],
-  ["on_hold", "On hold"],
+  ["on_hold", "Pending"],
 ] as const;
 
 export default function QueuePage() {
@@ -27,18 +29,24 @@ export default function QueuePage() {
   const [stf, setStf] = useState("open");
   const [q, setQ] = useState("");
   // Active: by received date (all dates by default). Completed: by finish date (today by default).
-  const [pa, setPa] = useState<{ kind: PeriodKind; anchor: number }>({ kind: "all", anchor: now });
-  const [pd, setPd] = useState<{ kind: PeriodKind; anchor: number }>({ kind: "day", anchor: now });
+  const [pa, setPa] = useState<DateRange>(null);
+  const [pd, setPd] = useState<DateRange>(todayRange(now));
   const ql = lc(q);
   const match = (t: Task) =>
     !ql || lc(t.title + " " + t.id + " " + ticketOf(data, t) + " " + typeNameOf(data, t) + " " + Object.values(t.fields).join(" ")).includes(ql);
-  const [af, at] = periodRange(pa.kind, pa.anchor);
-  const [df, dt] = periodRange(pd.kind, pd.anchor);
+  const [af, at] = rangeMs(pa);
+  const [df, dt] = rangeMs(pd);
+  // Due / overdue board: open tickets in this unit; clicking a count shows just those.
+  const board = dueBoard(data, data.tasks.filter((t) => t.status !== "done" && inUnit(t)), now);
+  const [pick, setPick] = useState<{ ids: string[]; label: string } | null>(null);
+  // Overdue now without delay remarks (a row on the board).
+  const noRemarks = new Set(data.tasks.filter((t) => t.status !== "done" && inUnit(t) && !t.delay && isOverdue(t, data, now)).map((t) => t.id));
   const active = sortTasks(
     data.tasks.filter(
       (t) =>
         t.status !== "done" &&
         inUnit(t) &&
+        (!pick || pick.ids.includes(t.id)) &&
         (stf === "open" || t.status === stf) &&
         t.received >= af &&
         t.received < at &&
@@ -81,6 +89,28 @@ export default function QueuePage() {
           )}
         </div>
       </div>
+      {tab === "active" && (
+        <DueBoard
+          board={board}
+          noRemarks={noRemarks}
+          pick={pick?.label ?? ""}
+          onPick={(ids, label) => {
+            setPick(pick?.label === label ? null : { ids, label });
+            setPa(null);
+            setStf("open");
+          }}
+        />
+      )}
+      {pick && tab === "active" && (
+        <div className="banner" style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10 }}>
+          <span>
+            Showing {pick.ids.length} ticket{pick.ids.length === 1 ? "" : "s"}: {pick.label}
+          </span>
+          <button className="btn btn-ghost" onClick={() => setPick(null)}>
+            Show all
+          </button>
+        </div>
+      )}
       <div className="tabs" role="tablist">
         <button role="tab" aria-selected={tab === "active"} onClick={() => setTab("active")}>
           Active · {data.tasks.filter((t) => t.status !== "done" && inUnit(t)).length}
@@ -92,7 +122,7 @@ export default function QueuePage() {
       <div className="row" style={{ justifyContent: "space-between", alignItems: "flex-end" }}>
         {tab === "active" ? (
           <>
-            <PeriodNav kind={pa.kind} anchor={pa.anchor} onChange={(kind, anchor) => setPa({ kind, anchor })} />
+            <DateRangePicker value={pa} onChange={setPa} today={dayKey(now)} allowAll id="qa" />
             <div className="field">
               <label htmlFor="q-st">Status</label>
               <select id="q-st" className="input" value={stf} onChange={(e) => setStf(e.target.value)} style={{ width: "auto", minWidth: 170 }}>
@@ -105,7 +135,7 @@ export default function QueuePage() {
             </div>
           </>
         ) : (
-          <PeriodNav kind={pd.kind} anchor={pd.anchor} onChange={(kind, anchor) => setPd({ kind, anchor })} kinds={["day", "week", "month"]} />
+          <DateRangePicker value={pd} onChange={setPd} today={dayKey(now)} id="qd" />
         )}
       </div>
       <Blueprint className="scroll-x">
@@ -117,5 +147,99 @@ export default function QueuePage() {
         {!(tab === "active" ? active : done).length && <div style={{ padding: "24px 14px", color: "var(--color-neutral-700)" }}>No tasks match.</div>}
       </Blueprint>
     </>
+  );
+}
+
+/** Days across, and for each system a Due row and an Overdue row; counts open the tickets. */
+function DueBoard({
+  board,
+  noRemarks,
+  pick,
+  onPick,
+}: {
+  board: { cols: BoardCol[]; groups: BoardGroup[] };
+  noRemarks: Set<string>;
+  pick: string;
+  onPick: (ids: string[], label: string) => void;
+}) {
+  const { cols, groups } = board;
+  if (!groups.length) return null;
+  const total = (k: "due" | "over") => cols.map((_, i) => groups.flatMap((g) => g[k][i]));
+  const all: BoardGroup = { id: "all", name: "All systems", due: total("due"), over: total("over"), overNow: groups.flatMap((g) => g.overNow) };
+  const cell = (ids: string[], label: string, over: boolean, proj = false) =>
+    ids.length ? (
+      <button
+        className={"qb-n" + (over ? " qb-over" : "") + (proj ? " qb-proj" : "") + (pick === label ? " on" : "")}
+        onClick={() => onPick(ids, label)}
+        title={proj ? `${ids.length} still open and due by then: overdue if not resolved` : `Show ${label}`}
+      >
+        {ids.length}
+      </button>
+    ) : (
+      <span className="qb-zero">·</span>
+    );
+  const rows = (g: BoardGroup, bold = false) => (
+    <>
+      <tr className="qb-sys">
+        <th colSpan={cols.length + 2}>{g.name}</th>
+      </tr>
+      {(["due", "over"] as const).map((k) => {
+        const sum = k === "over" ? g.overNow : [...new Set(g[k].flat())];
+        const lab = k === "due" ? "Due" : "Overdue";
+        return (
+          <tr key={k} className={k === "over" ? "qb-row-over" : undefined} style={bold ? { fontWeight: 600 } : undefined}>
+            <td className="qb-lab">{lab}</td>
+            {cols.map((c, i) => (
+              <td key={c.key} className={"qb-c" + (c.today ? " qb-today" : "")}>
+                {cell(g[k][i], `${g.name} · ${k === "over" && c.future ? "Overdue by end of" : lab} · ${c.label === "Today" ? "today" : c.sub}`, k === "over", k === "over" && !!c.future)}
+              </td>
+            ))}
+            <td className="qb-c qb-tot">{cell(sum, `${g.name} · ${k === "over" ? "Overdue now" : "Due · all days"}`, k === "over")}</td>
+          </tr>
+        );
+      })}
+      {g.overNow.some((id) => noRemarks.has(id)) && (
+        <tr className="qb-row-rem" style={bold ? { fontWeight: 600 } : undefined}>
+          <td className="qb-lab">No delay remarks</td>
+          {cols.map((c, i) => (
+            <td key={c.key} className={"qb-c" + (c.today ? " qb-today" : "")}>
+              {c.future ? <span className="qb-zero">·</span> : cell(g.over[i].filter((id) => noRemarks.has(id)), `${g.name} · Overdue without remarks · ${c.label === "Today" ? "today" : c.sub}`, true)}
+            </td>
+          ))}
+          <td className="qb-c qb-tot">{cell(g.overNow.filter((id) => noRemarks.has(id)), `${g.name} · Overdue without remarks`, true)}</td>
+        </tr>
+      )}
+    </>
+  );
+  return (
+    <Blueprint as="section" className="panel tight scroll-x" style={{ gap: 8 }}>
+      <div className="chart-head">
+        <h2 className="h2">Due and overdue by day</h2>
+        <span className="small">Open tickets by due date · future Overdue (in italics) = still open and due by then, if not resolved · click a number to list them, with their delay remarks</span>
+      </div>
+      <table className="table qb">
+        <thead>
+          <tr>
+            <th />
+            {cols.map((c) => (
+              <th key={c.key} className={"qb-c" + (c.today ? " qb-today" : "")}>
+                <div>{c.label}</div>
+                <div className="small">{c.sub}</div>
+              </th>
+            ))}
+            <th className="qb-c qb-tot">
+              <div>Total</div>
+              <div className="small">overdue now</div>
+            </th>
+          </tr>
+        </thead>
+        <tbody>
+          {groups.map((g) => (
+            <Fragment key={g.id || "none"}>{rows(g)}</Fragment>
+          ))}
+          {groups.length > 1 && rows(all, true)}
+        </tbody>
+      </table>
+    </Blueprint>
   );
 }

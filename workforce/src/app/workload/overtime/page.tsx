@@ -1,51 +1,47 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { DateRangePicker } from "@/components/DateRangePicker";
 import { Blueprint, PageHead } from "@/components/ui";
-import { H, TZ_OFFSET_H, dayKey, fmtT } from "@/lib/workload/clock";
-import { fmtMin, personOf } from "@/lib/workload/engine";
+import { rangeMs, type DateRange } from "@/lib/workload/period";
+import { dayKey, fmtT } from "@/lib/workload/clock";
+import { OT_KIND, fmtMin, personOf } from "@/lib/workload/engine";
 import { trPathOf } from "@/lib/workload/constants";
 import { useWorkload } from "@/lib/workload/store";
+import { useUnit } from "@/lib/workload/useUnit";
 import type { Activity } from "@/lib/workload/types";
-
-/** Team-local midnight of a yyyy-mm-dd date. */
-const dateMs = (d: string) => Date.parse(d + "T00:00:00Z") - TZ_OFFSET_H * H;
-const nextMonth = (ym: string) => {
-  const [y, m] = ym.split("-").map(Number);
-  return m === 12 ? `${y + 1}-01` : `${y}-${String(m + 1).padStart(2, "0")}`;
-};
 
 /**
  * Overtime reported at End work. Admins and the team's leads approve or decline it;
  * only approved overtime counts in the dashboard and this report.
  */
 export default function OvertimePage() {
-  const { data, run, me, now, isApprover, mode, toast } = useWorkload();
-  const [range, setRange] = useState<"month" | "last" | "custom">("month");
+  const { data, run, me, now, isApprover, mode, toast, sys, tr } = useWorkload();
+  // The System › Trade filter: only overtime for the selected processes (a split entry
+  // counts its parts there; an unsplit one counts when the person works there).
+  const { unitTrades, people: unitPeople, unitLabel } = useUnit();
+  const filtered = sys !== "all" || tr !== "all";
+  const inTrades = new Set(unitTrades.map((t) => t.id));
+  const inPeople = new Set(unitPeople.map((p) => p.id));
   const today0 = dayKey(now);
-  const [fromD, setFromD] = useState(today0.slice(0, 8) + "01");
-  const [toD, setToD] = useState(today0);
+  // This month so far by default; Today or any From – To dates.
+  const [range, setRange] = useState<DateRange>({ from: today0.slice(0, 8) + "01", to: today0 });
   const [rows0, setRows0] = useState<Activity[] | null>(null);
   const name = (pid: number | null) => (pid === null ? "—" : (personOf(data, pid)?.name ?? `#${pid}`));
   const ends = data.activities.filter((a) => a.kind === "end" && a.otMin > 0);
   const typeName = (id?: string) => (id ? ((data.settings.taskTypes ?? []).find((t) => t.id === id)?.name ?? "Deleted type") : "");
   const partName = (x: { trade: string; ttype?: string }) => trPathOf(data.org, x.trade) + (x.ttype ? ` · ${typeName(x.ttype)}` : "");
   /** The entry's breakdown, or the whole overtime as one unassigned part. */
-  const partsOf = (a: Activity) => (a.otSplit?.length ? a.otSplit : [{ trade: "", min: a.otMin }]);
-  const pending = ends.filter((a) => a.otStatus === "pending").sort((a, b) => a.start - b.start);
+  const allParts = (a: Activity) => (a.otSplit?.length ? a.otSplit : [{ trade: "", min: a.otMin }]);
+  const partsOf = (a: Activity) => (filtered ? allParts(a).filter((x) => (x.trade ? inTrades.has(x.trade) : inPeople.has(a.pid))) : allParts(a));
+  /** Minutes of the entry in the filter. */
+  const minOf = (a: Activity) => partsOf(a).reduce((n, x) => n + x.min, 0);
+  const pending = ends.filter((a) => a.otStatus === "pending" && minOf(a) > 0).sort((a, b) => a.start - b.start);
 
-  // Report period: this month, last month, or any From–To dates (inclusive).
-  const ym = today0.slice(0, 7);
-  const [y, m] = ym.split("-").map(Number);
-  const prev = m === 1 ? `${y - 1}-12` : `${y}-${String(m - 1).padStart(2, "0")}`;
-  const [from, to] =
-    range === "month"
-      ? [dateMs(ym + "-01"), dateMs(nextMonth(ym) + "-01")]
-      : range === "last"
-        ? [dateMs(prev + "-01"), dateMs(ym + "-01")]
-        : [dateMs(fromD), dateMs(toD) + 24 * H];
-  const badRange = !(to > from) || !fromD || !toD;
-  const want = range === "month" ? ym : range === "last" ? prev : `${fromD}_to_${toD}`;
+  // Report period (inclusive dates).
+  const [from, to] = rangeMs(range);
+  const badRange = !range;
+  const want = range ? `${range.from}_to_${range.to}` : "all";
   // Saved data: fetch the period from the server (the page itself holds about 5 weeks).
   const team = data.org.team.id;
   useEffect(() => {
@@ -66,14 +62,14 @@ export default function OvertimePage() {
   }, [mode, team, from, to, badRange, toast]);
   if (!isApprover) return null;
   const source = mode === "db" ? (rows0 ?? []) : ends.filter((a) => a.start >= from && a.start < to);
-  const decided = badRange ? [] : source.filter((a) => a.otStatus !== "pending").sort((a, b) => b.start - a.start);
+  const decided = badRange ? [] : source.filter((a) => a.otStatus !== "pending" && minOf(a) > 0).sort((a, b) => b.start - a.start);
   const byPerson = new Map<number, { approved: number; days: number; declined: number }>();
   decided.forEach((a) => {
     const r = byPerson.get(a.pid) ?? { approved: 0, days: 0, declined: 0 };
     if (a.otStatus === "approved") {
-      r.approved += a.otMin;
+      r.approved += minOf(a);
       r.days++;
-    } else r.declined += a.otMin;
+    } else r.declined += minOf(a);
     byPerson.set(a.pid, r);
   });
   const rows = [...byPerson.entries()].sort((a, b) => b[1].approved - a[1].approved);
@@ -91,15 +87,26 @@ export default function OvertimePage() {
       }),
     );
   const procRows = [...byProc.values()].sort((a, b) => b.min - a.min);
+  // Approved overtime by type: regular (after the shift), holiday duty, rest day OT.
+  const kindOf = (a: Activity) => (a.otKind ? OT_KIND[a.otKind] : "Regular overtime");
+  const byKind = new Map<string, { min: number; people: Set<number> }>();
+  decided
+    .filter((a) => a.otStatus === "approved")
+    .forEach((a) => {
+      const r = byKind.get(kindOf(a)) ?? { min: 0, people: new Set<number>() };
+      r.min += minOf(a);
+      r.people.add(a.pid);
+      byKind.set(kindOf(a), r);
+    });
 
   const csv = () => {
     const q = (x: string | number) => `"${String(x).replace(/"/g, '""')}"`;
     // One line per process the overtime was for.
-    const body = [["Name", "Date", "Ended at", "Process", "Task type", "Overtime (min)", "Total that day (min)", "Status", "Decided by"].map(q).join(",")]
+    const body = [["Name", "Date", "Ended at", "Overtime type", "Process", "Task type", "Overtime (min)", "Total that day (min)", "Status", "Decided by"].map(q).join(",")]
       .concat(
         decided.flatMap((a) =>
           partsOf(a).map((x) =>
-            [name(a.pid), dayKey(a.start), fmtT(a.start), x.trade ? trPathOf(data.org, x.trade) : "", typeName((x as { ttype?: string }).ttype), x.min, a.otMin, a.otStatus ?? "", name(a.decidedBy)].map(q).join(","),
+            [name(a.pid), dayKey(a.start), fmtT(a.start), kindOf(a), x.trade ? trPathOf(data.org, x.trade) : "", typeName((x as { ttype?: string }).ttype), x.min, a.otMin, a.otStatus ?? "", name(a.decidedBy)].map(q).join(","),
           ),
         ),
       )
@@ -114,8 +121,8 @@ export default function OvertimePage() {
   return (
     <>
       <PageHead
-        title={`Overtime · ${data.org.team.name}`}
-        sub="Members report overtime when they end work after their shift. It counts in the dashboard and reports only once an admin or lead approves it. You can’t approve your own."
+        title={`Overtime · ${filtered ? unitLabel : data.org.team.name}`}
+        sub="Members report overtime when they end work after their shift, and on holiday duty or a rest day they work (all of that day counts). It counts in the dashboard and reports only once an admin or lead approves it. You can’t approve your own."
       />
       <Blueprint as="section" className="panel tight">
         <h2 className="h2">Waiting for approval · {pending.length}</h2>
@@ -139,6 +146,11 @@ export default function OvertimePage() {
                   <td>{fmtT(a.start)}</td>
                   <td>
                     <span style={{ fontWeight: 600 }}>{fmtMin(a.otMin)}</span>
+                    {a.otKind && (
+                      <span className="tag tag-amber" style={{ marginLeft: 8 }}>
+                        {OT_KIND[a.otKind]}
+                      </span>
+                    )}
                     {a.otSplit?.length ? (
                       <div className="small">{a.otSplit.map((x) => `${partName(x)} ${fmtMin(x.min)}`).join(" · ")}</div>
                     ) : null}
@@ -172,18 +184,7 @@ export default function OvertimePage() {
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
           <h2 className="h2">Approved overtime</h2>
           <div className="row" style={{ gap: 8 }}>
-            <select aria-label="Period" className="input" value={range} onChange={(e) => setRange(e.target.value as typeof range)}>
-              <option value="month">This month ({ym})</option>
-              <option value="last">Last month ({prev})</option>
-              <option value="custom">Choose dates…</option>
-            </select>
-            {range === "custom" && (
-              <>
-                <input aria-label="From" className="input" type="date" value={fromD} max={toD} onChange={(e) => setFromD(e.target.value)} style={{ width: "auto" }} />
-                <span className="small">to</span>
-                <input aria-label="To" className="input" type="date" value={toD} min={fromD} onChange={(e) => setToD(e.target.value)} style={{ width: "auto" }} />
-              </>
-            )}
+            <DateRangePicker value={range} onChange={setRange} today={today0} id="ot" />
             <button className="btn btn-secondary btn-36" disabled={!decided.length} onClick={csv}>
               Download CSV
             </button>
@@ -212,6 +213,31 @@ export default function OvertimePage() {
           </table>
         ) : (
           <span className="small">No overtime decided in this period.</span>
+        )}
+        {byKind.size > 0 && (
+          <>
+            <h2 className="h2" style={{ marginTop: 10 }}>
+              Approved overtime by type
+            </h2>
+            <table className="table">
+              <thead>
+                <tr>
+                  <th>Type</th>
+                  <th>Approved</th>
+                  <th>People</th>
+                </tr>
+              </thead>
+              <tbody>
+                {[...byKind.entries()].map(([k, r]) => (
+                  <tr key={k}>
+                    <td style={{ fontWeight: 500 }}>{k}</td>
+                    <td style={{ fontWeight: 600 }}>{fmtMin(r.min)}</td>
+                    <td>{r.people.size}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </>
         )}
         {procRows.length > 0 && (
           <>

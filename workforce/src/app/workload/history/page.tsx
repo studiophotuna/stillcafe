@@ -3,11 +3,11 @@
 import { useState } from "react";
 import { TaskTable } from "@/components/TaskTable";
 import { Blueprint, PageHead } from "@/components/ui";
-import { PeriodNav } from "@/components/WorkloadBits";
-import { dur } from "@/lib/workload/clock";
+import { DateRangePicker } from "@/components/DateRangePicker";
+import { H, dayKey, dur } from "@/lib/workload/clock";
 import { lc, trPathOf } from "@/lib/workload/constants";
 import { due, holdPeriods, personOf, slaOf, taskWorkMs, ticketField, ticketOf } from "@/lib/workload/engine";
-import { periodLabel, periodRange, type PeriodKind } from "@/lib/workload/period";
+import { rangeLabel, rangeMs, type DateRange } from "@/lib/workload/period";
 import { useWorkload } from "@/lib/workload/store";
 import { taskRow, typeNameOf } from "@/lib/workload/view";
 
@@ -20,7 +20,8 @@ export default function HistoryPage() {
   const { data, now, me, isAdmin, isApprover } = useWorkload();
   const lead = isAdmin || isApprover;
   const [scope, setScope] = useState<"me" | "team">(lead ? "team" : "me");
-  const [p, setP] = useState<{ kind: PeriodKind; anchor: number }>({ kind: "week", anchor: now });
+  // The last 7 days by default.
+  const [p, setP] = useState<DateRange>({ from: dayKey(now - 6 * 24 * H), to: dayKey(now) });
   const [trade, setTrade] = useState("all");
   const [who, setWho] = useState("all");
   const [timely, setTimely] = useState<"all" | "ontime" | "late">("all");
@@ -28,7 +29,7 @@ export default function HistoryPage() {
   const types = data.settings.taskTypes ?? [];
   const [q, setQ] = useState("");
   const ql = lc(q);
-  const [from, to] = periodRange(p.kind, p.anchor);
+  const [from, to] = rangeMs(p);
   const s = data.settings;
   const tf = ticketField(data);
   const list = data.tasks
@@ -54,7 +55,7 @@ export default function HistoryPage() {
   const csv = () => {
     const iso = (ms: number | null) => (ms ? new Date(ms).toISOString() : "");
     const q2 = (x: unknown) => `"${String(x ?? "").replace(/"/g, '""')}"`;
-    const head = ["Task ID", ...(tf ? [tf.label] : []), "Title", "System › Trade", "Task type", "SLA (h)", "Due", "Done by", "Received", "Started", "Finished", "Worked (min)", "On time", "On hold (min)", "On hold dates", "On hold reasons"].concat(
+    const head = ["Task ID", ...(tf ? [tf.label] : []), "Title", "System › Trade", "Task type", "SLA (h)", "Due", "Done by", "Received", "Started", "Finished", "Worked (min)", "On time", "Delay remarks", "Pending (min)", "Pending dates", "Pending reasons"].concat(
       data.fields.filter((f) => f !== tf).map((f) => f.label),
     );
     const rows = list.map((t) =>
@@ -72,6 +73,7 @@ export default function HistoryPage() {
         iso(t.doneAt),
         Math.round(taskWorkMs(data, t, now) / 60000),
         t.doneAt! <= due(t, data) ? "Yes" : "No",
+        t.delay ?? "",
         Math.round(holdPeriods(t, now).reduce((a, p) => a + ((p.to ?? now) - p.from), 0) / 60000),
         holdPeriods(t, now).map((p) => `${iso(p.from)} to ${iso(p.to)}`).join("; "),
         holdPeriods(t, now).map((p) => p.reason).join("; "),
@@ -80,7 +82,7 @@ export default function HistoryPage() {
     const body = [head, ...rows].map((r) => r.map(q2).join(",")).join("\n");
     const a = document.createElement("a");
     a.href = URL.createObjectURL(new Blob([body], { type: "text/csv" }));
-    a.download = `tasks-${data.org.team.name.replace(/[^A-Za-z0-9]+/g, "-")}-${periodLabel(p.kind, p.anchor, now).replace(/[^A-Za-z0-9]+/g, "-")}.csv`;
+    a.download = `tasks-${data.org.team.name.replace(/[^A-Za-z0-9]+/g, "-")}-${rangeLabel(p, now).replace(/[^A-Za-z0-9]+/g, "-")}.csv`;
     a.click();
     URL.revokeObjectURL(a.href);
   };
@@ -89,10 +91,10 @@ export default function HistoryPage() {
     <>
       <PageHead
         title={`Task history · ${scope === "team" && lead ? data.org.team.name : "My tasks"}`}
-        sub="Completed tasks with when they were started and finished, the time worked (time on hold, breaks and other time away excluded) and time on hold. Open a task for its hold dates and reasons."
+        sub="Completed tasks with when they were started and finished, the time worked (time pending, breaks and other time away excluded) and time pending. Open a task for its pending dates and reasons."
       />
       <div className="row" style={{ justifyContent: "space-between", alignItems: "flex-end" }}>
-        <PeriodNav kind={p.kind} anchor={p.anchor} onChange={(kind, anchor) => setP({ kind, anchor })} kinds={["day", "week", "month"]} />
+        <DateRangePicker value={p} onChange={setP} today={dayKey(now)} id="hist" />
         <div className="row" style={{ alignItems: "flex-end" }}>
           {lead && (
             <div className="field">

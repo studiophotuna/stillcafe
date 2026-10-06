@@ -2,6 +2,7 @@
 
 import { Chip } from "@/components/calendar/bits";
 import { MonthNav } from "@/components/calendar/CalendarGrid";
+import { AttendanceSummary } from "@/components/calendar/AttendanceSummary";
 import { BarList, ColumnChart, VIZ, VIZ_OTHER } from "@/components/Charts";
 import { Blueprint } from "@/components/ui";
 import { ANNUAL, BSTY, BUCKETS, CODES, OOO, PEND, TYPE_L } from "@/lib/calendar/constants";
@@ -97,6 +98,7 @@ export default function CalDashboardPage() {
           </Blueprint>
         ))}
       </div>
+      <AttendanceSummary key={unitId + ref} scope={unitId} date0={ref} />
       <Blueprint as="section" className="panel">
         <div className="chart-head">
           <h2 className="h2">Daily attendance · working days</h2>

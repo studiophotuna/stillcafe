@@ -17,12 +17,13 @@ export const CODES: Record<Code, Chip & { label: string }> = {
   HD: { label: "Half-day leave", bg: "var(--color-accent-300)", fg: "var(--color-accent-900)", bd: T },
   BT: { label: "Business trip", bg: "transparent", fg: "var(--color-accent-700)", bd: "1px solid var(--color-accent-700)" },
   HOL: { label: "Holiday", bg: "var(--color-neutral-300)", fg: "var(--color-neutral-800)", bd: T },
-  HDY: { label: "Holiday duty", bg: "var(--color-neutral-300)", fg: "var(--color-accent-800)", bd: "1px solid var(--color-accent-700)" },
+  HDY: { label: "Holiday duty (OT)", bg: "var(--color-neutral-300)", fg: "var(--color-accent-800)", bd: "1px solid var(--color-accent-700)" },
   RD: { label: "Rest day", bg: "var(--color-neutral-200)", fg: "var(--color-neutral-700)", bd: T },
+  RDOT: { label: "Rest day OT", bg: "var(--color-neutral-200)", fg: "var(--color-accent-800)", bd: "1px solid var(--color-accent-700)" },
 };
 export const CODE_KEYS = Object.keys(CODES) as Code[];
-/** Pending approval: dashed outline. */
-export const PEND: Chip = { bg: "var(--color-bg)", fg: "var(--color-accent-800)", bd: "1px dashed var(--color-accent-700)" };
+/** Pending approval: amber with a dashed outline. */
+export const PEND: Chip = { bg: "#fff4dc", fg: "#8a5300", bd: "1px dashed #d99a1e" };
 export const BSTY: Record<Bucket, Chip> = {
   morning: { bg: "var(--color-accent-100)", fg: "var(--color-accent-800)", bd: "1px solid var(--color-accent-300)" },
   mid: { bg: "var(--color-accent-300)", fg: "var(--color-accent-900)", bd: T },
@@ -30,7 +31,9 @@ export const BSTY: Record<Bucket, Chip> = {
 };
 export const BUCKETS: Record<Bucket, string> = { morning: "Morning", mid: "Midshift", gy: "GY" };
 
-export const WORKING: Code[] = ["RTO", "WFH", "HDY"];
+/** Working days; HDY (holiday duty) and RDOT (rest day OT) are overtime. */
+export const WORKING: Code[] = ["RTO", "WFH", "HDY", "RDOT"];
+export const OT_CODES: Code[] = ["HDY", "RDOT"];
 /** Out of office (drives Outlook reminders). */
 export const OOO: Code[] = ["VL", "SL", "EL", "HD", "BT"];
 /** Uses a leave balance. */
@@ -106,7 +109,7 @@ export const READY_F: [ReadyKey, string][] = [
 export const RD_L = { ready: "Ready", partial: "Partly ready", not: "Not ready", none: "Not submitted" };
 export const RD_CLS = { ready: "tag-accent", partial: "tag-outline", not: "tag-outline", none: "tag-neutral" };
 
-export const APPR_TAG = { approved: "tag-accent", pending: "tag-outline", declined: "tag-neutral" } as const;
+export const APPR_TAG = { approved: "tag-accent", pending: "tag-amber", declined: "tag-neutral" } as const;
 export const APPR_WORD = { approved: "Approved", pending: "Pending", declined: "Declined" } as const;
 
 /**

@@ -2,7 +2,7 @@
 import { H, dur, fmtS, fmtT } from "./clock";
 import { AV, PR, ST, trPathOf } from "./constants";
 import type { Action } from "./actions";
-import { canTake, due, holdPeriods, isBusy, overdueMs, personOf, slaOf, slaText, taskTypeOf, waitingMs, taskWorkMs, ticketOf, type WorkloadData } from "./engine";
+import { blocked, canTake, cxCheck, cxOn, cxText, due, holdPeriods, isBusy, overdueMs, personOf, slaOf, slaText, taskTypeOf, waitingMs, taskWorkMs, ticketOf, type WorkloadData } from "./engine";
 import type { Task } from "./types";
 
 export interface RowAction {
@@ -42,6 +42,10 @@ export interface TaskRowVM {
   onTime: boolean;
   /** Total time on hold, "" if never. */
   held: string;
+  /** Delay remarks (overdue tickets), "" if none. */
+  delay: string;
+  /** May add / edit delay remarks: an open overdue ticket, for its assignee, admins and leads. */
+  canDelay: boolean;
 }
 
 export function taskRow(d: WorkloadData, t: Task, me: number, isAdmin: boolean, now: number): TaskRowVM {
@@ -50,7 +54,7 @@ export function taskRow(d: WorkloadData, t: Task, me: number, isAdmin: boolean, 
   const od = t.status !== "done" && now > dueAt;
   const soon = !od && t.status !== "done" && dueAt - now < 2 * H;
   const meP = personOf(d, me) ?? { id: me, name: "", trades: [], avail: "available" as const, shift: "", shiftStart: 8 };
-  const busy = isBusy(d.tasks, me);
+  const busy = blocked(d, me);
   let action: RowAction | null = null;
   if (t.status === "new" && s.mode === "self" && canTake(d, meP, t))
     action = { kind: "take", id: t.id, label: meP.trades.includes(t.trade) ? "Take" : "Help", disabled: busy };
@@ -85,6 +89,8 @@ export function taskRow(d: WorkloadData, t: Task, me: number, isAdmin: boolean, 
       const ps = holdPeriods(t, now);
       return ps.length ? dur(ps.reduce((a, p) => a + ((p.to ?? now) - p.from), 0)) : "";
     })(),
+    delay: t.delay ?? "",
+    canDelay: od && (t.assignee === me || isAdmin || d.approvers.includes(me)),
   };
 }
 
@@ -115,11 +121,13 @@ export function taskDetail(d: WorkloadData, t: Task, now: number) {
   ]
     .concat(timeRows)
     .concat(d.fields.map((f) => ({ label: f.label, value: (t.fields[f.key] ?? "") === "" ? "—" : String(t.fields[f.key]) })))
+    .concat(cxRows(d, t))
+    .concat(t.delay ? [{ label: "Delay remarks", value: t.delay }] : [])
     // Every pending (on hold) period with its date and reason.
     .concat(
       holdPeriods(t, now).map((p, i, all) => ({
-        label: all.length > 1 ? `On hold (${i + 1})` : "On hold",
-        value: `${fmtT(p.from)} → ${p.to ? fmtT(p.to) : "still on hold"} · ${dur((p.to ?? now) - p.from)} · ${p.reason || "no reason given"}`,
+        label: all.length > 1 ? `Pending (${i + 1})` : "Pending",
+        value: `${fmtT(p.from)} → ${p.to ? fmtT(p.to) : "still pending"} · ${dur((p.to ?? now) - p.from)} · ${p.reason || "no reason given"}`,
       })),
     );
   return {
@@ -142,7 +150,7 @@ export function taskDetail(d: WorkloadData, t: Task, now: number) {
     history: t.history
       .slice()
       .reverse()
-      .map((h) => ({ at: fmtS(h.at, now), text: h.text })),
+      .map((h) => ({ at: fmtS(h.at, now), text: h.text.replace(/^On hold/, "Pending") })),
   };
 }
 
@@ -153,4 +161,29 @@ export function assignOptions(d: WorkloadData, t: Task) {
       p.name +
       (p.avail !== "available" ? ` (${AV[p.avail][0].toLowerCase()})` : isBusy(d.tasks, p.id) ? " (busy)" : ""),
   }));
+}
+
+/** Complexity tagged on a done ticket, how its handling time compares, and any admin check. */
+function cxRows(d: WorkloadData, t: Task) {
+  if (!cxOn(d.settings) || !t.cx) return [];
+  const chk = cxCheck(d, t);
+  const rows = [{ label: "Complexity", value: cxText(d.settings, t.cx) }];
+  if (chk)
+    rows.push({
+      label: "Handling time",
+      value:
+        `${dur(chk.actMs)} worked · ${dur(chk.expMs)} expected` +
+        (chk.flag === "slow" ? " · took much longer than this complexity suggests" : ""),
+    });
+  const r = t.cxReview;
+  if (r)
+    rows.push({
+      label: "Complexity check",
+      value:
+        (r.verdict === "ok" ? "Confirmed" : `Corrected (tagged ${cxText(d.settings, r.was)})`) +
+        ` by ${d.people.find((p) => p.id === r.by)?.name ?? "an admin"}, ${fmtT(r.at)}` +
+        (r.note ? ` · ${r.note}` : ""),
+    });
+  else if (chk?.flag) rows.push({ label: "Complexity check", value: "Question for an admin: check the complexity" });
+  return rows;
 }

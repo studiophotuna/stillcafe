@@ -2,7 +2,7 @@
 
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 import { applyAction, type Action } from "./actions";
-import { nowMs, setRealClock } from "./clock";
+import { dayKey, nowMs, setRealClock } from "./clock";
 import { loadMe, toLogin } from "../session";
 import { ADMIN_ID, EMPLOYEE_ID, person } from "./constants";
 import { canUpload } from "./authz";
@@ -25,6 +25,7 @@ export type DataMode = "demo" | "db";
 export type Dialog =
   | { kind: "task"; id: string }
   | { kind: "hold"; id: string }
+  | { kind: "delay"; id: string }
   | { kind: "done"; id: string }
   | { kind: "assist"; offer: AssistOffer }
   | { kind: "endWork" }
@@ -232,6 +233,26 @@ export function WorkloadProvider({ children }: { children: React.ReactNode }) {
     },
     [commit, toast],
   );
+
+  // Working an unscheduled weekend / rest day: once they start a task, tag the day rest day
+  // OT (RDOT) on their Calendar schedule. Once per day.
+  const rdSent = useRef("");
+  useEffect(() => {
+    const me = session && data ? personOf(data, session.id) : null;
+    if (modeRef.current !== "db" || !me?.rdTag || !data) return;
+    const today = dayKey(Date.now());
+    if (rdSent.current === today) return;
+    const started = data.tasks.some((t) => t.assignee === me.id && t.startedAt && dayKey(t.startedAt) === today);
+    if (!started) return;
+    rdSent.current = today;
+    fetch("/api/cal/action", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ type: "restDayWork", pid: me.id, date: today, actor: me.id }),
+    })
+      .then((r) => r.json().catch(() => ({})).then((j) => r.ok && toast(j.message || "Today is marked as rest day OT.")))
+      .catch(() => {});
+  }, [data, session, toast]);
 
   const setHolidayWork = useCallback(
     async (code: "RTO" | "WFH" | "HOL") => {

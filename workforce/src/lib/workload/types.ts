@@ -38,6 +38,8 @@ export interface Activity {
   decidedAt: number | null;
   /** Where the overtime went (End work): minutes per process (trade) and task type; adds up to otMin. */
   otSplit?: OtPart[] | null;
+  /** The whole day was overtime: holiday duty or rest day OT (weekend / rest day worked). */
+  otKind?: "holiday" | "restday" | null;
 }
 
 /** Part of a day's overtime: a process (trade id) and optionally a task type. */
@@ -70,6 +72,12 @@ export interface Person {
   shiftStart: number;
   /** Scheduled to work today (not on leave or rest day), so outside the shift they can carry on as overtime until they end work. */
   onToday?: boolean;
+  /** Today is overtime as a whole: holiday duty, or a weekend / rest day worked (rest day OT). */
+  otDay?: "holiday" | "restday";
+  /** A rest day not yet marked rest day OT in the Calendar. */
+  rdTag?: boolean;
+  /** Their assigned approver in the Calendar (a team lead or above). */
+  approver?: number;
   /** Today is a holiday for this person: its name, and where they work if they're on holiday duty. */
   holiday?: { name: string; date: string; working: "RTO" | "WFH" | null; answered: boolean };
 }
@@ -124,6 +132,41 @@ export interface Task {
    * changes to the SLA settings don't move open tasks. Missing on older tasks: current settings apply.
    */
   slaH?: number | null;
+  /** Contracts in the ticket by complexity level, as tagged by the member at Mark done (e.g. { simple: 1, complex: 2 }). */
+  cx?: Record<string, number> | null;
+  /** An admin's check of the complexity (when the handling time didn't match it). */
+  cxReview?: CxReview | null;
+  /** Why it was late: required when a ticket is resolved after its due time. */
+  delay?: string | null;
+}
+
+/** A complexity level: its own daily target (put first) and average handling time per contract. */
+export interface CxLevel {
+  id: string;
+  name: string;
+  /** Contracts of this level one person is expected to finish in a day; 0/missing: the task's usual target. */
+  target?: number;
+  /** Average handling time per contract, in minutes; 0/missing: not checked. */
+  aht?: number;
+}
+
+export interface Complexity {
+  on: boolean;
+  levels: CxLevel[];
+  /** How far (in %) the handling time may differ from the expected time before it's questioned. Default 50. */
+  tol?: number;
+  /** Number field set to the total contracts (e.g. "No. of contracts"); default: the productivity field when it's a number. "" = none. */
+  field?: string;
+}
+
+export interface CxReview {
+  by: number;
+  at: number;
+  /** "ok": the tagging was right; "corrected": the admin changed it. */
+  verdict: "ok" | "corrected";
+  note?: string;
+  /** What the member tagged, when corrected. */
+  was?: Record<string, number>;
 }
 
 /** A kind of request with its own SLA (e.g. Doc review 2 h, Booking 4 h). */
@@ -160,6 +203,8 @@ export interface Settings {
   order: OrderRule;
   skipUnavail: boolean;
   autoFeed: boolean;
+  /** One task in progress per member at a time (default yes); no = they can work several at once. */
+  oneAtATime?: boolean;
   sla: Record<Priority, number>;
   mailbox: string;
   mailTrade: string;
@@ -183,6 +228,8 @@ export interface Settings {
   slaHolidays?: boolean;
   /** Request types with their own SLA. Tasks without a type use the standard SLA (by priority). */
   taskTypes?: TaskType[];
+  /** Complexity of contracts in a ticket (Simple / Medium / Complex …), each with its own target and handling time. */
+  complexity?: Complexity;
 }
 
 export interface Toast {

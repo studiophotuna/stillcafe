@@ -113,6 +113,14 @@ describe("start work (FIFO)", () => {
     expect(get(o.data, next.id).status).toBe("new");
   });
 
+  it("allows several tasks in progress when the team turns one-at-a-time off", () => {
+    const cur = task({ status: "in_progress", assignee: ANA, startedAt: NOW - M });
+    const next = task();
+    const o = startWork(data([cur, next], { oneAtATime: false }), ANA, NOW);
+    expect(get(o.data, next.id)).toMatchObject({ status: "in_progress", assignee: ANA });
+    expect(get(o.data, cur.id).status).toBe("in_progress");
+  });
+
   it("does not give work to unavailable people unless the team allows it", () => {
     const t = task({ trade: "eu" });
     expect(get(startWork(data([t]), ELI, NOW).data, t.id).status).toBe("new");
@@ -397,7 +405,7 @@ describe("status: time away, end of work and overtime approval", async () => {
     expect(e.data.activities[0]).toMatchObject({ otMin: 70, otStatus: "pending" });
     expect(personMetrics(e.data, ana, at("18:10"))).toMatchObject({ otMin: 0, otPending: 70 });
     // Can't end with a task in progress; can undo while pending.
-    expect(endWork(data([task({ status: "in_progress", assignee: ANA, startedAt: at("17:30") })]), ANA, 0, at("18:10")).message).toMatch(/Finish your task/);
+    expect(endWork(data([task({ status: "in_progress", assignee: ANA, startedAt: at("17:30") })]), ANA, 0, at("18:10")).message).toMatch(/Resolve your ticket/);
     expect(undoEndWork(e.data, ANA, at("18:20")).data.activities).toHaveLength(0);
     expect(startWork({ ...e.data, tasks: [task()] }, ANA, at("18:20")).message).toMatch(/ended work/);
   });
@@ -803,5 +811,168 @@ describe("overtime: processes worked, task types per process, and the target", a
     const id = ended.activities[0].id;
     const no = { ...ended, activities: ended.activities.map((a) => (a.id === id ? { ...a, otStatus: "declined" as const } : a)) };
     expect(E.personMetrics(no, one, at("20:05")).prod).toBe(125);
+  });
+});
+
+describe("complexity", async () => {
+  const E = await import("./engine");
+  const { authorizeWl } = await import("./authz");
+  const at = (hm: string) => Date.parse(`2026-09-24T${hm}:00+08:00`);
+  const levels = [
+    { id: "simple", name: "Simple", target: 12, aht: 30 },
+    { id: "medium", name: "Medium", target: 8, aht: 60 },
+    { id: "complex", name: "Complex", target: 4, aht: 120 },
+  ];
+  const cxs = (p: Partial<Settings> = {}) => ({ complexity: { on: true, levels, tol: 50 }, prodBasis: "contracts", ...p });
+  const working = (started: string) => task({ status: "in_progress", assignee: ANA, startedAt: at(started) });
+
+  it("asks for the contracts by complexity at Mark done and sets the contracts field to their total", () => {
+    const t = working("09:00");
+    const d = data([t], cxs());
+    expect(E.completeTask(d, t.id, { ticket: "1", carrier: "MSK" }, ANA, at("10:00")).message).toMatch(/contracts of each complexity/);
+    const o = E.completeTask(d, t.id, { ticket: "1", carrier: "MSK" }, ANA, at("10:00"), { simple: 1, complex: 2, bogus: 5 });
+    const done = get(o.data, t.id);
+    expect(done.status).toBe("done");
+    expect(done.cx).toEqual({ simple: 1, complex: 2 });
+    expect(done.fields.contracts).toBe(3);
+    expect(done.history.at(-1)!.text).toBe("Done · 1 Simple · 2 Complex");
+  });
+
+  it("counts each contract against its level's target first", () => {
+    const d = data([], cxs());
+    const t = task({ status: "done", cx: { simple: 1, medium: 1, complex: 1 }, fields: { contracts: 3 } });
+    expect(E.dayShare(d, [t], 20).share).toBeCloseTo(1 / 12 + 1 / 8 + 1 / 4);
+    expect(E.dayShare(d, [t], 20).mix).toBe("1 Simple of 12 · 1 Medium of 8 · 1 Complex of 4");
+    // A level without its own target uses the usual one; without complexity, the contracts field ÷ target.
+    const noT = data([], cxs({ complexity: { on: true, levels: [{ id: "simple", name: "Simple" }], tol: 50 } }));
+    expect(E.dayShare(noT, [task({ status: "done", cx: { simple: 2 }, fields: { contracts: 2 } })], 20).share).toBeCloseTo(0.1);
+    expect(E.dayShare(data([], { prodBasis: "contracts" }), [t], 20).share).toBeCloseTo(0.15);
+  });
+
+  it("questions tagging that doesn't match the time worked, until an admin checks it", () => {
+    // 3 Simple at 30 min = 1 h 30 expected; worked 4 h.
+    const slow = task({ status: "done", assignee: ANA, startedAt: at("09:00"), doneAt: at("13:00"), cx: { simple: 3 }, fields: { contracts: 3 } });
+    const ok = task({ status: "done", assignee: ANA, startedAt: at("13:00"), doneAt: at("14:40"), cx: { simple: 3 }, fields: { contracts: 3 } });
+    const fast = task({ status: "done", assignee: ANA, startedAt: at("15:00"), doneAt: at("15:10"), cx: { complex: 1 }, fields: { contracts: 1 } });
+    const d = data([slow, ok, fast], cxs());
+    expect(E.cxCheck(d, slow)).toMatchObject({ expMs: 90 * M, actMs: 4 * H, flag: "slow" });
+    expect(E.cxCheck(d, ok)!.flag).toBeNull();
+    expect(E.cxCheck(d, fast)!.flag).toBeNull(); // quicker than expected isn't questioned
+    expect(E.cxQuestions(d).map((t) => t.id)).toEqual([slow.id]);
+    // Confirm one, correct the other: both leave the list; the correction updates the contracts.
+    const c1 = E.reviewCx(d, fast.id, 23, at("16:00")).data;
+    expect(get(c1, fast.id).cxReview).toMatchObject({ by: 23, verdict: "ok" });
+    const c2 = E.reviewCx(c1, slow.id, 23, at("16:00"), { complex: 2 }, "two complex contracts").data;
+    expect(get(c2, slow.id)).toMatchObject({ cx: { complex: 2 }, fields: { contracts: 2 }, cxReview: { verdict: "corrected", was: { simple: 3 }, note: "two complex contracts" } });
+    expect(E.cxQuestions(c2)).toEqual([]);
+    // Only admins may check it.
+    expect(authorizeWl({ type: "reviewCx", id: slow.id, by: 0 }, d, ANA)).toEqual({ error: "Only Workload admins can do that." });
+  });
+});
+
+describe("average handling time", async () => {
+  const { ahtStats, perContract, perTicket, vsExpected } = await import("./aht");
+  const at = (hm: string) => Date.parse(`2026-09-24T${hm}:00+08:00`);
+  const levels = [
+    { id: "simple", name: "Simple", aht: 30 },
+    { id: "complex", name: "Complex", aht: 120 },
+  ];
+  it("per ticket, per contract, per level (time shared by set AHT) and vs expected", () => {
+    const a = task({ status: "done", assignee: ANA, trade: "lcl", startedAt: at("09:00"), doneAt: at("10:00"), cx: { simple: 2 }, fields: { contracts: 2 } }); // 60 of 60 expected
+    const b = task({ status: "done", assignee: ANA, trade: "lcl", startedAt: at("10:00"), doneAt: at("13:00"), cx: { simple: 1, complex: 1 }, fields: { contracts: 2 } }); // 180 of 150
+    const d = data([a, b], { complexity: { on: true, levels, tol: 50 }, prodBasis: "contracts" });
+    const st = ahtStats(d, at("00:00"), at("23:59"));
+    expect(st.total).toMatchObject({ tickets: 2, contracts: 4 });
+    expect(perTicket(st.total)).toBe(2 * H);
+    expect(perContract(st.total)).toBe(H);
+    // Ticket b: 180 min shared 30:120 → Simple 36 min, Complex 144 min.
+    const simple = st.levels.find((x) => x.level.id === "simple")!.row;
+    expect(perContract(simple)).toBe(((60 + 36) / 3) * M);
+    expect(perContract(st.levels.find((x) => x.level.id === "complex")!.row)).toBe(144 * M);
+    expect(vsExpected(st.members[0])).toBe(Math.round((240 / 210) * 100));
+  });
+});
+
+describe("holiday duty and rest day overtime", async () => {
+  const E = await import("./engine");
+  const at = (hm: string) => Date.parse(`2026-09-26T${hm}:00+08:00`);
+  const rest = { ...PEOPLE.find((p) => p.id === ANA)!, trades: ["lcl"], shiftStart: 8, otDay: "restday" as const };
+  const mk = (tasks: Task[] = []) => ({ ...data(tasks, { memberTargets: { [ANA]: "4" } }), people: data([]).people.map((x) => (x.id === ANA ? rest : x)) });
+  it("counts all time worked that day as overtime of its type", () => {
+    const d = mk([task({ assignee: ANA, trade: "lcl", status: "done", startedAt: at("09:00"), doneAt: at("11:00") })]);
+    expect(E.otAvailMin(d, rest, at("12:30"))).toBe(210);
+    const a = E.endWork(d, ANA, 210, at("12:30")).data.activities[0];
+    expect(a).toMatchObject({ otMin: 210, otStatus: "pending", otKind: "restday" });
+    // Only the overtime is expected: 3.5 h at 4 a day in 6.8 h fits 2 tasks; 1 done = 50%.
+    expect(E.personMetrics(E.endWork(d, ANA, 210, at("12:30")).data, rest, at("12:31")).prod).toBe(50);
+    // A normal day's end-of-work entry has no type.
+    const norm = { ...rest, otDay: undefined };
+    const n = { ...d, people: d.people.map((x) => (x.id === ANA ? norm : x)) };
+    expect(E.endWork(n, ANA, 0, Date.parse("2026-09-24T18:00:00+08:00")).data.activities[0].otKind).toBeNull();
+  });
+});
+
+describe("delay remarks and the due / overdue board", async () => {
+  const E = await import("./engine");
+  const { dueBoard } = await import("./dueBoard");
+  it("needs delay remarks to resolve an overdue ticket", () => {
+    const t = task({ status: "in_progress", assignee: ANA, startedAt: NOW - H, received: NOW - 100 * H, fields: { ticket: "1", carrier: "MSK", contracts: 1 } });
+    const d = data([t]);
+    expect(E.completeTask(d, t.id, t.fields, ANA, NOW).message).toMatch(/overdue\. Enter delay remarks/);
+    const ok = E.completeTask(d, t.id, t.fields, ANA, NOW, null, "  Waited for the carrier  ");
+    expect(get(ok.data, t.id)).toMatchObject({ status: "done", delay: "Waited for the carrier" });
+    // On time: no remarks needed.
+    const fresh = task({ status: "in_progress", assignee: ANA, startedAt: NOW - H, received: NOW - H, fields: { ticket: "1", carrier: "MSK", contracts: 1 } });
+    expect(get(E.completeTask(data([fresh]), fresh.id, fresh.fields, ANA, NOW).data, fresh.id).status).toBe("done");
+  });
+  it("takes delay remarks on open overdue tickets, kept at resolve", async () => {
+    const { authorizeWl } = await import("./authz");
+    const t = task({ status: "assigned", assignee: ANA, received: NOW - 100 * H });
+    const d = data([t]);
+    const r = E.setDelay(d, t.id, " Carrier slow ", NOW);
+    expect(get(r.data, t.id).delay).toBe("Carrier slow");
+    expect(E.setDelay(r.data, t.id, "", NOW).data.tasks[0].delay).toBeNull();
+    const ok = task({ status: "assigned", assignee: ANA, received: NOW - H });
+    expect(E.setDelay(data([ok]), ok.id, "x", NOW).message).toMatch(/isn't overdue/);
+    expect("action" in authorizeWl({ type: "setDelay", id: t.id, delay: "x" }, d, ANA)).toBe(true);
+    const other = d.people.find((p) => p.id !== ANA && !d.admins.includes(p.id) && !d.approvers.includes(p.id))!;
+    expect("error" in authorizeWl({ type: "setDelay", id: t.id, delay: "x" }, d, other.id)).toBe(true);
+  });
+  it("counts open tickets by due day and system", () => {
+    const over = task({ trade: "lcl", received: NOW - 100 * H }); // RCM, overdue
+    const soon = task({ trade: "fewb", received: NOW - H }); // GPM, still due
+    const b = dueBoard(data([over, soon]), [over, soon], NOW);
+    const rcm = b.groups.find((g) => g.name === "RCM")!;
+    const gpm = b.groups.find((g) => g.name === "GPM")!;
+    expect(rcm.overNow).toEqual([over.id]);
+    expect(rcm.due.flat()).toEqual([]);
+    expect(gpm.due.flat()).toEqual([soon.id]);
+    expect(gpm.overNow).toEqual([]);
+    expect(b.cols.some((c) => c.today)).toBe(true);
+    // Future days project overdue: still open and due by the end of that day.
+    const later = task({ trade: "fewb", received: NOW + 30 * H }); // due a few days out
+    const b2 = dueBoard(data([over, later]), [over, later], NOW);
+    const g2 = b2.groups.find((g) => g.name === "GPM")!;
+    const dueCol = g2.due.findIndex((x) => x.includes(later.id));
+    expect(b2.cols[dueCol].future).toBe(true);
+    expect(g2.over[dueCol]).toEqual([later.id]); // overdue by the end of its due day if not resolved
+    expect(g2.over[dueCol - 1]).toEqual([]);
+    const r2 = b2.groups.find((g) => g.name === "RCM")!;
+    expect(r2.over.slice(b2.cols.findIndex((c) => c.future)).every((x) => x.includes(over.id))).toBe(true); // stays overdue on every future day
+  });
+});
+
+describe("break and lunch over the allowance", async () => {
+  const { breakFlags } = await import("./breaks");
+  const act = (pid: number, kind: "break" | "lunch" | "meeting", start: number, min: number | null) =>
+    ({ id: `A${pid}${kind}${start}`, pid, kind, start, end: min === null ? null : start + min * M, otMin: 0, otStatus: null, decidedBy: null, decidedAt: null });
+  it("flags days where break and lunch together exceed the planned breaks", () => {
+    // Planned breaks: 60 + 30 = 90 min.
+    const d = { ...data([]), activities: [act(ANA, "lunch", NOW - 5 * H, 65), act(ANA, "break", NOW - 2 * H, 20), act(ANA, "meeting", NOW - 4 * H, 60), act(8, "break", NOW - 3 * H, 30)] };
+    expect(breakFlags(d, NOW - 10 * H, NOW + H, NOW)).toEqual([]); // 85 min: within
+    d.activities.push(act(ANA, "break", NOW - 20 * M, null)); // ongoing 20 min → 105
+    const f = breakFlags(d, NOW - 10 * H, NOW + H, NOW);
+    expect(f).toHaveLength(1);
+    expect(f[0]).toMatchObject({ pid: ANA, min: 105, allowed: 90, over: 15 });
   });
 });

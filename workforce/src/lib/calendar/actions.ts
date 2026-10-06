@@ -3,7 +3,7 @@
  * re-applied by the server (/api/cal/action) to the stored calendar.
  */
 import { fmtT } from "../workload/clock";
-import { ANNUAL, CODES, LEVELS, TYPE_L, first } from "./constants";
+import { ANNUAL, CODES, LEVELS, TYPE_L, first, isLeader } from "./constants";
 import { addDays, dowOf, fmtY, isWk, MONL } from "./dates";
 import { Cal, evState, logsDecision, logsSubmit } from "./engine";
 import { allocProblem, hcTeamOf, mkOrg, primaryTeamOf, teamDefaults, withHcChange, type Org } from "./org";
@@ -29,6 +29,7 @@ export type CalAction =
   | { type: "setOverride"; pid: number; date: string; code: Code | null }
   | { type: "setShiftDay"; pid: number; date: string; shift: string }
   | { type: "holidayWork"; pid: number; date: string; code: "RTO" | "WFH" | "HOL" | null; actor: number }
+  | { type: "restDayWork"; pid: number; date: string; actor: number }
   | { type: "teamSettings"; id: string; patch: Partial<Pick<OrgNode, "mode" | "notifyAdmin" | "notifyUser" | "invite" | "defaultScope" | "costCentre" | "schedPeriod">> }
   | { type: "setSchedule"; bid: string; pids: number[]; from: string; to: string; shift: string | null; days: Partial<Record<number, SchedDay>> }
   | { type: "setBilled"; pid: number; bid: string; months: string[]; value: number | null }
@@ -41,6 +42,7 @@ export type CalAction =
   | { type: "deleteNode"; id: string }
   | { type: "saveMember"; pid: number; level: Level; shift: string; adminHere: boolean; bid: string; assign: string[]; isNew: boolean; details?: MemberDetails; hcFrom?: string }
   | { type: "setHcHistory"; pid: number; history: HcTag[] }
+  | { type: "bulkMembers"; pids: number[]; level?: Level; approver?: number; shift?: string; wfhDays?: number[] }
   | { type: "addPerson"; details: MemberDetails & { name: string; email: string }; level: Level; shift: string; adminHere: boolean; bid: string; assign: string[] }
   | { type: "removeFromTeam"; pid: number; bid: string }
   | { type: "setResign"; pid: number; date: string | null }
@@ -55,8 +57,8 @@ export type CalAction =
   | { type: "importUpload"; mode: UploadMode; rows: UploadRow[]; bid: string };
 
 /** What a weekday becomes in Update schedules: a status, or "" for the person's usual pattern. */
-export type SchedDay = "RTO" | "WFH" | "RD" | "";
-const SCHED_DAYS: SchedDay[] = ["RTO", "WFH", "RD", ""];
+export type SchedDay = "RTO" | "WFH" | "RD" | "RDOT" | "";
+const SCHED_DAYS: SchedDay[] = ["RTO", "WFH", "RD", "RDOT", ""];
 
 /** Editable person details (Members › Add / Edit). */
 export interface MemberDetails {
@@ -72,6 +74,8 @@ export interface MemberDetails {
   wfhDays?: number[];
   /** Headcount team when allocated to several teams ("" = the first allocation's team). */
   primaryTeam?: string;
+  /** Assigned approver (a team leader or above); 0 = none. */
+  approver?: number;
 }
 
 export const EMAIL_RE = /^[^@\s]+@[^@\s]+\.[^@\s]+$/;
@@ -123,6 +127,11 @@ export function cleanDetails(d: CalendarData, m: MemberDetails, selfId: number |
   }
   if (m.wfhDays !== undefined) out.wfhDays = [...new Set(m.wfhDays.filter((x) => x >= 1 && x <= 5))].sort();
   if (typeof m.primaryTeam === "string") out.primaryTeam = m.primaryTeam;
+  if (m.approver !== undefined) {
+    const ap = d.people.find((p) => p.id === m.approver);
+    if (m.approver && (!ap || ap.id === selfId || !isLeader(ap.level))) return { error: "The approver must be a team lead, manager or director (not the person themselves)." };
+    out.approver = m.approver || undefined;
+  }
   return { patch: out };
 }
 
@@ -150,8 +159,12 @@ const plural = (n: number, w: string) => `${n} ${w}${n === 1 ? "" : "s"}`;
 export function createRequest(c: Cal, pid: number, f: RequestForm, adminBid: string | null, now: number) {
   const d = c.d;
   const approvals: LeaveRequest["approvals"] = {};
-  c.O.branchesOf(c.person(pid)).forEach((b) => {
-    approvals[b.id] = b.id === adminBid || b.mode === "auto" ? "approved" : "pending";
+  const p = c.person(pid);
+  // Team leads and above don't need approval; members' requests follow the team's setting
+  // (approved when an admin enters them on the calendar).
+  const lead = isLeader(p.level);
+  c.O.branchesOf(p).forEach((b) => {
+    approvals[b.id] = lead || b.id === adminBid || b.mode === "auto" ? "approved" : "pending";
   });
   const q: LeaveRequest = {
     id: "LR" + String(d.seq).padStart(6, "0"),
@@ -212,7 +225,7 @@ function applyInner(d: CalendarData, a: CalAction, today: string, now: number): 
       if (!n || (f.type !== "HD" && f.end < f.start)) return { data: d };
       const { data, q } = createRequest(c, a.pid, f, a.adminBid, now);
       const p = c.person(a.pid);
-      if (a.adminBid) return { data, message: `${CODES[f.type].label} recorded for ${first(p.name)}. Notifications sent.` };
+      if (a.adminBid && q.approvals[a.adminBid] === "approved") return { data, message: `${CODES[f.type].label} recorded for ${first(p.name)}. Notifications sent.` };
       const pend = Object.keys(q.approvals).filter((k) => q.approvals[k] === "pending").map((k) => c.O.by[k].name);
       return {
         data,
@@ -224,7 +237,7 @@ function applyInner(d: CalendarData, a: CalAction, today: string, now: number): 
     case "decide": {
       const q = d.requests.find((x) => x.id === a.rid);
       if (!q || q.approvals[a.bid] !== "pending") return { data: d };
-      const upd = { ...q, approvals: { ...q.approvals, [a.bid]: a.st } };
+      const upd = { ...q, approvals: { ...q.approvals, [a.bid]: a.st }, decided: { ...(q.decided ?? {}), [a.bid]: { by: a.actor, at } } };
       const next: CalendarData = { ...d, requests: d.requests.map((x) => (x.id === q.id ? upd : x)) };
       const ls = logsDecision(new Cal(next, today), upd, a.bid, a.st, at, "admin");
       const p = c.person(q.pid);
@@ -287,6 +300,16 @@ function applyInner(d: CalendarData, a: CalAction, today: string, now: number): 
           ? `${self ? "You’re" : first(p.name) + " is"} on holiday duty ${fmtY(a.date)} (${a.code === "WFH" ? "work from home" : "in office"}).`
           : `${fmtY(a.date)} is back to a holiday${self ? " for you" : " for " + first(p.name)}.`,
       };
+    }
+    case "restDayWork": {
+      // Working on a weekend (or rest day) with no schedule: it becomes rest day overtime.
+      const p = c.people.get(a.pid);
+      if (!p || !/^\d{4}-\d{2}-\d{2}$/.test(a.date) || (p.resign && a.date > p.resign)) return { data: d };
+      const cell = c.raw(p, a.date, null);
+      // Members tag their own weekends; admins may also tag a weekday rest day.
+      const self = a.actor === a.pid;
+      if (!(isWk(a.date) || (!self && cell.code === "RD")) || c.holFor(p, a.date) || (cell.code && cell.code !== "RD")) return { data: d };
+      return { data: { ...d, overrides: { ...d.overrides, [a.pid + "|" + a.date]: "RDOT" } }, message: `${fmtY(a.date)} is marked as rest day OT.` };
     }
     case "setSchedule": {
       // Several members at once, for a week or a month: shift and/or each weekday's status.
@@ -354,6 +377,7 @@ function applyInner(d: CalendarData, a: CalAction, today: string, now: number): 
     case "setLinks": {
       const ok = (u: unknown) => typeof u === "string" && /^https:\/\/\S{3,490}$/.test(u.trim());
       const l = a.links ?? {};
+      const payDates = [...new Set((Array.isArray(l.payrollDates) ? l.payrollDates : []).filter((x) => typeof x === "string" && /^\d{4}-\d{2}-\d{2}$/.test(x) && !Number.isNaN(Date.parse(x))))].sort().slice(-120);
       const links: AppLinks = {
         bipoLeave: ok(l.bipoLeave) ? l.bipoLeave!.trim() : undefined,
         bipoOt: ok(l.bipoOt) ? l.bipoOt!.trim() : undefined,
@@ -361,6 +385,8 @@ function applyInner(d: CalendarData, a: CalAction, today: string, now: number): 
           .filter((q) => q && ok(q.url) && typeof q.label === "string" && q.label.trim())
           .slice(0, 20)
           .map((q) => ({ label: q.label.trim().slice(0, 40), url: q.url.trim() })),
+        payrollDates: payDates.length ? payDates : undefined,
+        payrollNote: typeof l.payrollNote === "string" && l.payrollNote.trim() ? l.payrollNote.trim().slice(0, 200) : undefined,
       };
       return { data: { ...d, links }, message: "Links saved." };
     }
@@ -456,6 +482,39 @@ function applyInner(d: CalendarData, a: CalAction, today: string, now: number): 
       if (a.adminHere && inHere) na = na.concat(a.pid);
       if (na.join() !== (b.admins ?? []).join()) next = setNode(next, a.bid, { admins: na });
       return { data: next, message: p.name + (a.isNew ? " added." : " updated.") };
+    }
+    case "bulkMembers": {
+      // Several members at once: only the fields given change. A role that doesn't fit
+      // someone's allocations (e.g. Manager without a tower) is skipped for them.
+      const pids = [...new Set(a.pids)].filter((id) => c.people.has(id));
+      if (!pids.length) return { data: d, error: "Select members first." };
+      if (a.level && !LEVELS[a.level]) return { data: d, error: "Choose a role." };
+      if (a.shift && !d.shifts.some((x) => x.id === a.shift)) return { data: d, error: "Choose a shift." };
+      const ap = a.approver ? c.people.get(a.approver) : undefined;
+      if (a.approver && (!ap || !isLeader(ap.level))) return { data: d, error: "The approver must be a team lead, manager or director." };
+      const wfh = a.wfhDays ? [...new Set(a.wfhDays.filter((x) => x >= 1 && x <= 5))].sort() : undefined;
+      const skipped: string[] = [];
+      let n = 0;
+      const people = d.people.map((p) => {
+        if (!pids.includes(p.id)) return p;
+        const next = { ...p };
+        if (a.level && a.level !== p.level) {
+          if (allocProblem(c.O, a.level, p.assign)) skipped.push(p.name);
+          else next.level = a.level;
+        }
+        if (a.approver !== undefined) {
+          if (a.approver === 0) delete next.approver;
+          else if (a.approver !== p.id) next.approver = a.approver;
+        }
+        if (a.shift) next.shift = a.shift;
+        if (wfh) next.wfhDays = wfh;
+        n++;
+        return next;
+      });
+      return {
+        data: { ...d, people },
+        message: `${plural(n, "member")} updated.` + (skipped.length ? ` Role not changed for ${skipped.join(", ")} (their allocations don’t fit it).` : ""),
+      };
     }
     case "setHcHistory": {
       // Admin edits a person's headcount tagging: months must be yyyy-mm, teams real teams (or none).

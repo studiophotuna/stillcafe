@@ -4,6 +4,9 @@ import { usePathname, useRouter } from "next/navigation";
 import { useEffect } from "react";
 import { fmtT } from "@/lib/workload/clock";
 import { modeLabel, trPathOf } from "@/lib/workload/constants";
+import { cxQuestions } from "@/lib/workload/engine";
+import { breakFlags } from "@/lib/workload/breaks";
+import { rangeMs, todayRange } from "@/lib/workload/period";
 import { useWorkload } from "@/lib/workload/store";
 import { useUnit } from "@/lib/workload/useUnit";
 import { AppFrame, type NavItem } from "./AppFrame";
@@ -17,19 +20,28 @@ const isAdminRoute = (path: string) => path.startsWith("/workload/admin") || pat
 export function Shell({ children }: { children: React.ReactNode }) {
   const { data, now, mode, me, isAdmin, canUpload, isApprover, viewAs, setViewAs, sys, tr, setSys, setTr, setTeam } = useWorkload();
   const otPending = data.activities.filter((a) => a.otStatus === "pending" && a.pid !== me.id).length;
+  // Today's break + lunch over the allowance for members assigned to me (or unassigned).
+  const [d0, d1] = rangeMs(todayRange(now));
+  const brkFlags = isApprover
+    ? breakFlags(data, d0, d1, now).filter((f) => {
+        const ap = data.people.find((p) => p.id === f.pid)?.approver;
+        return f.pid !== me.id && (ap === me.id || ap === undefined);
+      }).length
+    : 0;
   const { trOpts } = useUnit();
   const { org } = data;
   // Teams grouped by tower for the picker.
   const towers = [...new Set(org.teams.map((t) => t.tower))];
   const path = usePathname();
   const router = useRouter();
-  const blocked = (!isAdmin && isAdminRoute(path)) || (!canUpload && path === "/workload/upload") || (!isApprover && path === "/workload/overtime");
+  const blocked = (!isAdmin && isAdminRoute(path)) || (!canUpload && path === "/workload/upload") || (!isApprover && (path === "/workload/overtime" || path === "/workload/breaks"));
 
   useEffect(() => {
     if (blocked) router.replace("/workload");
   }, [blocked, router]);
 
   const openQ = data.tasks.filter((t) => t.status === "new").length;
+  const cxQs = isAdmin ? cxQuestions(data).length : 0;
   const nav: NavItem[] = [
     { href: "/workload", icon: "my", label: "My work" },
     { href: "/workload/queue", icon: "queue", label: "Queue", badge: openQ },
@@ -37,6 +49,7 @@ export function Shell({ children }: { children: React.ReactNode }) {
     ...(isAdmin ? [{ href: "/workload/dashboard", icon: "dash" as const, label: "Dashboard" }] : []),
     ...(!isAdmin && canUpload ? [{ href: "/workload/upload", icon: "intake" as const, label: "Upload tasks" }] : []),
     ...(isApprover ? [{ href: "/workload/overtime", icon: "targets" as const, label: "Overtime", badge: otPending }] : []),
+    ...(isApprover ? [{ href: "/workload/breaks", icon: "check" as const, label: "Breaks", badge: brkFlags }] : []),
   ];
   const adminNav: NavItem[] = isAdmin
     ? [
@@ -44,6 +57,8 @@ export function Shell({ children }: { children: React.ReactNode }) {
         { href: "/workload/admin/fields", icon: "fields", label: "Task fields" },
         { href: "/workload/admin/allocation", icon: "rules", label: "Allocation" },
         { href: "/workload/admin/sla", icon: "check", label: "SLA & task types" },
+        { href: "/workload/admin/complexity", icon: "fields", label: "Complexity", badge: cxQs },
+        { href: "/workload/admin/aht", icon: "dash", label: "Handling time" },
         { href: "/workload/admin/targets", icon: "targets", label: "Targets" },
       ]
     : [];

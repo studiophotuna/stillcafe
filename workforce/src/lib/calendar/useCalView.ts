@@ -3,6 +3,7 @@
 import { useMemo } from "react";
 import { isNodeAdmin } from "./org";
 import { isLeader as isLeaderLevel } from "./constants";
+import { canDecide, seesApprovals } from "./approvals";
 import { useCalendar } from "./store";
 import type { CalPerson, OrgNode } from "./types";
 
@@ -73,8 +74,11 @@ export function useCalView() {
     // Management view tower filter ("all" when the saved one isn't in this department).
     const mTowers = O.kids(dept.id, "tower");
     const mTower = mTowers.some((t) => t.id === sel.mTower) ? sel.mTower : "all";
-    const pendingCount = data.requests.filter((q) => q.approvals[bid] === "pending").length;
+    // Team admins and the team's leaders see its approvals; the badge counts what I can decide.
+    const canApprove = seesApprovals(cal, me, bid);
+    const pendingCount = canApprove ? data.requests.filter((q) => q.approvals[bid] === "pending" && canDecide(cal, me, q, bid)).length : 0;
     return {
+      canApprove,
       meP, myBranches, viewBranches, mTowers, mTower, branch, dept, tower, bid, isAdmin, anyAdmin, isLeader, systems, system, trades, trade,
       unitId, unitIds, inUnit, unitLabel, deptList, towerOpts, deptShort: dept.name.split(" (")[0], pendingCount,
       branchOpts: viewBranches.filter((b) => O.up(b.id, "tower")!.id === tower.id),

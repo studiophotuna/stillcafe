@@ -126,3 +126,6 @@ export const primaryTeamOf = (O: Pick<Org, "branchesOf">, p: CalPerson) => {
  */
 export const isNodeAdmin = (O: Pick<Org, "anc" | "by">, id: string, pid: number) =>
   O.anc(id).some((n) => (O.by[n]?.admins ?? []).includes(pid));
+
+/** Who approves a team's requests: its admins and the admins of its tower and department. */
+export const approversOf = (O: Pick<Org, "anc" | "by">, id: string) => [...new Set(O.anc(id).flatMap((n) => O.by[n]?.admins ?? []))];

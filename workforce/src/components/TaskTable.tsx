@@ -14,6 +14,9 @@ export function TaskTable({ rows, variant }: { rows: TaskRowVM[]; variant: "mine
   const q = variant === "queue";
   const h = variant === "history";
   const tf = ticketField(data);
+  // Delay remarks column: in the queue whenever the list has overdue tickets; in completed
+  // lists whenever a ticket was resolved late or has remarks.
+  const dl = (q && rows.some((r) => r.dueState === "overdue" || r.delay)) || (h && rows.some((r) => r.delay || !r.onTime));
   return (
     <table className="table" style={{ minWidth: q || h ? 1100 : 760 }}>
       <thead>
@@ -28,10 +31,11 @@ export function TaskTable({ rows, variant }: { rows: TaskRowVM[]; variant: "mine
           {h && <th>Started</th>}
           {h && <th>Finished</th>}
           {h && <th>Worked</th>}
-          {h && <th>On hold</th>}
+          {h && <th>Pending</th>}
           {h && <th>On time</th>}
           {!h && <th>Status</th>}
           {(q || h) && <th>{h ? "Done by" : "Assignee"}</th>}
+          {dl && <th>Delay remarks</th>}
           {!h && <th />}
         </tr>
       </thead>
@@ -78,6 +82,16 @@ export function TaskTable({ rows, variant }: { rows: TaskRowVM[]; variant: "mine
               </td>
             )}
             {(q || h) && <td className="nowrap">{r.assignee}</td>}
+            {dl && (
+              <td style={{ minWidth: 200, maxWidth: 320 }}>
+                {r.delay ? <span className="delay-note">{r.delay}</span> : r.dueState === "overdue" || (h && !r.onTime) ? <span className="muted small" style={{ display: "block" }}>{h ? "None" : "None yet"}</span> : null}
+                {r.canDelay && (
+                  <button className="btn btn-ghost btn-link-sm" onClick={() => setDialog({ kind: "delay", id: r.id })}>
+                    {r.delay ? "Edit" : "Add remarks"}
+                  </button>
+                )}
+              </td>
+            )}
             {!h && (
               <td>
                 {r.action && (

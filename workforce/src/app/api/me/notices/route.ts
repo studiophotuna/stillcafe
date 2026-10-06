@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { authError, requireSession } from "@/lib/auth";
 import { ANNUAL, CODES } from "@/lib/calendar/constants";
-import { isWk } from "@/lib/calendar/dates";
+import { daysBetween, isWk, nextCutoff } from "@/lib/calendar/dates";
 import { Cal, allApproved } from "@/lib/calendar/engine";
 import { getCalendar } from "@/lib/calendar/server";
 import { db, dbConfigured } from "@/lib/db";
@@ -41,7 +41,10 @@ export async function GET() {
     const today = dayKey(now);
     const h = me && c.alive(me, today) ? c.holFor(me, today) : null;
     const holiday = h && !isWk(today) ? { pid: me!.id, date: today, name: h.name, answer: data.overrides[me!.id + "|" + today] ?? null } : null;
-    return NextResponse.json({ leave, ot, holiday, links: { leave: data.links?.bipoLeave ?? "", ot: data.links?.bipoOt ?? "" } });
+    // Payroll cut-off: from 2 days before it until the day itself.
+    const cut = nextCutoff(today, data.links?.payrollDates);
+    const payroll = cut && daysBetween(today, cut) <= 2 ? { date: cut, days: daysBetween(today, cut), note: data.links?.payrollNote ?? "" } : null;
+    return NextResponse.json({ leave, ot, holiday, payroll, links: { leave: data.links?.bipoLeave ?? "", ot: data.links?.bipoOt ?? "" } });
   } catch (e) {
     return authError(e);
   }

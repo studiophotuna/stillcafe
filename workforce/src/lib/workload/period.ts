@@ -69,3 +69,61 @@ export function periodBuckets(kind: PeriodKind, anchor: number): [string, number
   }
   return out;
 }
+
+/** A date range picked by the user: first and last day (yyyy-mm-dd, inclusive), or all dates. */
+export type DateRange = { from: string; to: string } | null;
+
+const dayMs = (k: string) => Date.parse(k + "T00:00:00Z") - TZ_OFFSET_H * H;
+
+/** Today as a range. */
+export const todayRange = (now: number): { from: string; to: string } => ({ from: dayKey(now), to: dayKey(now) });
+
+/** [from, to) timestamps for a range (all dates: ±Infinity). */
+export function rangeMs(r: DateRange): [number, number] {
+  if (!r) return [-Infinity, Infinity];
+  const a = dayMs(r.from);
+  const b = dayMs(r.to < r.from ? r.from : r.to) + 24 * H;
+  return [a, b];
+}
+
+/** "Today · 29 Sep 2026", "28 Sep 2026", "28 Sep – 4 Oct 2026" or "All dates". */
+export function rangeLabel(r: DateRange, now: number): string {
+  if (!r) return "All dates";
+  const a = lbl(dayMs(r.from));
+  if (r.from === r.to || r.to < r.from) return (r.from === dayKey(now) ? "Today · " : "") + `${a.s} ${a.y}`;
+  const b = lbl(dayMs(r.to));
+  return a.y === b.y ? `${a.s} – ${b.s} ${b.y}` : `${a.s} ${a.y} – ${b.s} ${b.y}`;
+}
+
+/** How a range breaks down in charts: by hour (one day), by day (up to about 3 months) or by month. */
+export function rangeGrain(r: DateRange): "hour" | "day" | "month" {
+  const [a, b] = rangeMs(r);
+  const days = Math.round((b - a) / (24 * H));
+  return days <= 1 ? "hour" : days <= 92 ? "day" : "month";
+}
+
+/** Sub-periods of a range: [label, short label, from, to). */
+export function rangeBuckets(r: { from: string; to: string }): [string, string, number, number][] {
+  const [from, to] = rangeMs(r);
+  const grain = rangeGrain(r);
+  const out: [string, string, number, number][] = [];
+  if (grain === "hour") {
+    for (let h = 0; h < 24; h++) out.push([`${String(h).padStart(2, "0")}:00`, String(h).padStart(2, "0"), from + h * H, from + (h + 1) * H]);
+  } else if (grain === "day") {
+    const DOW = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+    const days = (to - from) / (24 * H);
+    for (let t = from; t < to; t += 24 * H) {
+      const x = lbl(t);
+      const dow = DOW[new Date(t + TZ_OFFSET_H * H).getUTCDay()];
+      out.push([`${dow} ${x.s}`, days <= 7 ? dow : days <= 31 ? String(x.d) : `${x.d}/${x.m}`, t, t + 24 * H]);
+    }
+  } else {
+    for (let t = from; t < to; ) {
+      const [a, b] = periodRange("month", t);
+      const x = lbl(a);
+      out.push([`${MON[x.m - 1]} ${x.y}`, MON[x.m - 1], Math.max(a, from), Math.min(b, to)]);
+      t = b;
+    }
+  }
+  return out;
+}
