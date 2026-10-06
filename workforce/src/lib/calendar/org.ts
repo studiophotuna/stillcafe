@@ -150,13 +150,17 @@ export const approversOf = (O: Pick<Org, "anc" | "by"> & Partial<Pick<Org, "role
 export const aboveTeams = (O: Pick<Org, "anc" | "by">, branchIds: string[]) =>
   new Set(branchIds.flatMap((b) => O.anc(b).filter((n) => O.by[n] && (O.by[n].type === "tower" || O.by[n].type === "dept"))));
 
+/** Managers and directors lead a tower or department: they're shown from the tower level up. */
+export const isMgmt = (p: Pick<CalPerson, "level">) => p.level === "manager" || p.level === "director";
+
 /**
- * Who appears in a view of these teams: everyone in them, plus directors and managers
- * allocated to the whole tower or department above them (not when a system or trade is
- * picked, since they aren't in one).
+ * Who appears in a view of these teams. One team: its members, without managers and
+ * directors. All teams of a tower / all towers: everyone in them, plus directors and
+ * managers allocated to the whole tower or department above them.
  */
-export const inViewOf = (O: Org, branchIds: string[], unitIds: string[], filtered: boolean) => {
+export const inViewOf = (O: Org, branchIds: string[], unitIds: string[], filtered: boolean, multi = false) => {
   const above = aboveTeams(O, branchIds);
+  if (!multi) return (p: CalPerson) => !isMgmt(p) && unitIds.some((u) => O.inN(p, u));
   return (p: CalPerson) => unitIds.some((u) => O.inN(p, u)) || (!filtered && p.assign.some((a) => above.has(a)));
 };
 /** Allocated only above the teams (whole tower / department), not in a team itself. */

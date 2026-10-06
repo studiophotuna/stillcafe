@@ -46,7 +46,9 @@ export function useCalView() {
     const towerTeams = viewBranches.filter((b) => O.up(b.id, "tower")!.id === tower.id);
     const deptTeams = viewBranches.filter((b) => O.up(b.id, "dept")!.id === dept.id);
     const span: "team" | "tower" | "dept" =
-      sel.span === "dept" && deptTeams.length > 1 ? "dept" : sel.span && sel.span !== "team" && towerTeams.length > 1 ? "tower" : "team";
+      // Tower and department views also show their managers and directors, so they're
+      // available even with one team.
+      sel.span === "dept" && deptTeams.length > 0 ? "dept" : sel.span && sel.span !== "team" && towerTeams.length > 0 ? "tower" : "team";
     const multi = span !== "team";
     const scopeBranches = span === "dept" ? deptTeams : span === "tower" ? towerTeams : [branch];
     const scopeId = span === "dept" ? dept.id : span === "tower" ? tower.id : bid;
@@ -67,7 +69,7 @@ export function useCalView() {
     const inUnit = (p: CalPerson) => unitIds.some((u) => O.inN(p, u));
     // Members of the teams plus directors / managers allocated to the tower or department above.
     const scopeIds = scopeBranches.map((b) => b.id);
-    const inView = inViewOf(O, scopeIds, unitIds, system !== "all" || trade !== "all");
+    const inView = inViewOf(O, scopeIds, unitIds, system !== "all" || trade !== "all", multi);
     const isAbove = onlyAbove(O, scopeIds);
     const unitLabel = multi
       ? span === "dept"

@@ -237,15 +237,22 @@ describe("role functions across Calendar and Workload", async () => {
     const q = { pid: 5 };
     expect([90, 23, 24].map((x) => canDecide(c, x, q, "rm"))).toEqual([true, true, true]);
     expect(canDecide(c, 27, q, "rm")).toBe(false);
-    // Views: the director shows in the department view and each team view, not when a system is picked.
+    // Views: managers and directors show from the tower level up (all teams of a tower,
+    // all towers of the department), not in a single team, nor when a system is picked.
     const p90 = c.person(90);
-    expect(inViewOf(c.O, ["rm", "cs"], ["rm", "cs"], false)(p90)).toBe(true);
-    expect(inViewOf(c.O, ["rm"], ["rm"], false)(p90)).toBe(true);
+    expect(inViewOf(c.O, ["rm", "cs"], ["rm", "cs"], false, true)(p90)).toBe(true);
+    expect(inViewOf(c.O, ["rm"], ["rm"], false)(p90)).toBe(false);
     expect(inViewOf(c.O, ["rm"], ["gpm"], true)(p90)).toBe(false);
-    // The tower manager allocated to the whole tower shows in its team, not in another tower's.
+    // The tower manager allocated to the whole tower shows in its tower's view, not another tower's, nor a team's.
     const mgr = { ...c.person(23), assign: ["t_rm"] };
-    expect(inViewOf(c.O, ["rm"], ["rm"], false)(mgr)).toBe(true);
-    expect(inViewOf(c.O, ["cs"], ["cs"], false)(mgr)).toBe(false);
+    expect(inViewOf(c.O, ["rm"], ["rm"], false, true)(mgr)).toBe(true);
+    expect(inViewOf(c.O, ["cs"], ["cs"], false, true)(mgr)).toBe(false);
+    expect(inViewOf(c.O, ["rm"], ["rm"], false)(mgr)).toBe(false);
+    // Allocated to the team itself: still only from the tower level up; leads and members show in the team.
+    expect(inViewOf(c.O, ["rm"], ["rm"], false)(c.person(23))).toBe(false);
+    expect(inViewOf(c.O, ["rm"], ["rm"], false)(c.person(ANA))).toBe(true);
+    const lead = c.d.people.find((p) => p.level === "lead" && c.O.inN(p, "rm"))!;
+    expect(inViewOf(c.O, ["rm"], ["rm"], false)(lead)).toBe(true);
   });
 });
 
