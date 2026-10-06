@@ -960,14 +960,40 @@ describe("complexity", async () => {
     const d = data([slow, ok, fast], cxs());
     expect(E.cxCheck(d, slow)).toMatchObject({ expMs: 90 * M, actMs: 4 * H, flag: "slow" });
     expect(E.cxCheck(d, ok)!.flag).toBeNull();
-    // 2 h expected, done in 10 min: 1200% productivity, flagged as very fast (default 200%).
-    expect(E.cxCheck(d, fast)).toMatchObject({ pct: 1200, flag: "fast" });
-    expect(E.cxCheck(d, ok)!.pct).toBe(90);
-    expect(E.cxQuestions(d).map((t) => t.id).sort()).toEqual([slow.id, fast.id].sort());
-    // The threshold is the admin's: 0 turns it off; above the ticket's productivity it isn't flagged.
-    expect(E.cxCheck(data([fast], cxs({ complexity: { on: true, levels, tol: 50, fast: 0 } })), fast)!.flag).toBeNull();
-    expect(E.cxCheck(data([fast], cxs({ complexity: { on: true, levels, tol: 50, fast: 1500 } })), fast)!.flag).toBeNull();
-    expect(E.cxCheck(data([fast], cxs({ complexity: { on: true, levels, tol: 50, fast: 1200 } })), fast)!.flag).toBe("fast");
+    // Done quickly isn't a question by itself: 1 Complex (target 4 a day) is 25% of a day.
+    expect(E.cxCheck(d, fast)!.flag).toBeNull();
+    expect(E.cxOver(d, fast)).toMatchObject({ pct: 25, flag: false });
+    expect(E.cxQuestions(d).map((t) => t.id)).toEqual([slow.id]);
+  });
+
+  it("flags over-productive tickets: more contracts in one ticket than a day's target", () => {
+    const cx3 = (fast?: number) => cxs({ complexity: { on: true, levels: levels.map((l) => (l.id === "complex" ? { ...l, target: 3 } : l)), tol: 50, ...(fast === undefined ? {} : { fast }) } });
+    // 16 Complex when the target is 3 Complex a day: 533% of a day in one ticket.
+    const big = task({ status: "done", assignee: ANA, startedAt: at("09:00"), doneAt: at("17:00"), cx: { complex: 16 }, fields: { contracts: 16 } });
+    const d = data([big], cx3());
+    expect(E.cxOver(d, big)).toEqual({ pct: 533, text: "16 Complex of 3 a day", flag: true });
+    expect(E.cxQuestions(d).map((t) => t.id)).toEqual([big.id]);
+    // Mixed levels add up: 6 Simple of 12 + 2 Complex of 3 = 50% + 67% = 117%.
+    expect(E.cxOver(d, { ...big, cx: { simple: 6, complex: 2 } })).toMatchObject({ pct: 117, flag: true });
+    expect(E.cxOver(d, { ...big, cx: { simple: 6, complex: 1 } })).toMatchObject({ pct: 83, flag: false });
+    // The limit is the admin's (default 100%); 0 turns it off.
+    expect(E.cxOver(data([big], cx3(600)), big)!.flag).toBe(false);
+    expect(E.cxOver(data([big], cx3(0)), big)!.flag).toBe(false);
+    // Levels without a target aren't counted; none with a target: no check.
+    const noT = cxs({ complexity: { on: true, levels: levels.map(({ target: _t, ...l }) => l), tol: 50 } });
+    expect(E.cxOver(data([big], noT), big)).toBeNull();
+    // Corrected to the right complexity (2 Complex, 14 Simple = 183%): productivity follows, and
+    // once an admin has checked it, it leaves the list.
+    const fixed = E.reviewCx(d, big.id, 23, at("17:30"), { complex: 2, simple: 14 }).data;
+    expect(get(fixed, big.id)).toMatchObject({ cx: { simple: 14, complex: 2 }, fields: { contracts: 16 }, cxReview: { verdict: "corrected", was: { complex: 16 } } });
+    expect(E.cxOver(fixed, get(fixed, big.id))).toMatchObject({ pct: 183 });
+    expect(E.cxQuestions(fixed)).toEqual([]);
+  });
+
+  it("lets an admin confirm or correct a questioned ticket", () => {
+    const slow = task({ status: "done", assignee: ANA, startedAt: at("09:00"), doneAt: at("13:00"), cx: { simple: 3 }, fields: { contracts: 3 } });
+    const fast = task({ status: "done", assignee: ANA, startedAt: at("15:00"), doneAt: at("15:10"), cx: { complex: 1 }, fields: { contracts: 1 } });
+    const d = data([slow, fast], cxs());
     // Confirm one, correct the other: both leave the list; the correction updates the contracts.
     const c1 = E.reviewCx(d, fast.id, 23, at("16:00")).data;
     expect(get(c1, fast.id).cxReview).toMatchObject({ by: 23, verdict: "ok" });

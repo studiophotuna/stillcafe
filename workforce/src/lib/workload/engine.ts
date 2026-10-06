@@ -1239,17 +1239,9 @@ export interface CxCheck {
   expMs: number;
   /** Time actually worked on the ticket, ms. */
   actMs: number;
-  /** Productivity of the ticket: expected ÷ worked time, %. */
-  pct: number;
-  /**
-   * "slow": took much longer than the tagging suggests (maybe tagged too simple);
-   * "fast": done far quicker than expected (over-productive: check the tagging and details).
-   */
-  flag: "slow" | "fast" | null;
+  /** "slow": took much longer than the tagging suggests (maybe tagged too simple). */
+  flag: "slow" | null;
 }
-
-/** The over-productivity threshold in % (0 = off). */
-export const fastPct = (s: Settings) => Math.max(0, s.complexity?.fast ?? 200);
 
 /** Compare a done ticket's handling time with what its complexity tagging implies (every tagged level needs an average handling time). */
 export function cxCheck(d: WorkloadData, t: Task): CxCheck | null {
@@ -1264,14 +1256,46 @@ export function cxCheck(d: WorkloadData, t: Task): CxCheck | null {
   if (!exp) return null;
   const act = taskWorkMs(d, t, t.doneAt);
   const tol = Math.max(0, d.settings.complexity?.tol ?? 50) / 100;
-  const pct = act > 0 ? Math.round((exp / act) * 100) : 0;
-  const fast = fastPct(d.settings);
-  return { expMs: exp, actMs: act, pct, flag: act > exp * (1 + tol) ? "slow" : fast > 0 && act > 0 && pct >= fast ? "fast" : null };
+  return { expMs: exp, actMs: act, flag: act > exp * (1 + tol) ? "slow" : null };
 }
 
-/** Done tickets whose handling time doesn't match their complexity and that no admin has checked yet. */
+/** The over-productivity threshold: % of a day's target in one ticket (0 = off). Default 100. */
+export const fastPct = (s: Settings) => Math.max(0, s.complexity?.fast ?? 100);
+
+export interface CxOver {
+  /** The ticket's contracts as a share of a day's target, %: each level's count ÷ its daily target. */
+  pct: number;
+  /** Per level, e.g. "16 Complex of 3 a day". */
+  text: string;
+  /** At or above the threshold: maybe not all of them are that complex. */
+  flag: boolean;
+}
+
+/**
+ * Over-productive: one ticket's tagged contracts against the levels' daily targets, e.g.
+ * 16 Complex when the target is 3 Complex a day = 533% of a day in one ticket. Levels
+ * without a target aren't counted.
+ */
+export function cxOver(d: Pick<WorkloadData, "settings">, t: Task): CxOver | null {
+  const levels = cxLevels(d.settings);
+  if (!levels.length || !t.cx || t.status !== "done") return null;
+  let share = 0;
+  const parts: string[] = [];
+  for (const l of levels) {
+    const n = t.cx[l.id] ?? 0;
+    if (!n || !((l.target ?? 0) > 0)) continue;
+    share += n / l.target!;
+    parts.push(`${n} ${l.name} of ${l.target} a day`);
+  }
+  if (!parts.length) return null;
+  const pct = Math.round(share * 100);
+  const lim = fastPct(d.settings);
+  return { pct, text: parts.join(" · "), flag: lim > 0 && pct >= lim };
+}
+
+/** Done tickets whose handling time doesn't match their complexity, or over-productive ones, that no admin has checked yet. */
 export const cxQuestions = (d: WorkloadData) =>
-  d.tasks.filter((t) => t.status === "done" && !t.cxReview && cxCheck(d, t)?.flag).sort((a, b) => (b.doneAt ?? 0) - (a.doneAt ?? 0));
+  d.tasks.filter((t) => t.status === "done" && !t.cxReview && (cxCheck(d, t)?.flag || cxOver(d, t)?.flag)).sort((a, b) => (b.doneAt ?? 0) - (a.doneAt ?? 0));
 
 /**
  * Admin correction of a resolved ticket's details (e.g. one flagged as over-productive):

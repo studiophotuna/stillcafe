@@ -2,7 +2,7 @@
 import { H, dur, fmtS, fmtT } from "./clock";
 import { AV, PR, ST, trPathOf } from "./constants";
 import type { Action } from "./actions";
-import { canClaim, canTake, cxCheck, cxOn, cxText, due, holdPeriods, isBusy, isPaused, overdueMs, personOf, slaOf, slaText, taskTypeOf, waitingMs, taskWorkMs, ticketOf, type WorkloadData } from "./engine";
+import { canClaim, canTake, cxCheck, cxOver, cxOn, cxText, due, holdPeriods, isBusy, isPaused, overdueMs, personOf, slaOf, slaText, taskTypeOf, waitingMs, taskWorkMs, ticketOf, type WorkloadData } from "./engine";
 import type { Task } from "./types";
 
 export interface RowAction {
@@ -178,7 +178,9 @@ export function assignOptions(d: WorkloadData, t: Task) {
 function cxRows(d: WorkloadData, t: Task) {
   if (!cxOn(d.settings) || !t.cx) return [];
   const chk = cxCheck(d, t);
+  const over = cxOver(d, t);
   const rows = [{ label: "Complexity", value: cxText(d.settings, t.cx) }];
+  if (over) rows.push({ label: "Against target", value: `${over.pct}% of a day’s target (${over.text})${over.flag ? " · over the limit: maybe not all that complex" : ""}` });
   if (chk)
     rows.push({
       label: "Handling time",

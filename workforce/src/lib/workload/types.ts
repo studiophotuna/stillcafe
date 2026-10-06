@@ -158,8 +158,9 @@ export interface Complexity {
   /** How far (in %) the handling time may differ from the expected time before it's questioned. Default 50. */
   tol?: number;
   /**
-   * Over-productivity: flag a ticket when its productivity (expected ÷ worked time) reaches
-   * this % or more, e.g. 200 = done in half the expected time or less. Default 200; 0 = off.
+   * Over-productivity: flag a ticket when its contracts reach this % of a day's target or
+   * more (each level's count ÷ its daily target), e.g. 16 Complex at 3 a day = 533%.
+   * Default 100 (one ticket worth a full day); 0 = off.
    */
   fast?: number;
   /** Number field set to the total contracts (e.g. "No. of contracts"); default: the productivity field when it's a number. "" = none. */
