@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { Modal } from "@/components/Dialogs";
+import { MoreMenu } from "@/components/MoreMenu";
 import { Blueprint, Icon } from "@/components/ui";
 import { LAW, LEVELS } from "@/lib/calendar/constants";
 import { leadersOf } from "@/lib/calendar/approvals";
@@ -224,34 +225,19 @@ export default function MembersPage() {
                           <button className="btn btn-ghost" onClick={() => openFor(p, "member")}>
                             Edit
                           </button>
-                          <button className="btn btn-ghost" onClick={() => openFor(p, "resign")}>
-                            {p.resign ? "Edit resignation" : "Resignation"}
-                          </button>
-                          {logins && !gone && p.id !== s.me && (
-                            <button className="btn btn-ghost" disabled={busy === p.id} onClick={() => resetPw(p.id)}>
-                              {logins[p.id] ? "Reset password" : "Create sign-in"}
-                            </button>
-                          )}
-                          {logins && gone && logins[p.id] && (
-                            <button className="btn btn-ghost" disabled={busy === p.id} onClick={() => resetPw(p.id, true)}>
-                              Remove sign-in
-                            </button>
-                          )}
-                          {!above(p) && !v.multi && p.assign.some((a) => !O.anc(a).includes(v.bid)) && (
-                            <button
-                              className="btn btn-ghost"
-                              style={{ color: "var(--color-neutral-700)" }}
-                              title={`Take ${p.name} out of ${v.branch.name}; their other teams stay`}
-                              onClick={() => s.run({ type: "removeFromTeam", pid: p.id, bid: v.bid })}
-                            >
-                              Remove from team
-                            </button>
-                          )}
-                          {canDelete(p) && (
-                            <button className="btn btn-ghost" style={{ color: "#b3261e" }} onClick={() => setDel(p)}>
-                              Delete
-                            </button>
-                          )}
+                          <MoreMenu
+                            items={[
+                              { label: p.resign ? "Edit resignation" : "Resignation", onClick: () => openFor(p, "resign") },
+                              ...(logins && !gone && p.id !== s.me
+                                ? [{ label: logins[p.id] ? "Reset password" : "Create sign-in", disabled: busy === p.id, onClick: () => resetPw(p.id) }]
+                                : []),
+                              ...(logins && gone && logins[p.id] ? [{ label: "Remove sign-in", disabled: busy === p.id, onClick: () => resetPw(p.id, true) }] : []),
+                              ...(!above(p) && !v.multi && p.assign.some((a) => !O.anc(a).includes(v.bid))
+                                ? [{ label: `Remove from ${v.branch.name}`, onClick: () => s.run({ type: "removeFromTeam", pid: p.id, bid: v.bid }) }]
+                                : []),
+                              ...(canDelete(p) ? [{ label: "Delete member…", danger: true, onClick: () => setDel(p) }] : []),
+                            ]}
+                          />
                         </>
                       )}
                     </div>

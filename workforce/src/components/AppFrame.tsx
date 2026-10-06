@@ -6,7 +6,7 @@ import type { ReactNode } from "react";
 import { signOut } from "@/lib/session";
 import { BipoNotice, HolidayPrompt, PayrollNotice, QuickLinks } from "./AppExtras";
 import type { ViewAs } from "@/lib/workload/types";
-import type { NavSection } from "./adminNav";
+import { sectionOf, type NavSection } from "./adminNav";
 import { Blueprint, Icon, type IconName } from "./ui";
 
 export interface NavItem {
@@ -51,6 +51,8 @@ export function AppFrame({
   overlay?: ReactNode;
 }) {
   const path = usePathname();
+  // The admin section of this page: its pages show as tabs above it.
+  const here = module === "admin" ? sectionOf(admin.sections, path) : undefined;
   const adminBadge = admin.sections.reduce((a, sec) => a + sec.items.reduce((b, n) => b + (n.badge ?? 0), 0), 0);
   const initials = user.name
     .split(" ")
@@ -90,12 +92,20 @@ export function AppFrame({
           </div>
           {module !== "admin" && top}
           {module === "admin" ? (
-            admin.sections.map((sec) => (
-              <nav key={sec.title} aria-label={sec.title} className="side-nav">
-                <span className="side-nav-label">{sec.title}</span>
-                {sec.items.map(item)}
-              </nav>
-            ))
+            <nav aria-label="Admin" className="side-nav">
+              {item({ href: "/calendar/admin", icon: "dash", label: "Overview" })}
+              {admin.sections.map((sec) => {
+                const on = sec === here;
+                const badge = sec.items.reduce((a, n) => a + (n.badge ?? 0), 0);
+                return (
+                  <Link key={sec.title} href={sec.items[0].href} className="nav-item" aria-current={on ? "page" : undefined}>
+                    <Icon name={sec.icon ?? sec.items[0].icon} />
+                    <span>{sec.title}</span>
+                    {!!badge && <span className="tag tag-accent">{badge}</span>}
+                  </Link>
+                );
+              })}
+            </nav>
           ) : (
             <nav aria-label="Main" className="side-nav">
               {nav.map(item)}
@@ -131,7 +141,19 @@ export function AppFrame({
           <QuickLinks />
           {banner}
           {filterBar && <div className="filterbar">{filterBar}</div>}
-          <main className="page">{children}</main>
+          <main className="page">
+            {here && here.items.length > 1 && (
+              <nav className="admin-tabs" aria-label={here.title}>
+                {here.items.map((n) => (
+                  <Link key={n.href} href={n.href} aria-current={n.href === path ? "page" : undefined}>
+                    {n.label}
+                    {!!n.badge && <span className="tag tag-accent">{n.badge}</span>}
+                  </Link>
+                ))}
+              </nav>
+            )}
+            {children}
+          </main>
         </div>
       </div>
       {overlay}

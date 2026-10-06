@@ -2,7 +2,6 @@
 
 import Link from "next/link";
 import { useState } from "react";
-import { Seg } from "@/components/calendar/bits";
 import { adminSections, type AdminFlags } from "@/components/adminNav";
 import { Blueprint, Icon } from "@/components/ui";
 import { useCalView } from "@/lib/calendar/useCalView";
@@ -100,16 +99,14 @@ export default function AdminHome() {
           style={{ width: 280, maxWidth: "100%" }}
         />
         {all.length > 1 && (
-          <Seg
-            name="hub-area"
-            value={area}
-            options={[
-              ["all", "All"],
-              ...all.map((sec): [string, string] => [sec.title, sec.title]),
-            ]}
-            onChange={setArea}
-            style={{ flexWrap: "wrap", maxWidth: "100%" }}
-          />
+          <select className="input" aria-label="Section" value={area} onChange={(e) => setArea(e.target.value)} style={{ width: "auto" }}>
+            <option value="all">All sections</option>
+            {all.map((sec) => (
+              <option key={sec.title} value={sec.title}>
+                {sec.title}
+              </option>
+            ))}
+          </select>
         )}
         <label className="check-row" style={{ alignItems: "center" }}>
           <input

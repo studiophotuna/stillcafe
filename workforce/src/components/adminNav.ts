@@ -20,6 +20,8 @@ export interface AdminFlags {
 
 export interface NavSection {
   title: string;
+  icon?: NavItem["icon"];
+  /** The section's pages, shown as tabs at the top of each of them. */
   items: NavItem[];
 }
 
@@ -32,65 +34,100 @@ export const isAdminPath = (path: string) =>
 /** Whether someone gets the Admin area at all. */
 export const hasAdminArea = (f: AdminFlags) => f.canApprove || f.teamAdmin || f.anyAdmin || f.leader || f.wlAdmin || f.wlApprover;
 
+const when = (on: boolean, items: NavItem[]) => (on ? items : []);
+
+/**
+ * The Admin menu: a few sections, each one entry in the sidebar with its pages as tabs
+ * (e.g. Trackers & reports: OT tracker, KPI tracker, Accuracy log, Reports, Business case).
+ * Only the pages this person may open are listed; empty sections are left out.
+ */
 export function adminSections(f: AdminFlags): NavSection[] {
   const b = f.badges ?? {};
-  const people: NavItem[] = [
-    { href: "/calendar/admin", icon: "dash", label: "Overview" },
-    ...(f.canApprove || f.teamAdmin ? [{ href: "/calendar/admin/approvals", icon: "approvals" as const, label: "Approvals", badge: b.approvals }] : []),
-    ...(f.teamAdmin
-      ? [
-          { href: "/calendar/admin/members", icon: "members" as const, label: "Members" },
-          { href: "/calendar/admin/schedules", icon: "calendar" as const, label: "Schedules" },
-          { href: "/calendar/admin/settings", icon: "settings" as const, label: "Team settings" },
-        ]
-      : []),
-    ...(f.leader || f.anyAdmin
-      ? [
-          { href: "/calendar/dashboard", icon: "dash" as const, label: "Attendance dashboard" },
-          { href: "/calendar/management", icon: "mgmt" as const, label: "Management calendar" },
-          { href: "/calendar/admin/ot-tracker", icon: "targets" as const, label: "OT tracker" },
-          { href: "/calendar/admin/kpi-tracker", icon: "dash" as const, label: "KPI tracker" },
-          { href: "/calendar/admin/accuracy", icon: "check" as const, label: "Accuracy log" },
-        ]
-      : []),
-    ...(f.anyAdmin
-      ? [
-          { href: "/calendar/admin/reports", icon: "reports" as const, label: "Reports" },
-          { href: "/calendar/admin/headcount", icon: "members" as const, label: "Headcount" },
-          { href: "/calendar/admin/shifts", icon: "shifts" as const, label: "Shifts" },
-          { href: "/calendar/admin/holidays", icon: "holidays" as const, label: "Holidays" },
-          { href: "/calendar/admin/organization", icon: "org" as const, label: "Organization" },
-        ]
-      : []),
+  const lead = f.leader || f.anyAdmin;
+  const sections: NavSection[] = [
+    {
+      title: "Approvals",
+      icon: "approvals",
+      items: [
+        ...when(f.canApprove || f.teamAdmin, [{ href: "/calendar/admin/approvals", icon: "approvals", label: "Leave & schedule", badge: b.approvals }]),
+        ...when(f.wlApprover, [
+          { href: "/workload/overtime", icon: "targets", label: "Overtime", badge: b.overtime },
+          { href: "/workload/breaks", icon: "check", label: "Breaks", badge: b.breaks },
+        ]),
+      ],
+    },
+    {
+      title: "People",
+      icon: "members",
+      items: [
+        ...when(f.teamAdmin, [
+          { href: "/calendar/admin/members", icon: "members", label: "Members" },
+          { href: "/calendar/admin/schedules", icon: "calendar", label: "Schedules" },
+        ]),
+        ...when(f.anyAdmin, [{ href: "/calendar/admin/headcount", icon: "members", label: "Headcount" }]),
+      ],
+    },
+    {
+      title: "Dashboards",
+      icon: "dash",
+      items: [
+        ...when(lead, [
+          { href: "/calendar/dashboard", icon: "dash", label: "Attendance" },
+          { href: "/calendar/management", icon: "mgmt", label: "Management calendar" },
+        ]),
+        ...when(f.wlAdmin, [
+          { href: "/workload/dashboard", icon: "dash", label: "Workload" },
+          { href: "/workload/admin/aht", icon: "dash", label: "Handling time" },
+        ]),
+      ],
+    },
+    {
+      title: "Trackers & reports",
+      icon: "reports",
+      items: [
+        ...when(lead, [
+          { href: "/calendar/admin/ot-tracker", icon: "targets", label: "OT tracker" },
+          { href: "/calendar/admin/kpi-tracker", icon: "dash", label: "KPI tracker" },
+          { href: "/calendar/admin/accuracy", icon: "check", label: "Accuracy log" },
+        ]),
+        ...when(f.anyAdmin, [{ href: "/calendar/admin/reports", icon: "reports", label: "Reports" }]),
+        ...when(f.wlAdmin && !!f.pricing, [{ href: "/workload/admin/business", icon: "reports", label: "Business case" }]),
+      ],
+    },
+    {
+      title: "Work queue",
+      icon: "queue",
+      items: when(f.wlAdmin, [
+        { href: "/workload/admin/queue", icon: "queue", label: "Manage queue" },
+        { href: "/workload/admin/complexity", icon: "fields", label: "Complexity review", badge: b.complexity },
+      ]),
+    },
+    {
+      title: "Team setup",
+      icon: "settings",
+      items: [
+        ...when(f.teamAdmin, [{ href: "/calendar/admin/settings", icon: "settings", label: "Team settings" }]),
+        ...when(f.wlAdmin, [
+          { href: "/workload/admin/allocation", icon: "rules", label: "Allocation" },
+          { href: "/workload/admin/sla", icon: "check", label: "SLA & task types" },
+          { href: "/workload/admin/targets", icon: "targets", label: "Targets" },
+          { href: "/workload/admin/fields", icon: "fields", label: "Task fields" },
+          { href: "/workload/admin/intake", icon: "intake", label: "Intake" },
+        ]),
+      ],
+    },
+    {
+      title: "Organization",
+      icon: "org",
+      items: when(f.anyAdmin, [
+        { href: "/calendar/admin/organization", icon: "org", label: "Structure" },
+        { href: "/calendar/admin/shifts", icon: "shifts", label: "Shifts" },
+        { href: "/calendar/admin/holidays", icon: "holidays", label: "Holidays" },
+      ]),
+    },
   ];
-  const work: NavItem[] = [
-    ...(f.wlAdmin
-      ? [
-          { href: "/workload/dashboard", icon: "dash" as const, label: "Workload dashboard" },
-          { href: "/workload/admin/queue", icon: "queue" as const, label: "Manage queue" },
-        ]
-      : []),
-    ...(f.wlApprover
-      ? [
-          { href: "/workload/overtime", icon: "targets" as const, label: "Overtime", badge: b.overtime },
-          { href: "/workload/breaks", icon: "check" as const, label: "Breaks", badge: b.breaks },
-        ]
-      : []),
-    ...(f.wlAdmin
-      ? [
-          { href: "/workload/admin/aht", icon: "dash" as const, label: "Handling time" },
-          { href: "/workload/admin/complexity", icon: "fields" as const, label: "Complexity", badge: b.complexity },
-          { href: "/workload/admin/intake", icon: "intake" as const, label: "Intake" },
-          { href: "/workload/admin/allocation", icon: "rules" as const, label: "Allocation" },
-          { href: "/workload/admin/sla", icon: "check" as const, label: "SLA & task types" },
-          { href: "/workload/admin/targets", icon: "targets" as const, label: "Targets" },
-          { href: "/workload/admin/fields", icon: "fields" as const, label: "Task fields" },
-        ]
-      : []),
-    ...(f.wlAdmin && f.pricing ? [{ href: "/workload/admin/business", icon: "reports" as const, label: "Business case" }] : []),
-  ];
-  return [
-    { title: "People & calendar", items: people },
-    { title: "Workload", items: work },
-  ].filter((s) => s.items.length);
+  return sections.filter((s) => s.items.length);
 }
+
+/** The section a page belongs to. */
+export const sectionOf = (sections: NavSection[], path: string) => sections.find((s) => s.items.some((n) => n.href === path));
