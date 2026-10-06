@@ -2,7 +2,7 @@
 import { H, dur, fmtS, fmtT } from "./clock";
 import { AV, PR, ST, trPathOf } from "./constants";
 import type { Action } from "./actions";
-import { canClaim, canTake, cxCheck, cxOn, cxText, due, holdPeriods, isBusy, overdueMs, personOf, slaOf, slaText, taskTypeOf, waitingMs, taskWorkMs, ticketOf, type WorkloadData } from "./engine";
+import { canClaim, canTake, cxCheck, cxOn, cxText, due, holdPeriods, isBusy, isPaused, overdueMs, personOf, slaOf, slaText, taskTypeOf, waitingMs, taskWorkMs, ticketOf, type WorkloadData } from "./engine";
 import type { Task } from "./types";
 
 export interface RowAction {
@@ -60,7 +60,7 @@ export function taskRow(d: WorkloadData, t: Task, me: number, isAdmin: boolean, 
     action = s.multiPick
       ? { kind: "pick", id: t.id, label: "Pick", disabled: false }
       : { kind: "take", id: t.id, label: meP.trades.includes(t.trade) ? "Take" : "Help", disabled: busy };
-  else if (t.assignee === me && t.status === "assigned") action = { kind: "start", id: t.id, label: "Start", disabled: busy };
+  else if (t.assignee === me && t.status === "assigned") action = { kind: "start", id: t.id, label: isPaused(t) ? "Resume" : "Start", disabled: busy };
   else if (t.assignee === me && t.status === "on_hold") action = { kind: "resume", id: t.id, label: "Resume", disabled: busy };
   else if (isAdmin && t.status !== "done") action = { kind: "details", id: t.id, label: "Details", disabled: false };
   // Someone else's task in my trades: ask to take it (they decide).
@@ -76,8 +76,8 @@ export function taskRow(d: WorkloadData, t: Task, me: number, isAdmin: boolean, 
     path: trPathOf(d.org, t.trade),
     priority: PR[t.pr][0],
     prCls: PR[t.pr][1],
-    status: ST[t.status][0] + (t.status === "new" && !t.trade ? " · needs trade" : ""),
-    stCls: ST[t.status][1],
+    status: isPaused(t) ? "Paused" : ST[t.status][0] + (t.status === "new" && !t.trade ? " · needs trade" : ""),
+    stCls: isPaused(t) ? "tag-amber" : ST[t.status][1],
     sourceLabel: t.source === "outlook" ? "Outlook" : "Upload",
     typeName: typeNameOf(d, t),
     receivedShort: fmtS(t.received, now),

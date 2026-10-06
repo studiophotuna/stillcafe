@@ -98,6 +98,14 @@ export function holidaysFor(c: Cal, teamId: string): string[] {
 }
 
 /** Team admins of the team plus system admins. */
+/** Pricing (business case) is for managers and above: the team's Workload admins who are managers or directors, and system admins. */
+export function workloadPricers(c: Cal, teamId: string): number[] {
+  return workloadAdmins(c, teamId).filter((id) => {
+    const p = c.people.get(id);
+    return !!p && (p.sysAdmin || p.level === "manager" || p.level === "director");
+  });
+}
+
 export function workloadAdmins(c: Cal, teamId: string): number[] {
   // The team's admins and the admins of its tower and department.
   const ids = new Set<number>(approversOf(c.O, teamId)); // listed admins and admins by role

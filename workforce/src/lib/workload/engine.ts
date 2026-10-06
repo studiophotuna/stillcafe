@@ -33,6 +33,8 @@ export interface WorkloadData {
   holidays: string[];
   /** Business case: the team's billed FTE this year by person and month (Workload admins only). */
   hc?: { year: number; rows: BillRow[] };
+  /** Who may see and set the business case (pricing): Workload admins who are managers or directors, and system admins. */
+  pricers?: number[];
 }
 
 export const personOf = (d: Pick<WorkloadData, "people">, id: number | null) =>
@@ -223,6 +225,8 @@ export function startTask(d: WorkloadData, id: string, pid: number, now: number)
   const take = d.settings.mode === "self" && canTake(d, me, t);
   const mine = t.status === "assigned" && t.assignee === pid;
   if (!take && !mine) return { data: d };
+  // A task the member paused carries on where it stopped (its start time and worked time stay).
+  if (mine && isPaused(t)) return { data: patch(d, id, (x) => ({ ...x, status: "in_progress", history: hist(x, now, "Resumed") })), message: `${id} resumed.` };
   const note = take ? helping(d, me, t) : "";
   return { data: begin(d, id, me, now, note), message: take ? `Started ${id}${note}.` : undefined };
 }
@@ -241,6 +245,40 @@ export function pickTask(d: WorkloadData, id: string, pid: number, now: number):
   return {
     data: patch(d, id, (x) => ({ ...x, status: "assigned", assignee: pid, history: hist(x, now, "Picked by " + me.name + note) })),
     message: `${id} is on your list${note}. Start it from My work.`,
+  };
+}
+
+/**
+ * Pause: in Members pick with several picks allowed, a member can stop the task in progress
+ * (it goes back to their list, its timer stopped) and start another one from their list.
+ */
+export const canPause = (s: Settings) => s.mode === "self" && !!s.multiPick;
+/** Paused by its assignee and not started again since (it's back on their list). */
+/** History entries that end a pause: started or resumed again, done, or moved to someone / the queue. */
+const UNPAUSE = /^(Started|Resumed|Done|Assigned|Returned)|take this task$/;
+export const isPaused = (t: Task) => {
+  if (t.status !== "assigned" || !t.startedAt) return false;
+  const i = t.history.map((h) => h.text).findLastIndex((x) => x.startsWith("Paused"));
+  return i >= 0 && !t.history.slice(i + 1).some((h) => UNPAUSE.test(h.text));
+};
+/** When a task was paused: each "Paused" entry until it's resumed (or moved, or now while still paused). */
+export function pausePeriods(t: Task, now: number): [number, number][] {
+  const out: [number, number][] = [];
+  t.history.forEach((h, i) => {
+    if (!h.text.startsWith("Paused")) return;
+    const next = t.history.slice(i + 1).find((x) => x.at >= h.at && UNPAUSE.test(x.text));
+    out.push([h.at, next ? next.at : (t.doneAt ?? now)]);
+  });
+  return out;
+}
+
+export function pauseTask(d: WorkloadData, id: string, pid: number, now: number): Outcome {
+  const t = d.tasks.find((x) => x.id === id);
+  if (!t || t.assignee !== pid || t.status !== "in_progress") return { data: d };
+  if (!canPause(d.settings)) return { data: d, message: "Pause is for teams where members pick several tasks. Use Pending instead." };
+  return {
+    data: patch(d, id, (x) => ({ ...x, status: "assigned", history: hist(x, now, "Paused") })),
+    message: `${id} paused. Start another task from your list, or resume this one when you’re ready.`,
   };
 }
 
@@ -797,6 +835,8 @@ export interface PersonMetrics {
   tgt: number;
   /** Productive time so far, ms. */
   avail: number;
+  /** Idle so far today, ms: shift time with no task running and not away. */
+  idle: number;
   /** Handle time today, ms (done tasks start→done, plus the current task). */
   handle: number;
   onTime: number;
@@ -847,6 +887,7 @@ export function personMetrics(d: WorkloadData, p: Person, now: number): PersonMe
     prod: exp ? Math.round((share / exp) * 100) : null,
     util: avail ? Math.round((handle / avail) * 100) : null,
     time: done.length ? Math.round((onTime / done.length) * 100) : null,
+    idle: idleToday(d, p, now) + (act.away.idle ?? 0) * M,
   };
 }
 
@@ -864,12 +905,64 @@ export const AWAY: [Exclude<ActivityKind, "end" | "idle">, string][] = [
   ["adhoc", "Ad hoc"],
   ["training", "Training"],
 ];
-export const awayLabel = (k: ActivityKind) => (k === "idle" ? "Idle (paused)" : (AWAY.find(([x]) => x === k)?.[1] ?? "End of day"));
+export const awayLabel = (k: ActivityKind) => (k === "idle" ? "Idle" : (AWAY.find(([x]) => x === k)?.[1] ?? "End of day"));
 /**
- * Pausing a task logs "idle": the task timer stops like any time away, but idle time is not
- * deducted from the time available, so it lowers utilization and shows as idle.
+ * "idle" entries were logged by an earlier Pause button (kept for those records): like idle
+ * time, they aren't deducted from the time available. Idle is now worked out (idleMs).
  */
 export const IDLE: ActivityKind = "idle";
+
+/** Merge intervals and total the part inside [from, to). */
+function coveredMs(iv: [number, number][], from: number, to: number) {
+  const xs = iv.map(([a, b]): [number, number] => [Math.max(a, from), Math.min(b, to)]).filter(([a, b]) => b > a).sort((a, b) => a[0] - b[0]);
+  let tot = 0;
+  let cur = -Infinity;
+  for (const [a, b] of xs) {
+    const s0 = Math.max(a, cur);
+    if (b > s0) tot += b - s0;
+    cur = Math.max(cur, b);
+  }
+  return tot;
+}
+
+/**
+ * Idle: time in [from, to) with no task running for the member (not on hold or paused)
+ * and not logged away (break, lunch, meeting, …). Callers pass the shift window.
+ */
+export function idleMs(d: Pick<WorkloadData, "tasks" | "activities">, pid: number, from: number, to: number, now: number) {
+  to = Math.min(to, now);
+  if (to <= from) return 0;
+  const busy: [number, number][] = [];
+  for (const t of d.tasks) {
+    if (t.assignee !== pid || !t.startedAt || t.startedAt >= to) continue;
+    const end = t.status === "done" ? (t.doneAt ?? now) : t.status === "in_progress" ? now : Math.max(t.startedAt, t.history.at(-1)?.at ?? t.startedAt);
+    // Running = started → done (or now / the last change), minus time on hold or paused.
+    const off: [number, number][] = holdPeriods(t, now).map((p): [number, number] => [p.from, p.to ?? now]).concat(pausePeriods(t, now));
+    let s0 = t.startedAt;
+    for (const [a, b] of off.sort((x, y) => x[0] - y[0])) {
+      if (a > s0) busy.push([s0, Math.min(a, end)]);
+      s0 = Math.max(s0, b);
+    }
+    if (end > s0) busy.push([s0, end]);
+  }
+  for (const a of d.activities) if (a.pid === pid && a.kind !== "end" && a.kind !== IDLE) busy.push([a.start, a.end ?? now]);
+  return Math.max(0, to - from - coveredMs(busy, from, to));
+}
+
+/** Today's shift window for a member: [start, end) around `now`. */
+export function shiftWindow(p: Person, s: Settings, now: number): [number, number] {
+  const e = (localHour(now) - p.shiftStart + 24) % 24;
+  const start = Math.round((now - e * H) / M) * M;
+  return [start, start + s.work.shift * H];
+}
+
+/** Idle so far today: in the shift, until End work; not on leave, holiday duty or a rest day. */
+export function idleToday(d: WorkloadData, p: Person, now: number) {
+  if (p.avail === "leave" || p.otDay || p.onToday === false) return 0;
+  const [a, b] = shiftWindow(p, d.settings, now);
+  const end = endedToday(d, p.id, now);
+  return idleMs(d, p.id, a, end ? Math.min(b, end.start) : b, now);
+}
 
 const sameDay = (a: number, b: number) => dayKey(a) === dayKey(b);
 /** The member's ongoing away entry, if any. */
@@ -894,8 +987,8 @@ const newActivity = (pid: number, kind: ActivityKind, now: number, extra: Partia
 
 /** Go on a break / lunch / meeting / ad hoc / training (ends any other one). A task in progress keeps running but the time away isn't counted on it. */
 export function startAway(d: WorkloadData, pid: number, kind: ActivityKind, now: number): Outcome {
-  if (kind === "end" || (kind !== IDLE && !AWAY.some(([k]) => k === kind)) || !personOf(d, pid)) return { data: d };
-  if (kind === IDLE && !isBusy(d.tasks, pid)) return { data: d, message: "There’s no task in progress to pause." };
+  // Idle isn't logged by hand: it's the shift time with no task running (see idleMs).
+  if (kind === "end" || !AWAY.some(([k]) => k === kind) || !personOf(d, pid)) return { data: d };
   if (endedToday(d, pid, now)) return { data: d, message: "You’ve ended work for today." };
   const cur = currentAway(d, pid);
   if (cur?.kind === kind) return { data: d };
@@ -1233,7 +1326,7 @@ export function taskWorkMs(d: WorkloadData, t: Task, now: number) {
   const from = t.startedAt;
   const to = t.doneAt ?? now;
   // Excluded time: hold periods plus the assignee's breaks etc., merged so overlaps count once.
-  const ex: [number, number][] = holdPeriods(t, now).map((p) => [p.from, p.to ?? now]);
+  const ex: [number, number][] = holdPeriods(t, now).map((p): [number, number] => [p.from, p.to ?? now]).concat(pausePeriods(t, now));
   for (const a of d.activities) if (a.pid === t.assignee && a.kind !== "end") ex.push([a.start, a.end ?? now]);
   ex.sort((a, b) => a[0] - b[0]);
   let off = 0;

@@ -26,6 +26,7 @@ import {
   setTrade,
   startTask,
   pickTask,
+  pauseTask,
   claimTask,
   answerClaim,
   cancelClaim,
@@ -41,6 +42,7 @@ export type Action =
   | { type: "startWork"; pid: number; assist?: boolean }
   | { type: "startTask"; id: string; pid: number }
   | { type: "pickTask"; id: string; pid: number }
+  | { type: "pauseTask"; id: string; pid: number }
   | { type: "claimTask"; id: string; pid: number }
   | { type: "answerClaim"; id: string; ok: boolean; pid: number }
   | { type: "cancelClaim"; id: string; pid: number }
@@ -74,6 +76,7 @@ export function applyAction(d: WorkloadData, a: Action, now: number): Outcome {
   switch (a.type) {
     case "startWork": return startWork(d, a.pid, now, !!a.assist);
     case "startTask": return startTask(d, a.id, a.pid, now);
+    case "pauseTask": return pauseTask(d, a.id, a.pid, now);
     case "pickTask": return pickTask(d, a.id, a.pid, now);
     case "claimTask": return claimTask(d, a.id, a.pid, now);
     case "answerClaim": return answerClaim(d, a.id, a.ok, a.pid, now);

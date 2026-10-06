@@ -28,10 +28,10 @@ const ROUTES: { href: string; access: Access }[] = [
 ];
 
 /** Views that show the Department › Tower › Team › System › Trade bar. */
-const UNIT_BAR = ["/calendar", "/calendar/management", "/calendar/dashboard", "/calendar/bcp", "/calendar/admin/approvals", "/calendar/admin/members", "/calendar/admin/schedules", "/calendar/admin/settings"];
+const UNIT_BAR = ["/calendar", "/calendar/admin", "/calendar/management", "/calendar/dashboard", "/calendar/bcp", "/calendar/admin/approvals", "/calendar/admin/members", "/calendar/admin/schedules", "/calendar/admin/settings"];
 const SUB_SEL = ["/calendar", "/calendar/admin/members", "/calendar/admin/schedules", "/calendar/dashboard"];
 /** Views that can show every team in a tower or department ("All towers" / "All teams"). */
-const MULTI = ["/calendar", "/calendar/dashboard", "/calendar/admin/approvals", "/calendar/admin/members", "/calendar/admin/schedules"];
+const MULTI = ["/calendar", "/calendar/admin", "/calendar/dashboard", "/calendar/admin/approvals", "/calendar/admin/members", "/calendar/admin/schedules"];
 
 export function CalShell({ children }: { children: React.ReactNode }) {
   const s = useCalendar();
@@ -48,6 +48,7 @@ export function CalShell({ children }: { children: React.ReactNode }) {
     leader: v.isLeader,
     wlAdmin: v.anyAdmin,
     wlApprover: v.isLeader || v.anyAdmin,
+    pricing: !!v.meP.sysAdmin || v.meP.level === "manager" || v.meP.level === "director",
     badges: { approvals: v.pendingCount },
   };
   const allowed = (a: Access) =>

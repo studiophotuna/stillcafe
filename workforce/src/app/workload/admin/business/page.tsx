@@ -5,6 +5,7 @@ import { useState } from "react";
 import { Seg } from "@/components/calendar/bits";
 import { Blueprint, Icon, Kpi, PageHead } from "@/components/ui";
 import {
+  canPrice,
   ROLE_NAME,
   ROLE_ORDER,
   STANDARD,
@@ -41,7 +42,7 @@ const monName = (ym: string) =>
  * type), month by month. The team's billing mode says which one it bills on.
  */
 export default function BusinessCasePage() {
-  const { data, run, now, toast } = useWorkload();
+  const { data, run, now, toast, me } = useWorkload();
   const b = billingOf(data);
   const set = (patch: Partial<Billing>) =>
     run({ type: "setSettings", patch: { billing: { ...b, ...patch } } });
@@ -51,6 +52,7 @@ export default function BusinessCasePage() {
     year === Number(today.slice(0, 4)) ? Number(today.slice(5, 7)) : 12;
   const bc = businessCase(data, year, upTo);
   const [open, setOpen] = useState<string | null>(null);
+  if (!canPrice(data, me.id)) return null;
   const money = (n: number, dp = 2) =>
     `${n < -0.0049 ? "−" : ""}${b.currency} ${Math.abs(n).toLocaleString("en-US", { minimumFractionDigits: dp, maximumFractionDigits: dp })}`;
   const big = (n: number, sign = false) => (
@@ -192,7 +194,7 @@ export default function BusinessCasePage() {
             <Link href="/calendar/admin/headcount">Headcount</Link>) side by
             side with unit pricing (transactions × the agreed price per task
             type). The team bills on the model you choose; the other is shown
-            for comparison. Rates are visible to Workload admins only.
+            for comparison. Rates are visible to managers and directors only.
           </>
         }
       />

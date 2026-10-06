@@ -192,6 +192,8 @@ export interface CalendarData {
   checkins: Record<string, Record<number, Checkin>>;
   logs: NotifLog[];
   seq: number;
+  /** Highest person id ever used, so a deleted person's id is never given to someone new. */
+  pidSeq?: number;
   /** Headcount report: billed FTE overrides, "pid|teamId|yyyy-mm" → value. */
   billing?: Record<string, number>;
   links?: AppLinks;

@@ -13,6 +13,7 @@ import { adminSections, hasAdminArea, isAdminPath, type AdminFlags } from "./adm
 import { AppFrame, type NavItem } from "./AppFrame";
 import { Dialogs, Toasts } from "./Dialogs";
 import { AwayPopup, StaleNotice } from "./WorkloadBits";
+import { canPrice } from "@/lib/workload/business";
 
 /** Admin-only routes; members are sent back to My work. */
 const isAdminRoute = (path: string) => path.startsWith("/workload/admin") || path.startsWith("/workload/dashboard");
@@ -35,7 +36,7 @@ export function Shell({ children }: { children: React.ReactNode }) {
   const towers = [...new Set(org.teams.map((t) => t.tower))];
   const path = usePathname();
   const router = useRouter();
-  const blocked = (!isAdmin && isAdminRoute(path)) || (!canUpload && path === "/workload/upload") || (!isApprover && (path === "/workload/overtime" || path === "/workload/breaks"));
+  const blocked = (!isAdmin && isAdminRoute(path)) || (path === "/workload/admin/business" && !(isAdmin && canPrice(data, me.id))) || (!canUpload && path === "/workload/upload") || (!isApprover && (path === "/workload/overtime" || path === "/workload/breaks"));
 
   useEffect(() => {
     if (blocked) router.replace("/workload");
@@ -60,6 +61,7 @@ export function Shell({ children }: { children: React.ReactNode }) {
     leader: isApprover,
     wlAdmin: isAdmin,
     wlApprover: isApprover,
+    pricing: isAdmin && canPrice(data, me.id),
     badges: { overtime: otPending, breaks: brkFlags, complexity: cxQs },
   };
 

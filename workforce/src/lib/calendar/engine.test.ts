@@ -273,6 +273,37 @@ describe("people and org", () => {
     expect(o.message).toMatch(/has no other allocation/);
   });
 
+  it("deletes a member and everything tied to them, and never reuses their id", async () => {
+    const { authorizeCal } = await import("./authz");
+    const d0 = fresh();
+    // Someone in Rate Management only, with requests, an approver role and a billed override.
+    const pid = 15;
+    const d: CalendarData = {
+      ...d0,
+      people: d0.people.map((p) => (p.id === ANA ? { ...p, approver: pid } : p)),
+      overrides: { ...d0.overrides, [`${pid}|2026-09-25`]: "VL", [`${pid + 100}|2026-09-25`]: "VL" },
+      billing: { [`${pid}|rm|2026-09`]: 0.5, [`${ANA}|rm|2026-09`]: 1 },
+      nodes: d0.nodes.map((n) => (n.id === "rm" ? { ...n, admins: [...(n.admins ?? []), pid] } : n)),
+    };
+    const c = new Cal(d, TODAY);
+    expect("action" in authorizeCal({ type: "deleteMember", pid, bid: "rm" }, c, SAM)).toBe(true);
+    expect("error" in authorizeCal({ type: "deleteMember", pid, bid: "rm" }, c, ANA)).toBe(true);
+    expect("error" in authorizeCal({ type: "deleteMember", pid: SAM, bid: "rm" }, c, SAM)).toBe(true); // not themselves
+    const o = run(d, { type: "deleteMember", pid, bid: "rm" }).data;
+    expect(o.people.some((p) => p.id === pid)).toBe(false);
+    expect(o.requests.some((q) => q.pid === pid)).toBe(false);
+    expect(o.overrides[`${pid}|2026-09-25`]).toBeUndefined();
+    expect(o.overrides[`${pid + 100}|2026-09-25`]).toBe("VL");
+    expect(o.billing).toEqual({ [`${ANA}|rm|2026-09`]: 1 });
+    expect(o.nodes.find((n) => n.id === "rm")!.admins).not.toContain(pid);
+    expect(o.people.find((p) => p.id === ANA)!.approver).toBeUndefined();
+    // The highest id deleted: the next person still gets a new one.
+    const top = Math.max(...o.people.map((p) => p.id), pid);
+    const gone = run(o, { type: "deleteMember", pid: top, bid: "rm" }).data;
+    const added = run(gone, { type: "addPerson", details: { name: "New Hire", email: "new.hire2@example.com", hire: TODAY }, level: "member", shift: "D", bid: "rm", assign: ["rm"] });
+    expect(added.newPersonId).toBe(top + 1);
+  });
+
   it("save member updates admins of the team", () => {
     const d = fresh();
     const o = run(d, { type: "saveMember", pid: 15, level: "lead", shift: "M", adminHere: true, bid: "rm", assign: ["lcl"], isNew: false });
@@ -976,5 +1007,20 @@ describe("update several members at once", async () => {
     const c = new Cal(d, TODAY);
     expect("error" in authorizeCal({ type: "bulkMembers", pids: [15, 27] }, c, SAM)).toBe(true); // 27 is in another tower
     expect("error" in authorizeCal({ type: "bulkMembers", pids: [15, 16] }, c, SAM)).toBe(false);
+  });
+});
+
+describe("pricing is for managers and above", async () => {
+  const { workloadPricers, workloadAdmins } = await import("../workload/people");
+  it("lists the team's Workload admins who are managers or directors, and system admins", () => {
+    const c = new Cal(fresh(), TODAY);
+    const pr = workloadPricers(c, "rm");
+    for (const id of pr) {
+      const p = c.person(id);
+      expect(p.sysAdmin || p.level === "manager" || p.level === "director").toBe(true);
+      expect(workloadAdmins(c, "rm")).toContain(id);
+    }
+    expect(pr).toContain(SAM);
+    expect(workloadAdmins(c, "rm").filter((id) => c.person(id).level === "lead").every((id) => !pr.includes(id))).toBe(true);
   });
 });

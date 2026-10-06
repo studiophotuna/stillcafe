@@ -129,17 +129,58 @@ describe("start work (FIFO)", () => {
     expect(get(startWork(d, ANA, NOW).data, a.id).status).toBe("assigned");
   });
 
-  it("pauses a task: the timer stops and the time counts as idle, not away", async () => {
-    const { startAway, backToWork, taskWorkMs, dayActivity } = await import("./engine");
-    const cur = task({ status: "in_progress", assignee: ANA, startedAt: NOW - 60 * M });
-    let d = data([cur]);
-    expect(startAway(data([]), ANA, "idle", NOW).message).toMatch(/no task in progress/);
-    d = startAway(d, ANA, "idle", NOW - 20 * M).data;
-    d = backToWork(d, ANA, NOW - 10 * M).data;
-    expect(taskWorkMs(d, cur, NOW)).toBe(50 * M);
-    const act = dayActivity(d, ANA, NOW);
-    expect(act.away.idle).toBe(10);
-    expect(act.awayMs).toBe(0); // idle stays in the time available
+  it("pauses a task in Members pick with several picks, so the member can work on another", async () => {
+    const { pauseTask, startTask, isPaused, taskWorkMs, startAway } = await import("./engine");
+    const multi = { mode: "self" as const, multiPick: true };
+    const a = task({ status: "in_progress", assignee: ANA, startedAt: NOW - 60 * M, history: [{ at: NOW - 60 * M, text: "Started by Ana" }] });
+    const b = task({ status: "assigned", assignee: ANA });
+    // Only in Members pick with several picks allowed.
+    expect(pauseTask(data([a, b]), a.id, ANA, NOW - 20 * M).message).toMatch(/Use Pending/);
+    expect(pauseTask(data([a, b], { mode: "self" }), a.id, ANA, NOW - 20 * M).message).toMatch(/Use Pending/);
+    let d = pauseTask(data([a, b], multi), a.id, ANA, NOW - 20 * M).data;
+    expect(get(d, a.id)).toMatchObject({ status: "assigned", startedAt: NOW - 60 * M });
+    expect(isPaused(get(d, a.id))).toBe(true);
+    // Not blocked: the other task on the list starts.
+    d = startTask(d, b.id, ANA, NOW - 15 * M).data;
+    expect(get(d, b.id).status).toBe("in_progress");
+    // Back to the paused one later: it carries on with its own start time; the pause isn't worked time.
+    d = { ...d, tasks: d.tasks.map((t) => (t.id === b.id ? { ...t, status: "done" as const, doneAt: NOW - 10 * M } : t)) };
+    d = startTask(d, a.id, ANA, NOW - 10 * M).data;
+    expect(get(d, a.id)).toMatchObject({ status: "in_progress", startedAt: NOW - 60 * M });
+    expect(isPaused(get(d, a.id))).toBe(false);
+    expect(taskWorkMs(d, get(d, a.id), NOW)).toBe(50 * M);
+    // Idle can't be logged by hand any more.
+    expect(startAway(d, ANA, "idle", NOW).data).toBe(d);
+  });
+
+  it("counts idle as shift time with no task running and not away", async () => {
+    const { idleMs, idleToday, startAway, backToWork } = await import("./engine");
+    const at = (hm: string) => Date.parse(`2026-09-24T${hm}:00+08:00`);
+    // Shift 08:00–17:00. Task 08:30–09:30, on hold 09:00–09:10; break 09:40–09:50; nothing since.
+    const t = task({
+      status: "done",
+      assignee: ANA,
+      startedAt: at("08:30"),
+      doneAt: at("09:30"),
+      history: [
+        { at: at("09:00"), text: "On hold: waiting" },
+        { at: at("09:10"), text: "Resumed" },
+      ],
+    });
+    let d = startAway(data([t]), ANA, "break", at("09:40")).data;
+    d = backToWork(d, ANA, at("09:50")).data;
+    // 08:00–10:30 = 150 min; running 50 min; break 10 min → 90 min idle.
+    expect(idleMs(d, ANA, at("08:00"), at("17:00"), at("10:30"))).toBe(90 * M);
+    expect(idleToday(d, d.people.find((p) => p.id === ANA)!, at("10:30"))).toBe(90 * M);
+    // A task in progress isn't idle: 150 min − 50 running − 40 on the current task (09:50–10:30).
+    const run = task({ status: "in_progress", assignee: ANA, startedAt: at("09:50") });
+    expect(idleMs(data([t, run]), ANA, at("08:00"), at("17:00"), at("10:30"))).toBe(60 * M);
+    // A paused task isn't running: paused at 10:00, so 10:00–10:30 is idle too.
+    const paused = task({ status: "assigned", assignee: ANA, startedAt: at("09:50"), history: [{ at: at("10:00"), text: "Paused" }] });
+    expect(idleMs(data([t, paused]), ANA, at("08:00"), at("17:00"), at("10:30"))).toBe(90 * M);
+    // On leave: no idle.
+    const off = { ...data([t]), people: data([]).people.map((p) => (p.id === ANA ? { ...p, avail: "leave" as const } : p)) };
+    expect(idleToday(off, off.people.find((p) => p.id === ANA)!, at("10:30"))).toBe(0);
   });
 
   it("lets a member ask for a teammate's task; the assignee lets them take it or keeps it", async () => {
@@ -1093,7 +1134,7 @@ describe("business case: fixed against unit pricing", async () => {
     task({ status: "new", received: at("09-04"), ttype: "doc", fields: { contracts: 5 } }),
     task({ status: "done", doneAt: at("08-20"), received: at("08-20"), ttype: "gone" }),
   ];
-  const mk = (p = {}) => ({ ...data(tasks, { taskTypes: types, billing: bill(p) }), hc });
+  const mk = (p = {}) => ({ ...data(tasks, { taskTypes: types, billing: bill(p) }), hc, pricers: [23] });
 
   it("prices billed FTE per role per month and transactions per task type", () => {
     const bc = B.businessCase(mk(), 2026, 9);
@@ -1113,7 +1154,7 @@ describe("business case: fixed against unit pricing", async () => {
     expect(field).toMatchObject({ units: 5, unit: 3 * 10 + 2 * 25 });
   });
 
-  it("flags roles with billed FTE but no rate, and keeps rates from admins only", () => {
+  it("flags roles with billed FTE but no rate, and shows pricing to managers and above only", () => {
     const bc = B.businessCase(mk({ roleRates: { member: 2000 } }), 2026, 9);
     expect(bc.unpricedRoles).toEqual(["senior"]);
     const d = mk();
@@ -1122,6 +1163,12 @@ describe("business case: fixed against unit pricing", async () => {
     expect(emp.settings.billing).toBeUndefined();
     expect(emp.hc).toBeUndefined();
     expect(authorizeWl({ type: "setSettings", patch: { billing: bill() } }, d, ANA)).toHaveProperty("error");
+    // A team lead who is a Workload admin runs the team, but pricing is for managers and above.
+    const lead = { ...d, admins: [23, 9] };
+    expect(B.forViewer(lead, 9).settings.billing).toBeUndefined();
+    expect(authorizeWl({ type: "setSettings", patch: { billing: bill() } }, lead, 9)).toEqual({ error: "Only managers and directors can set pricing." });
+    expect(authorizeWl({ type: "setSettings", patch: { staleDays: 3 } }, lead, 9)).toHaveProperty("action");
+    expect(authorizeWl({ type: "setSettings", patch: { billing: bill() } }, lead, 23)).toHaveProperty("action");
   });
 
   it("cleans rates saved from the page", () => {

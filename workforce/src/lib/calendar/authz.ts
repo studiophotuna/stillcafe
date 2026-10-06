@@ -115,6 +115,13 @@ export function authorizeCal(a: CalAction, c: Cal, me: number): { action: CalAct
       return ok(r.teamAdmin(a.bid));
     case "removeFromTeam":
       return ok(r.teamAdmin(a.bid) && a.pid !== me);
+    case "deleteMember": {
+      // Only someone this admin fully manages: every team they're in is one this admin
+      // runs (a team admin can't delete a person other teams still have), never themselves.
+      const p = c.people.get(a.pid);
+      if (!p || a.pid === me || (p.sysAdmin && !r.sys) || !r.adminOf(a.pid)) return NO;
+      return ok(r.sys || c.O.branchesOf(p).every((b) => r.teamAdmin(b.id)));
+    }
     case "addNode":
       return ok(r.anyAdmin, { ...a, actor: me });
     case "importOrg":

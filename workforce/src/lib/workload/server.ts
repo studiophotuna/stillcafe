@@ -8,7 +8,7 @@ import { addDays } from "../calendar/dates";
 import type { Code } from "../calendar/types";
 import { dayKey } from "./clock";
 import { visibleTeams } from "../calendar/authz";
-import { billedFor, holidaysFor, orgFor, peopleFromCalendar, workloadAdmins, workloadApprovers } from "./people";
+import { billedFor, workloadPricers, holidaysFor, orgFor, peopleFromCalendar, workloadAdmins, workloadApprovers } from "./people";
 import { applyAction, type Action } from "./actions";
 import type { WorkloadData } from "./engine";
 import { initialData } from "./seed";
@@ -35,7 +35,7 @@ interface RawSnapshot {
   tasks: RawTask[];
 }
 
-type FromCal = Pick<WorkloadData, "people" | "admins" | "org" | "approvers" | "holidays" | "hc">;
+type FromCal = Pick<WorkloadData, "people" | "admins" | "org" | "approvers" | "holidays" | "hc" | "pricers">;
 type RawActivity = Activity & { version: number };
 /** Activity loaded with the team: recent days (reports) plus anything ongoing or pending. */
 const ACTIVITY_DAYS = 35;
@@ -61,6 +61,7 @@ async function teamContext(token: string, me: number, want?: string | null): Pro
       org: orgFor(c, team, teams),
       holidays: holidaysFor(c, team),
       hc: billedFor(c, team),
+      pricers: workloadPricers(c, team),
     },
   };
 }

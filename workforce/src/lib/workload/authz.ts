@@ -15,11 +15,13 @@ export function authorizeWl(a: Action, d: WorkloadData, me: number): { action: A
   const admin = d.admins.includes(me);
   if (a.type === "importRows") return canUpload(d, me) ? { action: a } : { error: "Ask a Workload admin for upload access." };
   if (a.type === "reviewCx" || a.type === "editDone") return admin ? { action: { ...a, by: me } } : { error: "Only Workload admins can do that." };
+  if (a.type === "setSettings" && "billing" in a.patch && !(d.pricers ?? []).includes(me)) return { error: "Only managers and directors can set pricing." };
   if (ADMIN_ONLY.includes(a.type)) return admin ? { action: a } : { error: "Only Workload admins can do that." };
   switch (a.type) {
     case "startWork":
     case "startTask":
     case "pickTask":
+    case "pauseTask":
     case "claimTask":
     case "answerClaim":
     case "cancelClaim":

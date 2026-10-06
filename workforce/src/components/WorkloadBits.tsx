@@ -38,8 +38,7 @@ export function AwayPopup() {
   if (!away) return null;
   const el = clock(t - away.start);
   const back = () => run({ type: "back", pid: me.id });
-  const idle = away.kind === "idle";
-  const backLabel = idle ? "Resume task" : "Back to work";
+  const backLabel = "Back to work";
   if (small === away.id)
     return (
       <div className="away-chip" role="status">
@@ -63,7 +62,7 @@ export function AwayPopup() {
         <span className="away-time" aria-live="off">
           {el}
         </span>
-        <span className="small">{idle ? "Your task timer is stopped. This time counts as idle." : "Tasks are paused while you’re away."}</span>
+        <span className="small">Tasks are paused while you’re away.</span>
         <Blueprint as="button" className="btn btn-primary btn-40" style={{ padding: "0 22px" }} onClick={back}>
           {backLabel}
         </Blueprint>

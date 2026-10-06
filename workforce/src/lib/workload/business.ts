@@ -152,9 +152,12 @@ export function cleanBilling(b: Billing): Billing {
   };
 }
 
-/** Rates and billed headcount are for Workload admins only; others get the data without them. */
+/** Pricing is for managers and above (see WorkloadData.pricers). */
+export const canPrice = (d: Pick<WorkloadData, "pricers">, me: number) => (d.pricers ?? []).includes(me);
+
+/** Rates and billed headcount are for managers and above; others get the data without them. */
 export function forViewer(d: WorkloadData, me: number): WorkloadData {
-  if (d.admins.includes(me)) return d;
+  if (canPrice(d, me)) return d;
   const { billing: _b, ...settings } = d.settings;
   return { ...d, settings, hc: undefined };
 }

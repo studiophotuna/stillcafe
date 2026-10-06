@@ -46,6 +46,7 @@ export type CalAction =
   | { type: "bulkMembers"; pids: number[]; level?: Level; approver?: number; shift?: string; wfhDays?: number[] }
   | { type: "addPerson"; details: MemberDetails & { name: string; email: string }; level: Level; shift: string; adminHere?: boolean; bid: string; assign: string[] }
   | { type: "removeFromTeam"; pid: number; bid: string }
+  | { type: "deleteMember"; pid: number; bid: string }
   | { type: "setResign"; pid: number; date: string | null }
   | { type: "saveShift"; orig: string | null; rec: Shift }
   | { type: "deleteShift"; id: string }
@@ -525,7 +526,7 @@ function applyInner(d: CalendarData, a: CalAction, today: string, now: number): 
       const cl = cleanDetails(d, { hire: today, entitle: 25, elEnt: 5, carry: null, ytd: 0, ytdEl: 0, wfhDays: [], ...a.details }, null, Number(today.slice(0, 4)));
       if ("error" in cl) return { data: d, error: cl.error };
       if (!cl.patch.name || !cl.patch.email) return { data: d, error: "Enter the person’s name and email." };
-      const id = Math.max(0, ...d.people.map((p) => p.id)) + 1;
+      const id = Math.max(0, d.pidSeq ?? 0, ...d.people.map((p) => p.id)) + 1;
       const person = {
         id, name: cl.patch.name, email: cl.patch.email, level: a.level, assign: [...new Set(a.assign)], pattern: "A" as const,
         shift: d.shifts.some((x) => x.id === a.shift) ? a.shift : d.shifts[0]?.id ?? "D", hire: cl.patch.hire!, resign: null,
@@ -616,6 +617,30 @@ function applyInner(d: CalendarData, a: CalAction, today: string, now: number): 
       return {
         data: { ...d, people: d.people.map((x) => (x.id === a.pid ? fixPrimary(c.O, { ...x, assign: left }) : x)) },
         message: `${p.name} removed from ${c.O.by[a.bid]?.name}. Their other allocations are unchanged.`,
+      };
+    }
+    case "deleteMember": {
+      // Permanently: the person, their requests, schedule entries, check-ins and billed
+      // FTE overrides; they're no longer an admin or anyone's approver. Their id isn't reused.
+      const p = c.people.get(a.pid);
+      if (!p) return { data: d };
+      const mine = (k: string) => k.split("|")[0] === String(a.pid);
+      const drop = <T,>(o: Record<string, T> | undefined) => (o ? Object.fromEntries(Object.entries(o).filter(([k]) => !mine(k))) : o);
+      const { [a.pid]: _r, ...bcpReady } = d.bcpReady;
+      return {
+        data: {
+          ...d,
+          pidSeq: Math.max(d.pidSeq ?? 0, ...d.people.map((x) => x.id)),
+          people: d.people.filter((x) => x.id !== a.pid).map((x) => (x.approver === a.pid ? { ...x, approver: undefined } : x)),
+          nodes: d.nodes.map((n) => (n.admins?.includes(a.pid) ? { ...n, admins: n.admins.filter((x) => x !== a.pid) } : n)),
+          requests: d.requests.filter((q) => q.pid !== a.pid),
+          overrides: drop(d.overrides)!,
+          roster: drop(d.roster)!,
+          billing: drop(d.billing),
+          bcpReady,
+          checkins: Object.fromEntries(Object.entries(d.checkins).map(([ev, m]) => [ev, Object.fromEntries(Object.entries(m).filter(([pid]) => pid !== String(a.pid)))])),
+        },
+        message: `${p.name} deleted.`,
       };
     }
     case "setResign": {

@@ -125,6 +125,7 @@ export default function DashboardPage() {
           ["Average time per task (min)", min(view.team.avgMs)],
           ["Approved overtime (min)", view.team.otMin],
           ["Time away (min)", view.team.awayMin],
+          ["Idle (min)", view.team.idleMin],
           ...metricF.map((f): Row => [f.label, sumF(view.doneTasks, f.key)]),
           ["Exported", fmtT(now)],
         ],
@@ -141,7 +142,7 @@ export default function DashboardPage() {
     sheets.push({
       name: "People",
       rows: [
-        ["Name", "Trades", "Days worked", "Done", weighted ? "Days of target done" : "Target for the days worked", "Productivity %", "Utilization %", "Timeliness %", "Avg time (min)", "Time away (min)", ...metricF.map((f) => f.label), "Overtime approved (min)", "Overtime pending (min)"],
+        ["Name", "Trades", "Days worked", "Done", weighted ? "Days of target done" : "Target for the days worked", "Productivity %", "Utilization %", "Timeliness %", "Avg time (min)", "Time away (min)", "Idle (min)", ...metricF.map((f) => f.label), "Overtime approved (min)", "Overtime pending (min)"],
         ...view.rows.map((r): Row => [
           r.p.name,
           r.p.trades.map((x) => tradeOf(data.org, x)?.name ?? x).join(", "),
@@ -153,6 +154,7 @@ export default function DashboardPage() {
           r.time,
           min(r.avgMs),
           r.awayMin,
+          r.idleMin,
           ...metricF.map((f) => sumF(r.done, f.key)),
           r.otMin,
           r.otPending,
@@ -261,6 +263,7 @@ export default function DashboardPage() {
             <Kpi k="Average time" v={view.team.avgMs === null ? "—" : dur(view.team.avgMs)} m="worked per task" />
             <Kpi k="Overtime" v={view.team.otMin ? fmtMin(view.team.otMin) : "—"} m="approved" />
             <Kpi k="Time away" v={view.team.awayMin ? fmtMin(view.team.awayMin) : "—"} m="breaks, meetings, training…" />
+            <Kpi k="Idle" v={view.team.idleMin ? fmtMin(view.team.idleMin) : "—"} m="in shift, no task running and not away" />
             {metricF.map((f) => (
               <Kpi key={f.key} k={f.label.replace(/^No\. of /, "")} v={sumF(view.doneTasks, f.key)} m="completed" />
             ))}
@@ -493,6 +496,7 @@ export default function DashboardPage() {
                   <th>Timeliness</th>
                   <th>Avg time</th>
                   <th>Time away</th>
+                  <th>Idle</th>
                   {metricF.map((f) => (
                     <th key={f.key}>{f.label.replace(/^No\. of /, "")}</th>
                   ))}
@@ -524,6 +528,7 @@ export default function DashboardPage() {
                       <td>{pct(r.time)}</td>
                       <td>{r.avgMs === null ? "—" : dur(r.avgMs)}</td>
                       <td title={Object.entries(r.away).map(([k, v]) => `${awayLabel(k as never)} ${fmtMin(v)}`).join(", ")}>{r.awayMin ? fmtMin(r.awayMin) : "—"}</td>
+                      <td title="Shift time with no task running and not away">{r.idleMin ? fmtMin(r.idleMin) : "—"}</td>
                       {metricF.map((f) => (
                         <td key={f.key}>{sumF(r.done, f.key)}</td>
                       ))}

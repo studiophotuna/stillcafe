@@ -8,8 +8,8 @@
  *   or minus the planned breaks when none were logged).
  * - Timeliness = tasks finished within SLA ÷ tasks finished.
  */
-import { H, M, dayKey } from "./clock";
-import { dayShare, due, elapsedFrac, otDays, otMinFor, output, targetOf, taskTypeOf, taskWorkMs, type WorkloadData } from "./engine";
+import { H, M, TZ_OFFSET_H, dayKey } from "./clock";
+import { dayShare, due, elapsedFrac, idleMs, otDays, otMinFor, output, targetOf, taskTypeOf, taskWorkMs, type WorkloadData } from "./engine";
 import type { Activity, Person, Task } from "./types";
 
 export interface PeriodInput {
@@ -42,6 +42,8 @@ export interface PersonPeriod {
   avgMs: number | null;
   away: Record<string, number>;
   awayMin: number;
+  /** Idle minutes: shift time on working days with no task running and not away. */
+  idleMin: number;
   otMin: number;
   otPending: number;
 }
@@ -81,6 +83,14 @@ export function personPeriod(d: WorkloadData, p: Person, x: PeriodInput): Person
     if (a.kind !== "idle") awayMs += ms; // idle (paused) time stays in the time available
   }
   const withActs = { ...d, activities: x.activities };
+  // Idle: each working day's shift (to End work today), less time on tasks and away.
+  let idle = 0;
+  for (const k of x.workDays[p.id] ?? []) {
+    if (k > today) continue;
+    const start = Date.parse(`${k}T00:00:00Z`) - TZ_OFFSET_H * H + p.shiftStart * H;
+    const end = k === today && endToday ? Math.min(endToday.start, start + s.work.shift * H) : start + s.work.shift * H;
+    idle += idleMs(withActs, p.id, Math.max(start, x.from), Math.min(end, until), x.now);
+  }
   // Today: overtime so far (or as reported at End work).
   if (x.now >= x.from && x.now < x.to) otD += otDays(s, target, otMinFor(withActs, p, x.now));
   const working = x.now >= x.from && x.now < x.to ? d.tasks.filter((t) => t.assignee === p.id && t.status === "in_progress") : [];
@@ -107,6 +117,8 @@ export function personPeriod(d: WorkloadData, p: Person, x: PeriodInput): Person
     avgMs: timed.length ? timed.reduce((a, t) => a + taskWorkMs(withActs, t, until), 0) / timed.length : null,
     away,
     awayMin: Math.round(awayMs / 60000),
+    // Plus idle logged by the earlier Pause button (those days' tasks counted as running).
+    idleMin: Math.round(idle / 60000) + (away.idle ?? 0),
     otMin,
     otPending,
   };
@@ -122,6 +134,7 @@ export interface TeamPeriod {
   avgMs: number | null;
   otMin: number;
   awayMin: number;
+  idleMin: number;
 }
 
 /** Team totals: each person weighted by their own days and targets. */
@@ -142,6 +155,7 @@ export function teamPeriod(d: WorkloadData, rows: PersonPeriod[], tasks: Task[],
     avgMs: n ? timed.reduce((a, [ms, c]) => a + ms * c, 0) / n : null,
     otMin: sum((r) => r.otMin),
     awayMin: sum((r) => r.awayMin),
+    idleMin: sum((r) => r.idleMin),
   };
 }
 

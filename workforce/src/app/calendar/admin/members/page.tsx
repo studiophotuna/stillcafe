@@ -74,6 +74,10 @@ export default function MembersPage() {
   const [bulk, setBulk] = useState(false);
   const selectable = members.filter(canManage);
   const picked = sel.filter((id) => selectable.some((p) => p.id === id));
+  // Delete: someone in teams this admin runs only (system admins: anyone but themselves).
+  const [del, setDel] = useState<CalPerson | null>(null);
+  const canDelete = (p: CalPerson) =>
+    p.id !== s.me && (!!v.meP.sysAdmin || (!p.sysAdmin && O.branchesOf(p).length > 0 && O.branchesOf(p).every((b) => isNodeAdmin(O, b.id, s.me))));
   return (
     <>
       <div className="page-head-row">
@@ -233,9 +237,19 @@ export default function MembersPage() {
                               Remove sign-in
                             </button>
                           )}
-                          {!above(p) && !v.multi && (
-                            <button className="btn btn-ghost" style={{ color: "var(--color-neutral-700)" }} onClick={() => s.run({ type: "removeFromTeam", pid: p.id, bid: v.bid })}>
-                              Remove
+                          {!above(p) && !v.multi && p.assign.some((a) => !O.anc(a).includes(v.bid)) && (
+                            <button
+                              className="btn btn-ghost"
+                              style={{ color: "var(--color-neutral-700)" }}
+                              title={`Take ${p.name} out of ${v.branch.name}; their other teams stay`}
+                              onClick={() => s.run({ type: "removeFromTeam", pid: p.id, bid: v.bid })}
+                            >
+                              Remove from team
+                            </button>
+                          )}
+                          {canDelete(p) && (
+                            <button className="btn btn-ghost" style={{ color: "#b3261e" }} onClick={() => setDel(p)}>
+                              Delete
                             </button>
                           )}
                         </>
@@ -247,6 +261,7 @@ export default function MembersPage() {
             })}
           </tbody>
         </table>
+        {del && <DeleteDialog p={del} bid={teamOf(del)} onClose={() => setDel(null)} />}
         {bulk && <BulkDialog pids={picked} onClose={() => setBulk(false)} onDone={() => setSel([])} />}
         {!members.length && <div style={{ padding: "24px 14px", color: "var(--color-neutral-700)" }}>{role === "all" && !mq ? "No members here yet." : "No members match."}</div>}
       </Blueprint>
@@ -353,6 +368,50 @@ function BulkDialog({ pids, onClose, onDone }: { pids: number[]; onClose: () => 
           >
             Update {pids.length}
           </Blueprint>
+        </div>
+      </div>
+    </Modal>
+  );
+}
+
+/** Delete a member permanently (after a mistake, e.g. added twice); leavers get a resignation instead. */
+function DeleteDialog({ p, bid, onClose }: { p: CalPerson; bid: string; onClose: () => void }) {
+  const s = useCalendar();
+  const [sure, setSure] = useState(false);
+  const reqs = s.data.requests.filter((q) => q.pid === p.id).length;
+  return (
+    <Modal onClose={onClose} width={520}>
+      <div className="dialog-scroll" style={{ padding: 20, gap: 12 }}>
+        <div className="dialog-title" style={{ fontSize: 24 }}>
+          Delete {p.name}?
+        </div>
+        <span>
+          This permanently removes {p.name} from every team and calendar, with their {reqs} leave request{reqs === 1 ? "" : "s"}, schedule changes, BCP check-ins,
+          billed FTE overrides and sign-in. It can’t be undone.
+        </span>
+        <span className="small">
+          If they’re leaving the company, close this and use <strong>Resignation</strong> instead: that keeps their history in reports and headcount. Workload tasks
+          still assigned to them can be reassigned in Manage queue.
+        </span>
+        <label className="check-row">
+          <input type="checkbox" className="check" checked={sure} onChange={() => setSure(!sure)} />
+          <span>I understand {p.name} and their records will be deleted.</span>
+        </label>
+        <div className="dialog-actions" style={{ gap: 10 }}>
+          <button className="btn btn-secondary btn-40" onClick={onClose}>
+            Cancel
+          </button>
+          <button
+            className="btn btn-primary btn-40"
+            style={{ padding: "0 18px", background: sure ? "#b3261e" : undefined, borderColor: sure ? "#b3261e" : undefined }}
+            disabled={!sure}
+            onClick={() => {
+              s.run({ type: "deleteMember", pid: p.id, bid });
+              onClose();
+            }}
+          >
+            Delete permanently
+          </button>
         </div>
       </div>
     </Modal>

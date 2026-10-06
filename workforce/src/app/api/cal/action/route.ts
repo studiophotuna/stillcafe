@@ -2,13 +2,13 @@ import { NextResponse } from "next/server";
 import { authError, issueLogin, requireSession } from "@/lib/auth";
 import type { CalAction } from "@/lib/calendar/actions";
 import { runCalAction } from "@/lib/calendar/server";
-import { ForbiddenError, dbConfigured } from "@/lib/db";
+import { ForbiddenError, db, dbConfigured } from "@/lib/db";
 
 export const dynamic = "force-dynamic";
 
 const TYPES = new Set<CalAction["type"]>([
   "submitRequest", "decide", "decideMany", "cancelRequest", "setOverride", "holidayWork", "restDayWork", "setHcHistory", "bulkMembers", "setSchedule", "setShiftDay", "teamSettings", "addAdmin", "removeAdmin",
-  "addNode", "importOrg", "setBilled", "setLinks", "renameNode", "deleteNode", "saveMember", "addPerson", "removeFromTeam", "setResign", "saveShift", "deleteShift",
+  "addNode", "importOrg", "setBilled", "setLinks", "renameNode", "deleteNode", "saveMember", "addPerson", "removeFromTeam", "deleteMember", "setResign", "saveShift", "deleteShift",
   "saveHoliday", "deleteHoliday", "toggleReady", "checkin", "startEvent", "closeEvent", "importUpload",
 ]);
 
@@ -37,6 +37,11 @@ export async function POST(req: Request) {
       } catch (e) {
         warnings.push(`${p.name}: ${e instanceof Error && e.message.includes("email_taken") ? "that email already has a sign-in" : "sign-in not created"}`);
       }
+    }
+    // A deleted person's sign-in goes too.
+    if (action.type === "deleteMember" && !out.data.people.some((p) => p.id === action.pid)) {
+      const { error } = await db().rpc("workforce_remove_login", { p_token: s.token, p_person_id: action.pid });
+      if (error) warnings.push("Their sign-in couldn’t be removed. Ask a system admin to remove it.");
     }
     return NextResponse.json({ data: out.data, message: out.message, issued, warnings });
   } catch (e) {
