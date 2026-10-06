@@ -16,7 +16,7 @@ export default function ApprovalsPage() {
   const v = useCalView();
   const c = s.cal;
   // Teams shown (one, or all teams in the tower / department you can see) and, per request,
-  // the team that decides it (the first in the member's profile).
+  // the team that decides it (the member's main team).
   const scope = v.scopeBranches.map((b) => b.id);
   const tb = (q: LeaveRequest) => {
     const d = decidingTeam(c, q);
@@ -30,7 +30,7 @@ export default function ApprovalsPage() {
   const adminsOf = (b: string) => approversOf(c.O, b);
   const allAdmins = [...new Set(scope.flatMap(adminsOf))];
   const assigned = (pid: number) => approverOf(c, pid)?.id;
-  // One approval per request: only the team first in the member's profile lists it.
+  // One approval per request: only the member's main team lists it.
   const waiting = s.data.requests.filter((q) => scope.some((b) => waitsOn(c, q, b))).sort((a, b) => a.start.localeCompare(b.start));
   const [q0, setQ] = useState("");
   const ql = q0.trim().toLowerCase();
@@ -77,7 +77,7 @@ export default function ApprovalsPage() {
         <span>
           {!v.multi && v.branch.mode === "auto"
             ? "This team approves requests automatically, so nothing will wait here. You can change this in Settings."
-            : `Requests from ${v.multi ? "these teams’" : v.branch.name} members wait here until their approver or another leader decides. Team leads and above don’t need approval. Members in several teams are approved once, by the first team in their profile.`}
+            : `Requests from ${v.multi ? "these teams’" : v.branch.name} members wait here until their approver or another leader decides. Team leads and above don’t need approval. Members in several teams or trades are approved once, by their main team; the decision then shows in all their teams.`}
         </span>
       </div>
       <div className="row" style={{ justifyContent: "space-between", alignItems: "flex-end" }}>

@@ -71,8 +71,9 @@ function RequestDialog({ date }: { date?: string }) {
                 : left < 0
                   ? ` · this is more than your ${bal} balance`
                   : ` · ${left} ${bal} days left after this`);
-  // One approval: the first team in the profile.
-  const routing = v.myBranches.slice(0, 1).map((b) => {
+  // One approval: the main team (primary allocation).
+  const mainTeam = v.myBranches.find((b) => b.id === primaryTeamOf(c.O, meP)) ?? v.myBranches[0];
+  const routing = (mainTeam ? [mainTeam] : []).map((b) => {
     const n = s.data.people.filter((x) => x.id !== s.me && c.O.inN(x, b.id) && !(x.resign && x.resign < s.today)).length;
     const admins = (b.admins ?? []).map((i) => c.people.get(i)?.name).filter(Boolean);
     return {
@@ -927,7 +928,7 @@ function MemberDialog({ pid: pid0 }: { pid: number | null }) {
             const cur = teams.includes(primary) ? primary : teams[0];
             return (
               <div className="field" style={{ maxWidth: 420 }}>
-                <label htmlFor="mem-primary">Primary team · counted in headcount</label>
+                <label htmlFor="mem-primary">Main team · approves leave, counted in headcount</label>
                 <select id="mem-primary" className="input" value={cur} onChange={(e) => setPrimary(e.target.value)}>
                   {teams.map((t) => (
                     <option key={t} value={t}>

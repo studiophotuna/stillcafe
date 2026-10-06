@@ -5,7 +5,7 @@
  */
 import { isLeader } from "./constants";
 import type { Cal } from "./engine";
-import { isNodeAdmin } from "./org";
+import { isNodeAdmin, primaryTeamOf } from "./org";
 import type { CalPerson, LeaveRequest } from "./types";
 
 /** A member's assigned approver, if still valid. */
@@ -34,13 +34,16 @@ export function canDecide(c: Cal, me: number, q: Pick<LeaveRequest, "pid">, bid:
 }
 
 /**
- * The one team that decides a request: the first of the member's teams (profile order) that
- * has a say on it. Requests made before this rule may still list several teams.
+ * The one team that decides a request: the member's main team (primary allocation) when it
+ * has a say on it, else the first of their teams that does. Older requests may list several teams.
  */
 export function decidingTeam(c: Cal, q: Pick<LeaveRequest, "pid" | "approvals">): string | undefined {
   const p = c.people.get(q.pid);
   const keys = Object.keys(q.approvals);
-  return (p ? c.O.branchesOf(p).map((b) => b.id).find((id) => keys.includes(id)) : undefined) ?? keys[0];
+  if (!p) return keys[0];
+  const main = primaryTeamOf(c.O, p);
+  if (main && keys.includes(main)) return main;
+  return c.O.branchesOf(p).map((b) => b.id).find((id) => keys.includes(id)) ?? keys[0];
 }
 
 /** Waiting on team `bid`: pending there, and `bid` is the team that decides it. */

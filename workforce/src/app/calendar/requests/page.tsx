@@ -43,7 +43,7 @@ export default function MyRequestsPage() {
     <>
       <div className="page-head">
         <h1>My requests</h1>
-        <span>Balances cover January to December {year}. If you’re in several teams, the first team in your profile approves your requests.</span>
+        <span>Balances cover January to December {year}. If you’re in several teams, your main team approves your requests and the decision shows in all of them.</span>
       </div>
       <div className="grid-kpi" style={{ gridTemplateColumns: "repeat(auto-fit,minmax(220px,1fr))" }}>
         {balances.map((b) => (

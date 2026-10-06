@@ -63,7 +63,7 @@ describe("cell resolution", () => {
 });
 
 describe("requests and approvals", () => {
-  it("routes to the first team in the member's profile only, with notifications", () => {
+  it("routes to one team only (by default the first in the profile), with notifications", () => {
     const d = fresh();
     const o = run(d, { type: "submitRequest", pid: ANA, form: { type: "VL", start: "2026-10-12", end: "2026-10-13", half: "AM", reason: "" }, adminBid: null, actor: ANA });
     const q = o.data.requests[0];
@@ -77,6 +77,24 @@ describe("requests and approvals", () => {
     // Approving at Rate Management decides it everywhere.
     const ok = run(o.data, { type: "decide", rid: q.id, bid: "rm", st: "approved", actor: SAM });
     expect(new Cal(ok.data, TODAY).raw(c.person(ANA), "2026-10-12", "cs")).toMatchObject({ code: "VL", pending: false });
+  });
+
+  it("routes to the main team (primary allocation) and shows the decision in every team", async () => {
+    const { waitsOn, decidingTeam } = await import("./approvals");
+    const d = fresh();
+    d.people = d.people.map((p) => (p.id === ANA ? { ...p, primaryTeam: "cs" } : p)); // Customer Service is her main team
+    d.nodes = d.nodes.map((n) => (n.id === "cs" ? { ...n, mode: "approval" as const } : n));
+    const o = run(d, { type: "submitRequest", pid: ANA, form: { type: "VL", start: "2026-10-12", end: "2026-10-12", half: "AM", reason: "" }, adminBid: null, actor: ANA });
+    const q = o.data.requests[0];
+    expect(q.approvals).toEqual({ cs: "pending" });
+    const c = new Cal(o.data, TODAY);
+    expect([waitsOn(c, q, "cs"), waitsOn(c, q, "rm")]).toEqual([true, false]);
+    expect(c.raw(c.person(ANA), "2026-10-12", "rm")).toMatchObject({ code: "VL", pending: true });
+    const ok = new Cal(run(o.data, { type: "decide", rid: q.id, bid: "cs", st: "approved", actor: SAM }).data, TODAY);
+    expect(ok.raw(ok.person(ANA), "2026-10-12", "rm")).toMatchObject({ code: "VL", pending: false });
+    expect(ok.raw(ok.person(ANA), "2026-10-12", "cs")).toMatchObject({ code: "VL", pending: false });
+    // An older request listing both teams waits at the main team only.
+    expect(decidingTeam(c, { pid: ANA, approvals: { rm: "pending", cs: "pending" } })).toBe("cs");
   });
 
   it("decides several requests at once and lists each request at one team only", async () => {

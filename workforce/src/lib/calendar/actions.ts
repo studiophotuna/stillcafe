@@ -219,9 +219,9 @@ export function createRequest(c: Cal, pid: number, f: RequestForm, adminBid: str
   // Team leads and above don't need approval; members' requests follow the team's setting
   // (approved when an admin enters them on the calendar).
   const lead = isLeader(p.level);
-  // One approval: the first team in the person's profile (admins entering it for their own
-  // team approve it there).
-  const home = (adminBid && c.O.branchesOf(p).find((b) => b.id === adminBid)) || c.O.branchesOf(p)[0];
+  // One approval: the person's main team (primary allocation; admins entering it for their own
+  // team approve it there). Once decided it shows the same in every team they're in.
+  const home = (adminBid && c.O.branchesOf(p).find((b) => b.id === adminBid)) || c.O.by[primaryTeamOf(c.O, p) ?? ""] || c.O.branchesOf(p)[0];
   if (home) approvals[home.id] = lead || home.id === adminBid || home.mode === "auto" ? "approved" : "pending";
   const q: LeaveRequest = {
     id: "LR" + String(d.seq).padStart(6, "0"),
