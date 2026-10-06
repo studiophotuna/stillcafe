@@ -5,6 +5,7 @@
  */
 import { basisField, cxCheck, cxField, cxLevels, cxTotal, personOf, taskWorkMs, type WorkloadData } from "./engine";
 import { trPathOf } from "./constants";
+import { dayKey } from "./clock";
 import { typeLabel } from "./metrics";
 import type { Task } from "./types";
 
@@ -88,3 +89,57 @@ export const perTicket = (r: AhtRow) => (r.tickets ? r.ms / r.tickets : null);
 export const perContract = (r: AhtRow) => (r.contracts ? r.ms / r.contracts : null);
 /** Time worked on checked tickets as % of expected (100 = as expected). */
 export const vsExpected = (r: AhtRow) => (r.expMs ? Math.round((r.checkedMs / r.expMs) * 100) : null);
+
+export interface FteRow {
+  key: string;
+  name: string;
+  /** Tickets received in the period (the demand). */
+  received: number;
+  /** AHT per ticket used, ms (the trade's own, else the team's). */
+  ahtMs: number | null;
+  ahtOwn: boolean;
+  /** Hours of work the demand needs (received × AHT). */
+  workH: number;
+  /** FTE needed: work hours ÷ (productive hours per day × working days). */
+  need: number;
+  /** FTE allocated: members in the trade (someone in two trades counts ½ in each). */
+  have: number;
+}
+
+/**
+ * FTE (full-time equivalent) computation per trade for a period:
+ *   FTE needed = tickets received × AHT per ticket ÷ (productive hours per day × working days)
+ * against the members allocated. Working days are Mon–Fri in the period up to now.
+ */
+export function fteStats(d: WorkloadData, from: number, to: number, now: number) {
+  const st = ahtStats(d, from, to);
+  const end = Math.min(to, now);
+  let days = 0;
+  for (let x = from; x < end; x += 24 * 3_600_000) {
+    const dow = new Date(dayKey(x) + "T00:00:00Z").getUTCDay();
+    if (dow !== 0 && dow !== 6) days++;
+  }
+  days = Math.max(1, days);
+  const prodH = d.settings.work?.prod || 6.8;
+  const teamAht = perTicket(st.total);
+  const rows: FteRow[] = d.org.trades.map((tr) => {
+    const own = st.trades.find((x) => x.key === tr.id);
+    const ahtMs = (own && perTicket(own)) ?? teamAht;
+    const received = d.tasks.filter((t) => t.trade === tr.id && t.received >= from && t.received < to).length;
+    const workH = ahtMs ? (received * ahtMs) / 3_600_000 : 0;
+    const have = d.people.reduce((a, p) => a + (p.trades.includes(tr.id) ? 1 / p.trades.length : 0), 0);
+    return { key: tr.id, name: trPathOf(d.org, tr.id), received, ahtMs, ahtOwn: !!own?.tickets, workH, need: workH / (prodH * days), have };
+  });
+  const used = rows.filter((r) => r.received || r.have);
+  const total: FteRow = {
+    key: "all",
+    name: "All trades",
+    received: used.reduce((a, r) => a + r.received, 0),
+    ahtMs: teamAht,
+    ahtOwn: true,
+    workH: used.reduce((a, r) => a + r.workH, 0),
+    need: used.reduce((a, r) => a + r.need, 0),
+    have: used.reduce((a, r) => a + r.have, 0),
+  };
+  return { rows: used, total, days, prodH };
+}

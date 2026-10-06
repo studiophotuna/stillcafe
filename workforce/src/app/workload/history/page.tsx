@@ -6,7 +6,7 @@ import { Blueprint, PageHead } from "@/components/ui";
 import { DateRangePicker } from "@/components/DateRangePicker";
 import { H, dayKey, dur } from "@/lib/workload/clock";
 import { lc, trPathOf } from "@/lib/workload/constants";
-import { due, holdPeriods, personOf, slaOf, taskWorkMs, ticketField, ticketOf } from "@/lib/workload/engine";
+import { due, holdPeriods, typeScope, personOf, slaOf, taskWorkMs, ticketField, ticketOf } from "@/lib/workload/engine";
 import { rangeLabel, rangeMs, type DateRange } from "@/lib/workload/period";
 import { useWorkload } from "@/lib/workload/store";
 import { taskRow, typeNameOf } from "@/lib/workload/view";
@@ -139,7 +139,7 @@ export default function HistoryPage() {
                 <option value="">Standard requests</option>
                 {types.map((t) => (
                   <option key={t.id} value={t.id}>
-                    {t.name}
+                    {t.name} · {typeScope(data, t)}
                   </option>
                 ))}
               </select>

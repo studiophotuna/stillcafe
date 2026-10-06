@@ -75,7 +75,8 @@ export class Cal {
       (q) =>
         q.start <= d &&
         d <= q.end &&
-        (bid ? !!q.approvals[bid] && q.approvals[bid] !== "declined" : Object.values(q.approvals).some((v) => v !== "declined")),
+        // A team without its own say on the request (only the first team decides) shows the overall status.
+        (bid && q.approvals[bid] ? q.approvals[bid] !== "declined" : Object.values(q.approvals).some((v) => v !== "declined")),
     );
   }
   workdays(a: string, b: string) {
@@ -103,7 +104,7 @@ export class Cal {
       if (q)
         return {
           code: q.type,
-          pending: bid ? q.approvals[bid] === "pending" : anyPending(q),
+          pending: bid && q.approvals[bid] ? q.approvals[bid] === "pending" : anyPending(q),
           req: q,
           wk,
         };

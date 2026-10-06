@@ -18,7 +18,7 @@ export interface Trade {
 }
 
 /** Time away from tasks, or the end of the working day. */
-export type ActivityKind = "break" | "lunch" | "meeting" | "adhoc" | "training" | "end";
+export type ActivityKind = "break" | "lunch" | "meeting" | "adhoc" | "training" | "idle" | "end";
 export type OtStatus = "pending" | "approved" | "declined";
 
 /**

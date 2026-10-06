@@ -33,6 +33,19 @@ export function canDecide(c: Cal, me: number, q: Pick<LeaveRequest, "pid">, bid:
   return leadersOf(c, bid).some((p) => p.id === me);
 }
 
+/**
+ * The one team that decides a request: the first of the member's teams (profile order) that
+ * has a say on it. Requests made before this rule may still list several teams.
+ */
+export function decidingTeam(c: Cal, q: Pick<LeaveRequest, "pid" | "approvals">): string | undefined {
+  const p = c.people.get(q.pid);
+  const keys = Object.keys(q.approvals);
+  return (p ? c.O.branchesOf(p).map((b) => b.id).find((id) => keys.includes(id)) : undefined) ?? keys[0];
+}
+
+/** Waiting on team `bid`: pending there, and `bid` is the team that decides it. */
+export const waitsOn = (c: Cal, q: LeaveRequest, bid: string) => q.approvals[bid] === "pending" && decidingTeam(c, q) === bid;
+
 /** Whether `me` sees a team's approvals: its admins and its leaders. */
 export const seesApprovals = (c: Cal, me: number, bid: string) =>
   !!c.people.get(me)?.sysAdmin || isNodeAdmin(c.O, bid, me) || leadersOf(c, bid).some((p) => p.id === me);

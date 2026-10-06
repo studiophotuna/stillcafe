@@ -78,7 +78,7 @@ export function personPeriod(d: WorkloadData, p: Person, x: PeriodInput): Person
     const ms = clip(a.start, a.end ?? x.now, x.from, until);
     if (!ms) continue;
     away[a.kind] = (away[a.kind] ?? 0) + Math.round(ms / 60000);
-    awayMs += ms;
+    if (a.kind !== "idle") awayMs += ms; // idle (paused) time stays in the time available
   }
   const withActs = { ...d, activities: x.activities };
   // Today: overtime so far (or as reported at End work).

@@ -36,9 +36,10 @@ export default function MyWorkPage() {
         { k: "Utilization", v: pct(mm.util), m: `${dur(mm.handle)} on tasks of ${dur(mm.avail)} available (shift so far minus time away)` },
         {
           k: "Time away",
-          v: fmtMin(Object.values(mm.away).reduce((a, b) => a + b, 0)),
+          v: fmtMin(Object.entries(mm.away).reduce((a, [k, v]) => a + (k === "idle" ? 0 : v), 0)),
           m:
             (Object.entries(mm.away).map(([k, v]) => `${awayLabel(k as never)} ${fmtMin(v)}`).join(" · ") || "nothing logged today") +
+            (mm.away.idle ? " · idle time counts in utilization" : "") +
             (brkOver > 0 ? ` · break + lunch ${fmtMin(brkOver)} over the ${fmtMin(breakAllowance(data))} allowance (your lead is notified)` : ""),
         },
         { k: "Timeliness", v: pct(mm.time), m: `${mm.onTime} of ${mm.done} done within SLA` },
@@ -157,11 +158,12 @@ export default function MyWorkPage() {
           ) : away ? (
             <>
               <span>
-                <strong>On {awayLabel(away.kind).toLowerCase()}</strong> since {fmtT(away.start).split(", ").pop()} · {fmtMin(Math.max(0, Math.round((now - away.start) / 60000)))}
-                {cur ? " · the time isn’t counted on your task" : ""}
+                <strong>{away.kind === "idle" ? "Task paused" : `On ${awayLabel(away.kind).toLowerCase()}`}</strong> since {fmtT(away.start).split(", ").pop()} ·{" "}
+                {fmtMin(Math.max(0, Math.round((now - away.start) / 60000)))}
+                {away.kind === "idle" ? " idle · the task timer is stopped and the time counts as idle" : cur ? " · the time isn’t counted on your task" : ""}
               </span>
               <Blueprint as="button" className="btn btn-primary btn-36" style={{ padding: "0 16px" }} onClick={() => run({ type: "back", pid: me.id })}>
-                Back to work
+                {away.kind === "idle" ? "Resume task" : "Back to work"}
               </Blueprint>
             </>
           ) : (
@@ -193,7 +195,7 @@ export default function MyWorkPage() {
           <div className="current-top">
             <div>
               <div className="task-meta">
-                <span className="tag tag-accent">In progress</span>
+                {away?.kind === "idle" ? <span className="tag tag-amber">Paused</span> : <span className="tag tag-accent">In progress</span>}
                 <span className={"tag " + c.prCls}>{c.priority}</span>
                 <span>
                   {cur.id} · {c.path} · {c.sourceLabel}
@@ -211,6 +213,21 @@ export default function MyWorkPage() {
               )}
             </div>
             <div className="row">
+              {away?.kind === "idle" ? (
+                <button className="btn btn-secondary btn-md" onClick={() => run({ type: "back", pid: me.id })}>
+                  <Icon name="play" size={16} />
+                  Resume
+                </button>
+              ) : (
+                <button
+                  className="btn btn-secondary btn-md"
+                  disabled={!!away}
+                  title="Stop the timer for a moment; the time counts as idle"
+                  onClick={() => run({ type: "away", kind: "idle", pid: me.id })}
+                >
+                  Pause
+                </button>
+              )}
               <button className="btn btn-secondary btn-md" onClick={() => setDialog({ kind: "hold", id: cur.id })}>
                 Pending
               </button>

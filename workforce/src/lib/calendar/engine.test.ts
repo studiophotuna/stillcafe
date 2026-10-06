@@ -4,7 +4,7 @@ import { Cal, evState } from "./engine";
 import { REPORT_TYPES, buildReport, toCsv } from "./reports";
 import { initialCalendar } from "./seed";
 import { checkUpload } from "./uploads";
-import type { CalendarData } from "./types";
+import type { CalendarData, LeaveRequest } from "./types";
 
 const TODAY = "2026-09-24";
 const NOW = Date.parse("2026-09-24T10:30:00+08:00");
@@ -63,16 +63,35 @@ describe("cell resolution", () => {
 });
 
 describe("requests and approvals", () => {
-  it("routes per team: auto-approve vs admin approval, with notifications", () => {
+  it("routes to the first team in the member's profile only, with notifications", () => {
     const d = fresh();
     const o = run(d, { type: "submitRequest", pid: ANA, form: { type: "VL", start: "2026-10-12", end: "2026-10-13", half: "AM", reason: "" }, adminBid: null, actor: ANA });
     const q = o.data.requests[0];
-    expect(q.approvals).toEqual({ rm: "pending", cs: "approved" });
+    expect(q.approvals).toEqual({ rm: "pending" }); // Ana: Rate Management first, then Customer Service
     expect(o.message).toBe("Request sent. The Rate Management admin will get an email to approve it.");
     const newLogs = o.data.logs.slice(0, o.data.logs.length - d.logs.length);
-    expect(newLogs.map((l) => l.subject)).toEqual(
-      expect.arrayContaining([expect.stringMatching(/^Approval needed: Ana Reyes/), expect.stringMatching(/^Your vacation leave was approved · Customer Service/)]),
-    );
+    expect(newLogs.map((l) => l.subject)).toEqual(expect.arrayContaining([expect.stringMatching(/^Approval needed: Ana Reyes/)]));
+    // Her other team shows the request on its calendar with the overall (pending) status.
+    const c = new Cal(o.data, TODAY);
+    expect(c.raw(c.person(ANA), "2026-10-12", "cs")).toMatchObject({ code: "VL", pending: true });
+    // Approving at Rate Management decides it everywhere.
+    const ok = run(o.data, { type: "decide", rid: q.id, bid: "rm", st: "approved", actor: SAM });
+    expect(new Cal(ok.data, TODAY).raw(c.person(ANA), "2026-10-12", "cs")).toMatchObject({ code: "VL", pending: false });
+  });
+
+  it("decides several requests at once and lists each request at one team only", async () => {
+    const { waitsOn } = await import("./approvals");
+    const d = fresh();
+    // An older request still listing both teams waits only at the first one.
+    d.requests = ([{ ...d.requests[0], id: "LRX", pid: ANA, approvals: { rm: "pending" as const, cs: "pending" as const } }] as LeaveRequest[]).concat(d.requests);
+    const c = new Cal(d, TODAY);
+    const q = d.requests[0];
+    expect(waitsOn(c, q, "rm")).toBe(true);
+    expect(waitsOn(c, q, "cs")).toBe(false);
+    const pend = d.requests.filter((x) => x.approvals.rm === "pending").map((x) => x.id);
+    const o = run(d, { type: "decideMany", rids: pend, bid: "rm", st: "approved", actor: SAM });
+    expect(o.message).toMatch(new RegExp(`^Approved ${pend.length} request`));
+    for (const id of pend) expect(Object.values(o.data.requests.find((x) => x.id === id)!.approvals).every((v) => v === "approved")).toBe(true);
   });
 
   it("rejects requests with no working days", () => {
@@ -94,7 +113,7 @@ describe("requests and approvals", () => {
   it("admin cell entry is approved for their team only", () => {
     const d = fresh();
     const o = run(d, { type: "submitRequest", pid: ANA, form: { type: "SL", start: "2026-10-07", end: "2026-10-07", half: "AM", reason: "Entered by Sam" }, adminBid: "rm", actor: SAM });
-    expect(o.data.requests[0].approvals).toEqual({ rm: "approved", cs: "approved" }); // cs is auto
+    expect(o.data.requests[0].approvals).toEqual({ rm: "approved" }); // one approval, by the admin's team
     expect(o.message).toBe("Sick leave recorded for Ana. Notifications sent.");
   });
 });
@@ -786,7 +805,7 @@ describe("approvals by leaders", async () => {
     const lead = run(fresh(), { type: "submitRequest", pid: 24, form, adminBid: null, actor: 24 }).data.requests[0];
     expect(Object.values(lead.approvals).every((x) => x === "approved")).toBe(true); // a team lead in an approval team
     const mem = run(fresh(), { type: "submitRequest", pid: ANA, form, adminBid: null, actor: ANA }).data.requests[0];
-    expect(mem.approvals).toMatchObject({ cs: "approved", rm: "pending" });
+    expect(mem.approvals).toEqual({ rm: "pending" });
   });
   it("the assigned approver and the team's other leaders can decide; nobody decides their own", () => {
     const d = fresh();

@@ -5,7 +5,7 @@ import { AhtPanels, useAht } from "@/components/AhtPanels";
 import { DateRangePicker, useStoredRange } from "@/components/DateRangePicker";
 import { Blueprint, Icon, Kpi, PageHead } from "@/components/ui";
 import { dayKey, dur } from "@/lib/workload/clock";
-import { perContract, perTicket, vsExpected, type AhtRow } from "@/lib/workload/aht";
+import { fteStats, perContract, perTicket, vsExpected, type AhtRow, type FteRow } from "@/lib/workload/aht";
 import { cxOn } from "@/lib/workload/engine";
 import { downloadSheets } from "@/lib/workload/excel";
 import { rangeLabel, rangeMs, todayRange } from "@/lib/workload/period";
@@ -28,6 +28,8 @@ export default function AhtPage() {
   const d = input ? { ...data, activities: input.activities } : data;
   const st = useAht(d, from, Math.min(to, now + 1));
   const on = cxOn(data.settings);
+  const fte = fteStats(d, from, Math.min(to, now + 1), now);
+  const f1 = (n: number) => (Math.round(n * 10) / 10).toFixed(1);
   const label = rangeLabel(r, now);
 
   const download = async () => {
@@ -49,6 +51,13 @@ export default function AhtPage() {
         { name: "Members", rows: [["Member", ...head], ...rows(st.members)] },
         { name: "Trades", rows: [["System › Trade", ...head], ...rows(st.trades)] },
         { name: "Task types", rows: [["Task type", ...head], ...rows(st.types)] },
+        {
+          name: "FTE",
+          rows: [
+            ["System › Trade", "Tickets received", "AHT / ticket (min)", "Work (h)", `FTE needed (${fte.prodH} h × ${fte.days} days)`, "FTE allocated", "Gap (allocated − needed)"],
+            ...fte.rows.concat(fte.total).map((x) => [x.name, x.received, min(x.ahtMs), +x.workH.toFixed(1), +x.need.toFixed(2), +x.have.toFixed(2), +(x.have - x.need).toFixed(2)]),
+          ],
+        },
       ]);
     } catch {
       toast("The export couldn’t be created. Try again.");
@@ -81,6 +90,68 @@ export default function AhtPage() {
         <Kpi k="AHT per contract" v={t(perContract(st.total))} m="time worked ÷ contracts" />
       </div>
       <AhtPanels st={st} />
+      <FteTable rows={fte.rows} total={fte.total} days={fte.days} prodH={fte.prodH} f1={f1} />
     </>
+  );
+}
+
+/** FTE needed per trade from the demand and AHT, against the members allocated. */
+function FteTable({ rows, total, days, prodH, f1 }: { rows: FteRow[]; total: FteRow; days: number; prodH: number; f1: (n: number) => string }) {
+  const row = (x: FteRow, bold = false) => {
+    const gap = x.have - x.need;
+    return (
+      <tr key={x.key} style={bold ? { fontWeight: 600 } : undefined}>
+        <td>{x.name}</td>
+        <td style={{ textAlign: "right" }}>{x.received}</td>
+        <td className="nowrap" style={{ textAlign: "right" }}>
+          {t(x.ahtMs)}
+          {!x.ahtOwn && x.ahtMs !== null && <span className="small"> (team)</span>}
+        </td>
+        <td style={{ textAlign: "right" }}>{f1(x.workH)} h</td>
+        <td style={{ textAlign: "right" }}>{f1(x.need)}</td>
+        <td style={{ textAlign: "right" }}>{f1(x.have)}</td>
+        <td style={{ textAlign: "right", color: gap < -0.05 ? "#b3261e" : gap > 0.05 ? "var(--color-accent-800)" : undefined }}>
+          {gap > 0.05 ? "+" : ""}
+          {f1(gap)}
+        </td>
+      </tr>
+    );
+  };
+  return (
+    <Blueprint as="section" className="panel" style={{ gap: 10 }}>
+      <div className="chart-head">
+        <h2 className="h2">FTE needed</h2>
+        <span className="small">
+          FTE needed = tickets received × AHT per ticket ÷ ({prodH} productive h × {days} working day{days === 1 ? "" : "s"})
+        </span>
+      </div>
+      {rows.length ? (
+        <div className="boxed-scroll">
+          <table className="table">
+            <thead>
+              <tr>
+                <th>System › Trade</th>
+                <th style={{ textAlign: "right" }}>Received</th>
+                <th style={{ textAlign: "right" }}>AHT / ticket</th>
+                <th style={{ textAlign: "right" }}>Work</th>
+                <th style={{ textAlign: "right" }}>FTE needed</th>
+                <th style={{ textAlign: "right" }}>FTE allocated</th>
+                <th style={{ textAlign: "right" }}>Gap</th>
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map((x) => row(x))}
+              {rows.length > 1 && row(total, true)}
+            </tbody>
+          </table>
+        </div>
+      ) : (
+        <span className="small">No tickets received or members allocated in this period.</span>
+      )}
+      <span className="small">
+        Allocated: members in each trade (someone in two trades counts ½ in each). Gap: allocated − needed; red means short of people. Trades with no resolved
+        tickets in the period use the team’s AHT. Productive hours per day come from Targets.
+      </span>
+    </Blueprint>
   );
 }

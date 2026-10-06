@@ -52,9 +52,11 @@ export const fmtS = (ms: number, now = nowMs()) => {
 /** "2h 5m" or "45m" */
 export const dur = (ms: number) => {
   ms = Math.max(0, ms);
-  const h = Math.floor(ms / H);
+  // A day or more reads as days: "1d 1h 47m" rather than "25h 47m".
+  const dd = Math.floor(ms / (24 * H));
+  const h = Math.floor((ms % (24 * H)) / H);
   const m = Math.floor((ms % H) / M);
-  return h ? `${h}h ${m}m` : `${m}m`;
+  return dd ? `${dd}d ${h}h ${m}m` : h ? `${h}h ${m}m` : `${m}m`;
 };
 
 const DAY = 24 * H;

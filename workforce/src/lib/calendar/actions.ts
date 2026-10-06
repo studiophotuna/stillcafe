@@ -25,6 +25,7 @@ export interface RequestForm {
 export type CalAction =
   | { type: "submitRequest"; pid: number; form: RequestForm; adminBid: string | null; actor: number }
   | { type: "decide"; rid: string; bid: string; st: "approved" | "declined"; actor: number }
+  | { type: "decideMany"; rids: string[]; bid: string; st: "approved" | "declined"; actor: number }
   | { type: "cancelRequest"; rid: string; via: "self" | "admin" }
   | { type: "setOverride"; pid: number; date: string; code: Code | null }
   | { type: "setShiftDay"; pid: number; date: string; shift: string }
@@ -155,6 +156,13 @@ const setNode = (d: CalendarData, id: string, patch: Partial<OrgNode>): Calendar
 });
 const plural = (n: number, w: string) => `${n} ${w}${n === 1 ? "" : "s"}`;
 
+/** Record a decision: one approval decides the whole request (any other team still pending follows it). */
+function decideOne(q: LeaveRequest, bid: string, st: "approved" | "declined", actor: number, at: string): LeaveRequest {
+  const approvals = { ...q.approvals };
+  for (const k of Object.keys(approvals)) if (k === bid || approvals[k] === "pending") approvals[k] = st;
+  return { ...q, approvals, decided: { ...(q.decided ?? {}), [bid]: { by: actor, at } } };
+}
+
 /** Create a request with per-team approvals; returns the new data, the request and its notifications. */
 export function createRequest(c: Cal, pid: number, f: RequestForm, adminBid: string | null, now: number) {
   const d = c.d;
@@ -163,9 +171,10 @@ export function createRequest(c: Cal, pid: number, f: RequestForm, adminBid: str
   // Team leads and above don't need approval; members' requests follow the team's setting
   // (approved when an admin enters them on the calendar).
   const lead = isLeader(p.level);
-  c.O.branchesOf(p).forEach((b) => {
-    approvals[b.id] = lead || b.id === adminBid || b.mode === "auto" ? "approved" : "pending";
-  });
+  // One approval: the first team in the person's profile (admins entering it for their own
+  // team approve it there).
+  const home = (adminBid && c.O.branchesOf(p).find((b) => b.id === adminBid)) || c.O.branchesOf(p)[0];
+  if (home) approvals[home.id] = lead || home.id === adminBid || home.mode === "auto" ? "approved" : "pending";
   const q: LeaveRequest = {
     id: "LR" + String(d.seq).padStart(6, "0"),
     pid,
@@ -237,7 +246,7 @@ function applyInner(d: CalendarData, a: CalAction, today: string, now: number): 
     case "decide": {
       const q = d.requests.find((x) => x.id === a.rid);
       if (!q || q.approvals[a.bid] !== "pending") return { data: d };
-      const upd = { ...q, approvals: { ...q.approvals, [a.bid]: a.st }, decided: { ...(q.decided ?? {}), [a.bid]: { by: a.actor, at } } };
+      const upd = decideOne(q, a.bid, a.st, a.actor, at);
       const next: CalendarData = { ...d, requests: d.requests.map((x) => (x.id === q.id ? upd : x)) };
       const ls = logsDecision(new Cal(next, today), upd, a.bid, a.st, at, "admin");
       const p = c.person(q.pid);
@@ -250,6 +259,21 @@ function applyInner(d: CalendarData, a: CalAction, today: string, now: number): 
               (inv ? ` and an Outlook reminder was sent to ${inv.toIds.length} ${c.O.by[a.bid].name} members.` : ".")
             : `Declined. ${first(p.name)} has been emailed.`,
       };
+    }
+    case "decideMany": {
+      // Several requests at once (approvals page selection); each is emailed as usual.
+      let next = d;
+      let n = 0;
+      for (const rid of [...new Set(a.rids)]) {
+        const q = next.requests.find((x) => x.id === rid);
+        if (!q || q.approvals[a.bid] !== "pending") continue;
+        const upd = decideOne(q, a.bid, a.st, a.actor, at);
+        next = { ...next, requests: next.requests.map((x) => (x.id === q.id ? upd : x)) };
+        next = pushLogs(next, logsDecision(new Cal(next, today), upd, a.bid, a.st, at, "admin"));
+        n++;
+      }
+      if (!n) return { data: d, message: "Nothing to decide: those requests were already decided." };
+      return { data: next, message: `${a.st === "approved" ? "Approved" : "Declined"} ${plural(n, "request")}. Each person has been emailed.` };
     }
     case "cancelRequest": {
       const q = d.requests.find((x) => x.id === a.rid);

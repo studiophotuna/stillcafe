@@ -5,7 +5,7 @@ import { Blueprint, Icon, Kpi, PageHead, pct } from "@/components/ui";
 import { DateRangePicker, useStoredRange } from "@/components/DateRangePicker";
 import { H, dayKey, dur, fmtT } from "@/lib/workload/clock";
 import { AV, PR, tradeOf, trPathOf } from "@/lib/workload/constants";
-import { awayLabel, cxCheck, cxOn, cxText, basisUnit, due, fmtMin, isOverdue, slaOf, slaText, taskTypeOf, taskWorkMs, ticketField, ticketOf, typeTargets } from "@/lib/workload/engine";
+import { awayLabel, cxCheck, cxOn, cxText, basisUnit, due, fmtMin, isOverdue, slaOf, slaText, taskTypeOf, taskWorkMs, typeScope, ticketField, ticketOf, typeTargets } from "@/lib/workload/engine";
 import { downloadSheets } from "@/lib/workload/excel";
 import { ahtStats } from "@/lib/workload/aht";
 import { AhtPanels } from "@/components/AhtPanels";
@@ -77,8 +77,13 @@ export default function DashboardPage() {
       };
     });
     const byType = types.length
-      ? [{ id: "", name: "Standard requests", sla: "By priority", target: "Member’s target" }]
-          .concat(types.map((x) => ({ id: x.id, name: x.name, sla: slaText(x.sla), target: x.target ? String(x.target) : "Member’s target" })))
+      ? [{ id: "", name: "Standard requests", scope: "All trades", sla: "By priority", target: "Member’s target" }]
+          .concat(
+            // Only the types used by the trades in view, each with the trades it applies to.
+            types
+              .filter((x) => !x.trades.length || x.trades.some((id) => unitTrades.some((u) => u.id === id)))
+              .map((x) => ({ id: x.id, name: x.name, scope: typeScope(data, x), sla: slaText(x.sla), target: x.target ? String(x.target) : "Member’s target" })),
+          )
           .map((x) => {
             const g = ut.filter((t) => (t.ttype ?? "") === x.id || (x.id === "" && !!t.ttype && !taskTypeOf(s, t)));
             const d = doneIn(g);
@@ -446,6 +451,7 @@ export default function DashboardPage() {
                 <thead>
                   <tr>
                     <th>Task type</th>
+                    <th>Trades</th>
                     <th>SLA</th>
                     <th>Target / day</th>
                     <th>Received</th>
@@ -458,6 +464,7 @@ export default function DashboardPage() {
                   {view.byType.map((b) => (
                     <tr key={b.id || "std"}>
                       <td style={{ fontWeight: 500 }}>{b.name}</td>
+                      <td className="small">{b.scope}</td>
                       <td>{b.sla}</td>
                       <td>{b.target}</td>
                       <td>{b.received}</td>
