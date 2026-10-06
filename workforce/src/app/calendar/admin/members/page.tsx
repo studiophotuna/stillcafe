@@ -88,7 +88,7 @@ export default function MembersPage() {
             <Icon name="upload" size={16} />
             Upload
           </button>
-          <button className="btn btn-secondary btn-36" disabled={v.multi} title={oneTeam} onClick={() => s.setDialog({ kind: "member", pid: null })}>
+          <button className="btn btn-secondary btn-36" onClick={() => s.setDialog({ kind: "member", pid: null })}>
             <Icon name="plus" size={16} />
             Add member
           </button>

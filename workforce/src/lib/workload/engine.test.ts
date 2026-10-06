@@ -163,6 +163,26 @@ describe("start work (FIFO)", () => {
     expect(authorizeWl({ type: "answerClaim", id: t.id, ok: true, pid: mate.id }, d, ANA)).toEqual({ action: { type: "answerClaim", id: t.id, ok: true, pid: ANA } });
   });
 
+  it("takes trade first, then the same system, then other systems", async () => {
+    const { canTake, canClaim, personOf } = await import("./engine");
+    const us = task({ trade: "us" }); // RCM, Ana's system (she works LCL)
+    const eu = task({ trade: "eu" }); // GPM, another system
+    const lcl = task({ trade: "lcl" });
+    const ana = (d: ReturnType<typeof data>) => personOf(d, ANA)!;
+    let d = data([us, eu, lcl], { mode: "self" });
+    expect([lcl, us, eu].map((t) => canTake(d, ana(d), t))).toEqual([true, false, false]); // own trade waiting
+    d = data([us, eu], { mode: "self" });
+    expect([us, eu].map((t) => canTake(d, ana(d), t))).toEqual([true, false]); // own clear: same system first
+    d = data([eu], { mode: "self" });
+    expect(canTake(d, ana(d), eu)).toBe(true); // whole system clear: other systems
+    // Asking to take: a teammate in the same system can ask for an LCL task, another system can't.
+    const held = task({ trade: "us", status: "assigned", assignee: 25 });
+    const heldGpm = task({ trade: "eu", status: "assigned", assignee: 3 });
+    d = data([held, heldGpm], { mode: "self" });
+    expect(canClaim(d, ana(d), held)).toBe(true);
+    expect(canClaim(d, ana(d), heldGpm)).toBe(false);
+  });
+
   it("does not give work to unavailable people unless the team allows it", () => {
     const t = task({ trade: "eu" });
     expect(get(startWork(data([t]), ELI, NOW).data, t.id).status).toBe("new");

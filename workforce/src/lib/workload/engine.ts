@@ -171,11 +171,18 @@ export function assistOffer(d: WorkloadData, me: Person): AssistOffer | undefine
   return { system: h.filter((x) => x.sameSystem).length, systemNames: names, team: h.filter((x) => !x.sameSystem).length };
 }
 
-/** Whether a member may take this waiting task: their own trade, or helping out when their trades are empty. */
+/**
+ * Whether a member may take this waiting task, trade first, then system: their own trades
+ * always; another trade in their system once their trades are clear; another system once
+ * their whole system is clear.
+ */
 export function canTake(d: WorkloadData, me: Person, t: Task) {
   if (t.status !== "new" || !canWork(me, d.settings)) return false;
   if (me.trades.includes(t.trade)) return true;
-  return !!t.trade && me.trades.length > 0 && ownQueue(d, me).length === 0;
+  if (!t.trade || !me.trades.length || ownQueue(d, me).length) return false;
+  const h = helpQueue(d, me);
+  const mine = h.find((x) => x.t.id === t.id);
+  return !!mine && (mine.sameSystem || !h.some((x) => x.sameSystem));
 }
 
 const helping = (d: WorkloadData, me: Person, t: Task) =>
@@ -241,12 +248,21 @@ export function pickTask(d: WorkloadData, id: string, pid: number, now: number):
  * keeps it. Admins can still reassign directly.
  */
 export const canClaim = (d: WorkloadData, me: Person, t: Task) =>
-  t.assignee !== null && t.assignee !== me.id && (t.status === "assigned" || t.status === "in_progress" || t.status === "on_hold") && me.trades.includes(t.trade);
+  t.assignee !== null &&
+  t.assignee !== me.id &&
+  (t.status === "assigned" || t.status === "in_progress" || t.status === "on_hold") &&
+  (me.trades.includes(t.trade) || sameSystem(d, me, t.trade));
+/** The trade is in one of the systems the member works in. */
+const sameSystem = (d: WorkloadData, me: Person, trade: string) => {
+  const sys = (id: string) => d.org.trades.find((x) => x.id === id)?.sys ?? "";
+  const s0 = sys(trade);
+  return !!s0 && me.trades.some((x) => sys(x) === s0);
+};
 
 export function claimTask(d: WorkloadData, id: string, pid: number, now: number): Outcome {
   const me = personOf(d, pid);
   const t = d.tasks.find((x) => x.id === id);
-  if (!me || !t || !canClaim(d, me, t)) return { data: d, message: "You can ask only for open tasks in your trades that someone else has." };
+  if (!me || !t || !canClaim(d, me, t)) return { data: d, message: "You can ask only for open tasks in your trades or system that someone else has." };
   if (t.claim && t.claim.by !== pid) return { data: d, message: `${personOf(d, t.claim.by)?.name ?? "Someone"} has already asked for ${id}.` };
   if (t.claim) return { data: d };
   const who = personOf(d, t.assignee)?.name ?? "the assignee";

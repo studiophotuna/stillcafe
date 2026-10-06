@@ -597,14 +597,25 @@ function MemberDialog({ pid: pid0 }: { pid: number | null }) {
   const [wfh, setWfh] = useState<number[]>(() => wfhOf(init));
   const [primary, setPrimary] = useState(init?.primaryTeam ?? "");
   const [approver, setApprover] = useState(init?.approver ? String(init.approver) : "");
-  // Approver choices: the leaders of this team (and its tower / department), not the person.
-  const approverOpts = leadersOf(s.cal, v.bid).filter((x) => x.id !== pid);
   const [hcFrom, setHcFrom] = useState(s.today.slice(0, 7));
   const [level, setLevel] = useState<Level>(init?.level ?? "member");
   const [shift, setShift] = useState(init?.shift ?? (s.data.shifts.some((x) => x.id === "D") ? "D" : s.data.shifts[0]?.id ?? "D"));
   const [adminHere, setAdminHere] = useState(init ? (v.branch.admins ?? []).includes(init.id) : false);
-  const hereRow: AllocRow = { dept: v.dept.id, tower: v.tower.id, branch: v.bid, system: v.system !== "all" ? v.system : "", trade: v.trade !== "all" && v.unitIds.length === 1 ? v.trade : "" };
+  // Adding from a tower / department view: choose the tower and team in the allocation.
+  const hereRow: AllocRow = v.multi
+    ? { dept: v.dept.id, tower: v.span === "tower" ? v.tower.id : "", branch: "", system: "", trade: "" }
+    : { dept: v.dept.id, tower: v.tower.id, branch: v.bid, system: v.system !== "all" ? v.system : "", trade: v.trade !== "all" && v.unitIds.length === 1 ? v.trade : "" };
   const [alloc, setAlloc] = useState<AllocRow[]>(init ? init.assign.map(allocOf) : [hereRow]);
+  // The team this is saved for: the selected team, or (several teams shown) the first team
+  // allocated, else a team you administer under the chosen tower / department.
+  const teamId = !v.multi
+    ? v.bid
+    : (alloc.map((r) => r.branch).find(Boolean) ??
+      v.scopeBranches.find((b) => alloc.some((r) => O.anc(b.id).includes(r.tower || r.dept)))?.id ??
+      v.bid);
+  const teamName = O.by[teamId]?.name ?? v.branch.name;
+  // Approver choices: the leaders of this team (and its tower / department), not the person.
+  const approverOpts = leadersOf(s.cal, teamId).filter((x) => x.id !== pid);
   const close = () => s.setDialog(null);
   const setA = (i: number, k: keyof AllocRow, val: string) =>
     setAlloc((rows) =>
@@ -620,7 +631,7 @@ function MemberDialog({ pid: pid0 }: { pid: number | null }) {
     );
   const setD = (k: keyof typeof f, val: string | boolean) => setF((x) => ({ ...x, [k]: val }));
   const cands = s.data.people
-    .filter((p) => !O.inN(p, v.bid) && !(p.resign && p.resign < s.today))
+    .filter((p) => !O.inN(p, teamId) && !(p.resign && p.resign < s.today))
     .sort((a, b) => a.name.localeCompare(b.name));
   const existing = isNew && who === "existing";
   const showDetails = !existing || pid !== null;
@@ -686,8 +697,8 @@ function MemberDialog({ pid: pid0 }: { pid: number | null }) {
       primaryTeam: primary,
       approver: Number(approver) || 0,
     };
-    if (isNew && !existing) s.run({ type: "addPerson", details, level, shift, adminHere, bid: v.bid, assign });
-    else s.run({ type: "saveMember", pid: pid!, level, shift, adminHere, bid: v.bid, assign, isNew, details, hcFrom });
+    if (isNew && !existing) s.run({ type: "addPerson", details, level, shift, adminHere, bid: teamId, assign });
+    else s.run({ type: "saveMember", pid: pid!, level, shift, adminHere, bid: teamId, assign, isNew, details, hcFrom });
     close();
   };
   const opts = (l: { id: string; name: string }[]) =>
@@ -712,7 +723,7 @@ function MemberDialog({ pid: pid0 }: { pid: number | null }) {
   return (
     <Modal onClose={close} width={980}>
       <div className="dialog-scroll" style={{ padding: 20 }}>
-        <Title>{isNew ? "Add member to " + v.branch.name : "Edit " + init!.name}</Title>
+        <Title>{isNew ? "Add member to " + (v.multi ? v.unitLabel : v.branch.name) : "Edit " + init!.name}</Title>
         {isNew && cands.length > 0 && (
           <Seg
             name="mem-who"
@@ -823,7 +834,7 @@ function MemberDialog({ pid: pid0 }: { pid: number | null }) {
               </div>
               <label style={{ display: "flex", gap: 10, alignItems: "center", cursor: "pointer", alignSelf: "center", minHeight: 36 }}>
                 <input type="checkbox" className="check" checked={adminHere} onChange={() => setAdminHere(!adminHere)} />
-                Admin of {v.branch.name}
+                Admin of {teamName}
               </label>
             </div>
             {section(`Leave balance ${s.cal.year}`)}

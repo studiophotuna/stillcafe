@@ -9,6 +9,7 @@ import { useCalendar } from "@/lib/calendar/store";
 import { useCalView } from "@/lib/calendar/useCalView";
 import type { CalPerson, Code } from "@/lib/calendar/types";
 import { Chip, Seg } from "./bits";
+import { RoleLegend } from "./Roles";
 
 const WK_BG = "color-mix(in srgb, var(--color-text) 5%, transparent)";
 const HATCH = "repeating-linear-gradient(135deg, transparent 0 5px, color-mix(in srgb, var(--color-text) 9%, transparent) 5px 6px)";
@@ -230,6 +231,7 @@ export function CalendarGrid({ mgmt, edit }: { mgmt?: boolean; edit?: boolean })
           </div>
         </div>
       </div>
+      <RoleLegend />
       <div className="cal-body">
       <Blueprint style={{ minWidth: 0, flex: 1 }}>
         <div className="grid-wrap">
@@ -264,7 +266,7 @@ export function CalendarGrid({ mgmt, edit }: { mgmt?: boolean; edit?: boolean })
                   <div>{r.header}</div>
                 </div>
               ) : (
-                <div key={r.p.id} className="grid-row" role="row">
+                <div key={r.p.id} className={"grid-row role-grid lv-" + r.p.level} role="row">
                   <div className="grid-name" role="rowheader">
                     <div>
                       <span>{r.p.name}</span>

@@ -244,3 +244,6 @@ tr.role-row > td { background: var(--role-bg); }
 .admin-hub-card > span { display: flex; flex-direction: column; gap: 2px; }
 .admin-hub-card strong { color: var(--color-accent-800); }
 .side-switch:has(> :nth-child(3)) > * { font-size: 12.5px; padding: 0 4px; }
+/* Calendar: role colour on each person's name cell (same colours as Members). */
+.grid-row.role-grid > .grid-name { box-shadow: inset 3px 0 0 var(--role); background: linear-gradient(var(--role-bg), var(--role-bg)), var(--color-card, var(--color-bg)); }
+.grid-row.role-grid > .grid-shift { background: linear-gradient(var(--role-bg), var(--role-bg)), var(--color-card, var(--color-bg)); }
