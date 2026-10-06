@@ -733,6 +733,19 @@ describe("attendance summary, reports, payroll and approvers", async () => {
     // A lead on leave: deducted from present, still listed with "incl TL".
     d.overrides[`21|${TODAY}`] = "VL";
     const b2 = leadSummary(new Cal(d, TODAY), "rm", TODAY);
+    // Several leads equally near (both allocated to the team): no guess, "No lead".
+    const l2 = d.people.find((p) => p.id === 14)!;
+    const savedL2 = l2.assign;
+    l2.assign = ["rm"];
+    const p66 = d.people.find((p) => p.id === 15)!;
+    p66.approver = undefined;
+    p66.assign = ["rcm"];
+    d.people.find((p) => p.id === 24)!.assign = ["rm"];
+    const tie = leadSummary(new Cal(d, TODAY), "rm", TODAY);
+    expect(tie.find((x) => x.lead && x.lead === l2.name)?.headcount ?? 0).toBeLessThan(b.reduce((a, x) => a + x.headcount, 0));
+    expect(tie.find((x) => x.name === "No lead")!.headcount).toBeGreaterThan(0);
+    l2.assign = savedL2;
+    d.people.find((p) => p.id === 24)!.assign = ["gpm"];
     const eu = b2.find((x) => x.name === "EU")!;
     expect(eu.headcount).toBe(b.find((x) => x.name === "EU")!.headcount + 1);
     expect(eu.lines.find((l) => l.code === "VL")).toMatchObject({ tl: 1 });
