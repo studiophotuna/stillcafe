@@ -114,19 +114,19 @@ function TaskDialog({ id }: { id: string }) {
                 <option value="low">Low</option>
               </select>
             </div>
-            {(data.settings.taskTypes?.length || t.ttype) && t.status !== "done" ? (
+            {(typesFor(data.settings, t.trade).length || t.ttype) && t.status !== "done" ? (
               <div className="field">
                 <label htmlFor="dt-tt">Task type (sets the SLA)</label>
                 <select id="dt-tt" className="input" value={t.ttype ?? ""} onChange={(e) => run({ type: "setTaskType", id, ttype: e.target.value })}>
                   <option value="">Standard request · SLA by priority</option>
-                  {(data.settings.taskTypes ?? []).map((o) => (
+                  {typesFor(data.settings, t.trade).map((o) => (
                     <option key={o.id} value={o.id}>
                       {o.name} · {slaText(o.sla)}
                     </option>
                   ))}
-                  {t.ttype && !(data.settings.taskTypes ?? []).some((o) => o.id === t.ttype) && (
+                  {t.ttype && !typesFor(data.settings, t.trade).some((o) => o.id === t.ttype) && (
                     <option value={t.ttype} disabled>
-                      Deleted type
+                      {(data.settings.taskTypes ?? []).some((o) => o.id === t.ttype) ? "Type not used in this trade" : "Deleted type"}
                     </option>
                   )}
                 </select>

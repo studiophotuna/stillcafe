@@ -4,7 +4,7 @@ import { useState } from "react";
 import { Chip } from "@/components/calendar/bits";
 import { Blueprint, Icon } from "@/components/ui";
 import { APPR_TAG, APPR_WORD, CODES } from "@/lib/calendar/constants";
-import { approverOf, canDecide, leadersOf } from "@/lib/calendar/approvals";
+import { approverOf, canDecide, leadersOf, waitsOn } from "@/lib/calendar/approvals";
 import { approversOf } from "@/lib/calendar/org";
 import { fmt, rng2 } from "@/lib/calendar/dates";
 import { useCalendar } from "@/lib/calendar/store";
@@ -22,7 +22,14 @@ export default function ApprovalsPage() {
   // team's admins. Every leader of the team still sees them all and can decide.
   const admins = approversOf(c.O, bid);
   const assigned = (pid: number) => approverOf(c, pid)?.id;
-  const waiting = s.data.requests.filter((q) => q.approvals[bid] === "pending").sort((a, b) => a.start.localeCompare(b.start));
+  // One approval per request: only the team first in the member's profile lists it.
+  const waiting = s.data.requests.filter((q) => waitsOn(c, q, bid)).sort((a, b) => a.start.localeCompare(b.start));
+  const [q0, setQ] = useState("");
+  const ql = q0.trim().toLowerCase();
+  // Search: name, type, reason or request ID.
+  const hit = (q: (typeof waiting)[number]) =>
+    !ql || [nameOf(q.pid), q.type, CODES[q.type].label, q.reason, q.id].join(" ").toLowerCase().includes(ql);
+  const [sel, setSel] = useState<Set<string>>(new Set());
   const mineWaiting = waiting.some((q) => assigned(q.pid) === s.me);
   const [who, setWho] = useState(mineWaiting ? String(s.me) : "all");
   // Decided by this team, most recent first; approved automatically has no approver.
@@ -36,8 +43,24 @@ export default function ApprovalsPage() {
   const pick = Number(who);
   // Filter by the approver a request is assigned to (unassigned ones count for the team's admins).
   const isFor = (pid: number, id: number) => (assigned(pid) ?? (admins.includes(id) ? id : undefined)) === id;
-  const pending = waiting.filter((q) => who === "all" || isFor(q.pid, pick));
-  const decided = decidedAll.filter((q) => who === "all" || (who === "auto" ? !q.decided?.[bid] : q.decided?.[bid]?.by === pick)).slice(0, 200);
+  const pending = waiting.filter((q) => (who === "all" || isFor(q.pid, pick)) && hit(q));
+  const decided = decidedAll.filter((q) => (who === "all" || (who === "auto" ? !q.decided?.[bid] : q.decided?.[bid]?.by === pick)) && hit(q)).slice(0, 200);
+  // Bulk decide: the selected requests still shown that I can decide.
+  const canPick = pending.filter((q) => canDecide(c, s.me, q, bid));
+  const picked = canPick.filter((q) => sel.has(q.id));
+  const allOn = canPick.length > 0 && picked.length === canPick.length;
+  const toggle = (id: string) =>
+    setSel((x) => {
+      const n = new Set(x);
+      if (n.has(id)) n.delete(id);
+      else n.add(id);
+      return n;
+    });
+  const decideSel = (st: "approved" | "declined") => {
+    if (!picked.length) return;
+    s.run({ type: "decideMany", rids: picked.map((q) => q.id), bid, st, actor: s.me });
+    setSel(new Set());
+  };
   return (
     <>
       <div className="page-head">
@@ -45,7 +68,7 @@ export default function ApprovalsPage() {
         <span>
           {v.branch.mode === "auto"
             ? "This team approves requests automatically, so nothing will wait here. You can change this in Settings."
-            : `Requests from ${v.branch.name} members wait here until their approver or another leader decides. Team leads and above don’t need approval. Each team a person belongs to approves separately.`}
+            : `Requests from ${v.branch.name} members wait here until their approver or another leader decides. Team leads and above don’t need approval. Members in several teams are approved once, by the first team in their profile.`}
         </span>
       </div>
       <div className="row" style={{ justifyContent: "space-between", alignItems: "flex-end" }}>
@@ -56,6 +79,11 @@ export default function ApprovalsPage() {
           <button role="tab" aria-selected={tab === "decided"} onClick={() => setTab("decided")}>
             Decided
           </button>
+        </div>
+        <div className="row" style={{ alignItems: "flex-end" }}>
+        <div className="field">
+          <label htmlFor="ap-q">Search</label>
+          <input id="ap-q" className="input" type="search" placeholder="Name, type, reason or ID" value={q0} onChange={(e) => setQ(e.target.value)} style={{ width: 240 }} />
         </div>
         <div className="field">
           <label htmlFor="ap-who">Approver</label>
@@ -70,7 +98,23 @@ export default function ApprovalsPage() {
             {tab === "decided" && <option value="auto">Approved automatically</option>}
           </select>
         </div>
+        </div>
       </div>
+      {tab === "waiting" && canPick.length > 0 && (
+        <div className="bulk-bar">
+          <span>{picked.length ? `${picked.length} selected` : "Select requests to approve or decline several at once."}</span>
+          <div className="row" style={{ gap: 8 }}>
+            <button className="btn btn-secondary btn-36" disabled={!picked.length} onClick={() => decideSel("declined")}>
+              <Icon name="x" size={16} />
+              Decline selected
+            </button>
+            <Blueprint as="button" className="btn btn-primary btn-36" disabled={!picked.length} onClick={() => decideSel("approved")}>
+              <Icon name="check" size={16} />
+              Approve selected
+            </Blueprint>
+          </div>
+        </div>
+      )}
       {tab === "decided" ? (
         <Blueprint className="scroll-x">
           <table className="table" style={{ minWidth: 900 }}>
@@ -118,6 +162,16 @@ export default function ApprovalsPage() {
         <table className="table" style={{ minWidth: 900 }}>
           <thead>
             <tr>
+              <th style={{ width: 36 }}>
+                <input
+                  type="checkbox"
+                  className="check"
+                  aria-label="Select all"
+                  checked={allOn}
+                  disabled={!canPick.length}
+                  onChange={() => setSel(allOn ? new Set() : new Set(canPick.map((q) => q.id)))}
+                />
+              </th>
               <th>Employee</th>
               <th>Type</th>
               <th>Dates</th>
@@ -135,6 +189,11 @@ export default function ApprovalsPage() {
               const others = Object.keys(q.approvals).filter((k) => k !== bid);
               return (
                 <tr key={q.id}>
+                  <td>
+                    {canDecide(c, s.me, q, bid) && (
+                      <input type="checkbox" className="check" aria-label={`Select ${p.name}`} checked={sel.has(q.id)} onChange={() => toggle(q.id)} />
+                    )}
+                  </td>
                   <td>
                     <div style={{ display: "flex", flexDirection: "column" }}>
                       <span className="nowrap" style={{ fontWeight: 500 }}>{p.name}</span>
@@ -190,7 +249,7 @@ export default function ApprovalsPage() {
             })}
           </tbody>
         </table>
-        {!pending.length && <div style={{ padding: "28px 14px", color: "var(--color-neutral-700)" }}>Nothing waiting for approval in {v.branch.name}{who === "all" ? "" : " for this approver"}.</div>}
+        {!pending.length && <div style={{ padding: "28px 14px", color: "var(--color-neutral-700)" }}>Nothing waiting for approval in {v.branch.name}{who === "all" ? "" : " for this approver"}{ql ? " matching your search" : ""}.</div>}
       </Blueprint>
       )}
     </>

@@ -129,6 +129,19 @@ describe("start work (FIFO)", () => {
     expect(get(startWork(d, ANA, NOW).data, a.id).status).toBe("assigned");
   });
 
+  it("pauses a task: the timer stops and the time counts as idle, not away", async () => {
+    const { startAway, backToWork, taskWorkMs, dayActivity } = await import("./engine");
+    const cur = task({ status: "in_progress", assignee: ANA, startedAt: NOW - 60 * M });
+    let d = data([cur]);
+    expect(startAway(data([]), ANA, "idle", NOW).message).toMatch(/no task in progress/);
+    d = startAway(d, ANA, "idle", NOW - 20 * M).data;
+    d = backToWork(d, ANA, NOW - 10 * M).data;
+    expect(taskWorkMs(d, cur, NOW)).toBe(50 * M);
+    const act = dayActivity(d, ANA, NOW);
+    expect(act.away.idle).toBe(10);
+    expect(act.awayMs).toBe(0); // idle stays in the time available
+  });
+
   it("does not give work to unavailable people unless the team allows it", () => {
     const t = task({ trade: "eu" });
     expect(get(startWork(data([t]), ELI, NOW).data, t.id).status).toBe("new");
@@ -885,6 +898,21 @@ describe("average handling time", async () => {
     { id: "simple", name: "Simple", aht: 30 },
     { id: "complex", name: "Complex", aht: 120 },
   ];
+  it("computes FTE needed from tickets received and AHT", async () => {
+    const { fteStats } = await import("./aht");
+    // 2 h per ticket on LCL; 6 more LCL tickets received today → 6 × 2 h = 12 h of work.
+    const a = task({ status: "done", assignee: ANA, trade: "lcl", startedAt: at("08:00"), doneAt: at("10:00"), received: at("07:00") });
+    const more = Array.from({ length: 5 }, () => task({ trade: "lcl", received: at("09:00") }));
+    const d = data([a, ...more]);
+    const f = fteStats(d, at("00:00"), at("23:59"), NOW);
+    const lcl = f.rows.find((r) => r.key === "lcl")!;
+    expect(f.days).toBe(1);
+    expect(lcl).toMatchObject({ received: 6, ahtOwn: true });
+    expect(lcl.workH).toBeCloseTo(12);
+    expect(lcl.need).toBeCloseTo(12 / f.prodH);
+    expect(lcl.have).toBeGreaterThan(0);
+  });
+
   it("per ticket, per contract, per level (time shared by set AHT) and vs expected", () => {
     const a = task({ status: "done", assignee: ANA, trade: "lcl", startedAt: at("09:00"), doneAt: at("10:00"), cx: { simple: 2 }, fields: { contracts: 2 } }); // 60 of 60 expected
     const b = task({ status: "done", assignee: ANA, trade: "lcl", startedAt: at("10:00"), doneAt: at("13:00"), cx: { simple: 1, complex: 1 }, fields: { contracts: 2 } }); // 180 of 150

@@ -232,3 +232,4 @@ tr.role-row > td { background: var(--role-bg); }
 .qb tr.qb-row-rem .qb-n { font-weight: 500; }
 .att-block li > span:last-child { text-align: right; }
 .qb-toggle { display: flex; align-items: center; gap: 8px; background: none; border: 0; padding: 0; font: inherit; color: inherit; cursor: pointer; text-align: left; }
+.bulk-bar { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; padding: 10px 14px; border: 1px solid var(--color-accent-200, var(--color-divider)); border-radius: var(--radius-md); background: var(--color-accent-100); font-size: 13.5px; }

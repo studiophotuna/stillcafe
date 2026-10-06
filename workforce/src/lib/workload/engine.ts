@@ -366,8 +366,11 @@ export function setTrade(d: WorkloadData, id: string, tradeId: string, now: numb
   if (!d.org.trades.some((t) => t.id === tradeId)) return { data: d, message: "That trade isn’t in this team." };
   let data = patch(d, id, (x) => {
     const requeue = x.status === "new" || x.status === "assigned";
+    // A task type the new trade doesn't use goes back to a standard request.
+    const keepType = !x.ttype || typesFor(d.settings, tradeId).some((t) => t.id === x.ttype);
+    const base = keepType ? x : withSla({ ...x, ttype: "" }, d.settings);
     return {
-      ...x,
+      ...base,
       trade: tradeId,
       assignee: requeue ? null : x.assignee,
       status: requeue ? "new" : x.status,
@@ -406,6 +409,8 @@ export function setTaskType(d: WorkloadData, id: string, ttype: string, now: num
   if (ttype && !ty) return { data: d, message: "That task type isn’t set up." };
   const t = d.tasks.find((x) => x.id === id);
   if (!t || t.status === "done") return { data: d };
+  if (ty && t.trade && !typesFor(d.settings, t.trade).some((x) => x.id === ty.id))
+    return { data: d, message: `${ty.name} isn’t used in ${trPathOf(d.org, t.trade)}.` };
   const y = withSla({ ...t, ttype }, d.settings);
   return {
     data: patch(d, id, () => ({ ...y, history: hist(t, now, (ty ? `Task type set to ${ty.name}` : "Set as a standard request") + ` · SLA ${y.slaH} h`) })),
@@ -781,14 +786,19 @@ export const doneToday = (tasks: Task[], now: number) => {
 
 // ── status: breaks, meetings, end of day, overtime ──
 
-export const AWAY: [Exclude<ActivityKind, "end">, string][] = [
+export const AWAY: [Exclude<ActivityKind, "end" | "idle">, string][] = [
   ["break", "Break"],
   ["lunch", "Lunch"],
   ["meeting", "Meeting"],
   ["adhoc", "Ad hoc"],
   ["training", "Training"],
 ];
-export const awayLabel = (k: ActivityKind) => AWAY.find(([x]) => x === k)?.[1] ?? "End of day";
+export const awayLabel = (k: ActivityKind) => (k === "idle" ? "Idle (paused)" : (AWAY.find(([x]) => x === k)?.[1] ?? "End of day"));
+/**
+ * Pausing a task logs "idle": the task timer stops like any time away, but idle time is not
+ * deducted from the time available, so it lowers utilization and shows as idle.
+ */
+export const IDLE: ActivityKind = "idle";
 
 const sameDay = (a: number, b: number) => dayKey(a) === dayKey(b);
 /** The member's ongoing away entry, if any. */
@@ -813,17 +823,25 @@ const newActivity = (pid: number, kind: ActivityKind, now: number, extra: Partia
 
 /** Go on a break / lunch / meeting / ad hoc / training (ends any other one). A task in progress keeps running but the time away isn't counted on it. */
 export function startAway(d: WorkloadData, pid: number, kind: ActivityKind, now: number): Outcome {
-  if (kind === "end" || !AWAY.some(([k]) => k === kind) || !personOf(d, pid)) return { data: d };
+  if (kind === "end" || (kind !== IDLE && !AWAY.some(([k]) => k === kind)) || !personOf(d, pid)) return { data: d };
+  if (kind === IDLE && !isBusy(d.tasks, pid)) return { data: d, message: "There’s no task in progress to pause." };
   if (endedToday(d, pid, now)) return { data: d, message: "You’ve ended work for today." };
   const cur = currentAway(d, pid);
   if (cur?.kind === kind) return { data: d };
-  return { data: { ...d, activities: closeAway(d.activities, pid, now).concat(newActivity(pid, kind, now)) }, message: `${awayLabel(kind)} started.` };
+  return {
+    data: { ...d, activities: closeAway(d.activities, pid, now).concat(newActivity(pid, kind, now)) },
+    message: kind === IDLE ? "Task paused. The timer is stopped; the time counts as idle." : `${awayLabel(kind)} started.`,
+  };
 }
 
 export function backToWork(d: WorkloadData, pid: number, now: number): Outcome {
   const cur = currentAway(d, pid);
   if (!cur) return { data: d };
-  return { data: { ...d, activities: closeAway(d.activities, pid, now) }, message: `Back to work after ${fmtMin(Math.round((now - cur.start) / 60000))} ${awayLabel(cur.kind).toLowerCase()}.` };
+  const mins = fmtMin(Math.round((now - cur.start) / 60000));
+  return {
+    data: { ...d, activities: closeAway(d.activities, pid, now) },
+    message: cur.kind === IDLE ? `Task resumed after ${mins} paused.` : `Back to work after ${mins} ${awayLabel(cur.kind).toLowerCase()}.`,
+  };
 }
 
 /**
@@ -888,6 +906,9 @@ export function endWork(d: WorkloadData, pid: number, otMin: number, now: number
 }
 
 /** Task types that apply to a process (trade): those for every trade, or naming it. */
+/** Where a task type applies, as people read it: "EU, LCL" or "All trades". */
+export const typeScope = (d: Pick<WorkloadData, "org">, t: Pick<TaskType, "trades">) =>
+  t.trades.length ? t.trades.map((id) => d.org.trades.find((x) => x.id === id)?.name ?? id).join(", ") : "All trades";
 export const typesFor = (s: Settings, trade: string) => (s.taskTypes ?? []).filter((t) => !t.trades.length || t.trades.includes(trade));
 
 /** Trades of the tasks the member worked on in the last `min` minutes. */
@@ -990,7 +1011,8 @@ export function dayActivity(d: WorkloadData, pid: number, now: number) {
     if (a.kind === "end") continue;
     const ms = (a.end ?? now) - a.start;
     away[a.kind] = (away[a.kind] ?? 0) + Math.round(ms / 60000);
-    awayMs += ms;
+    // Idle (paused) time stays in the time available, so it lowers utilization.
+    if (a.kind !== IDLE) awayMs += ms;
   }
   const end = mine.find((a) => a.kind === "end");
   return {

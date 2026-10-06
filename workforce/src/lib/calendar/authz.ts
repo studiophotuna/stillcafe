@@ -65,6 +65,10 @@ export function authorizeCal(a: CalAction, c: Cal, me: number): { action: CalAct
       const q = c.d.requests.find((x) => x.id === a.rid);
       return ok(!!q && canDecide(c, me, q, a.bid), { ...a, actor: me });
     }
+    case "decideMany": {
+      const qs = a.rids.map((id) => c.d.requests.find((x) => x.id === id));
+      return ok(qs.length > 0 && qs.length <= 200 && qs.every((q) => !!q && canDecide(c, me, q, a.bid)), { ...a, actor: me });
+    }
     case "cancelRequest": {
       const q = c.d.requests.find((x) => x.id === a.rid);
       if (!q) return NO;
