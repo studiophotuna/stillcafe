@@ -3,7 +3,7 @@
  * CalendarData. Shared by the browser (optimistic updates, rendering) and the
  * server (authoritative writes).
  */
-import { ANNUAL, CARRY_MAX, CODES, LEDGER_START, OOO, POOL, WORKING, first } from "./constants";
+import { CARRY_MAX, CODES, LEDGER_START, OOO, POOL, WORKING, first } from "./constants";
 import { dowOf, isWk, rng2, fmt, workdays } from "./dates";
 import { mkOrg, type Org } from "./org";
 import type { BcpEvent, CalPerson, CalendarData, Code, Holiday, LeaveRequest, NotifLog } from "./types";

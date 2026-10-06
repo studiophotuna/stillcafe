@@ -60,6 +60,13 @@ export default function MembersPage() {
     .filter((p) => (v.inUnit(p) || above(p)) && (!mq || p.name.toLowerCase().includes(mq)) && (role === "all" || p.level === role))
     .sort((a, b) => Number(above(b)) - Number(above(a)) || a.name.localeCompare(b.name));
   // Team admins manage the people in their teams; system admins manage everyone.
+  // Several teams shown: edit a person from their own team (the filter switches to it).
+  const teamOf = (p: CalPerson) => O.branchesOf(p).find((b) => v.scopeBranches.some((x) => x.id === b.id))?.id ?? v.bid;
+  const openFor = (p: CalPerson, kind: "member" | "resign") => {
+    if (v.multi) s.setSel({ branch: teamOf(p), span: "team", system: "all", trade: "all" });
+    s.setDialog({ kind, pid: p.id });
+  };
+  const oneTeam = v.multi ? "Choose a team above first" : undefined;
   const canManage = (p: CalPerson) =>
     !!v.meP.sysAdmin || O.branchesOf(p).some((b) => isNodeAdmin(O, b.id, s.me)) || p.assign.some((a) => isNodeAdmin(O, a, s.me));
   // Selecting several members to update at once (only those I manage).
@@ -77,11 +84,11 @@ export default function MembersPage() {
         <div className="row">
           <input className="input" type="search" aria-label="Find a member" placeholder="Find a member" value={q} onChange={(e) => setQ(e.target.value)} style={{ width: 220 }} />
           <RoleFilter value={role} onChange={setRole} />
-          <button className="btn btn-secondary btn-36" onClick={() => s.setDialog({ kind: "upload", mode: "members" })}>
+          <button className="btn btn-secondary btn-36" disabled={v.multi} title={oneTeam} onClick={() => s.setDialog({ kind: "upload", mode: "members" })}>
             <Icon name="upload" size={16} />
             Upload
           </button>
-          <button className="btn btn-secondary btn-36" onClick={() => s.setDialog({ kind: "member", pid: null })}>
+          <button className="btn btn-secondary btn-36" disabled={v.multi} title={oneTeam} onClick={() => s.setDialog({ kind: "member", pid: null })}>
             <Icon name="plus" size={16} />
             Add member
           </button>
@@ -94,7 +101,7 @@ export default function MembersPage() {
           <Blueprint as="button" className="btn btn-primary btn-36" style={{ padding: "0 14px" }} onClick={() => setBulk(true)}>
             Update selected
           </Blueprint>
-          <button className="btn btn-secondary btn-36" onClick={() => s.setDialog({ kind: "schedule", pids: picked })}>
+          <button className="btn btn-secondary btn-36" disabled={v.multi} title={oneTeam} onClick={() => s.setDialog({ kind: "schedule", pids: picked })}>
             Update their schedules
           </button>
           <button className="btn btn-ghost" onClick={() => setSel([])}>
@@ -152,7 +159,7 @@ export default function MembersPage() {
                     <div style={{ display: "flex", flexDirection: "column" }}>
                       <span style={{ display: "flex", gap: 6, alignItems: "center" }}>
                         <RoleTag level={p.level} />
-                        {(v.branch.admins ?? []).includes(p.id) && (
+                        {v.scopeBranches.some((b) => (b.admins ?? []).includes(p.id)) && (
                           <span className="tag tag-accent" style={{ padding: "0 6px", fontSize: 10.5 }}>
                             Admin
                           </span>
@@ -172,7 +179,7 @@ export default function MembersPage() {
                         const n = O.by[a];
                         const primary = !!b && O.branchesOf(p).length > 1 && primaryTeamOf(O, p) === b.id;
                         return (
-                          <span key={a} className={"tag " + (O.anc(a).includes(v.bid) ? "tag-accent" : "tag-neutral")}>
+                          <span key={a} className={"tag " + (O.anc(a).includes(v.scopeId) ? "tag-accent" : "tag-neutral")}>
                             {b ? b.name + (sb ? " › " + sb.replace(/ · /g, " › ") : "") : n ? `${n.name} · whole ${n.type === "dept" ? "department" : "tower"}` : "—"}
                             {primary && <strong title="Counted in this team on the headcount report"> · primary</strong>}
                           </span>
@@ -210,10 +217,10 @@ export default function MembersPage() {
                         </span>
                       ) : (
                         <>
-                          <button className="btn btn-ghost" onClick={() => s.setDialog({ kind: "member", pid: p.id })}>
+                          <button className="btn btn-ghost" onClick={() => openFor(p, "member")}>
                             Edit
                           </button>
-                          <button className="btn btn-ghost" onClick={() => s.setDialog({ kind: "resign", pid: p.id })}>
+                          <button className="btn btn-ghost" onClick={() => openFor(p, "resign")}>
                             {p.resign ? "Edit resignation" : "Resignation"}
                           </button>
                           {logins && !gone && p.id !== s.me && (
@@ -226,7 +233,7 @@ export default function MembersPage() {
                               Remove sign-in
                             </button>
                           )}
-                          {!above(p) && (
+                          {!above(p) && !v.multi && (
                             <button className="btn btn-ghost" style={{ color: "var(--color-neutral-700)" }} onClick={() => s.run({ type: "removeFromTeam", pid: p.id, bid: v.bid })}>
                               Remove
                             </button>
@@ -258,7 +265,7 @@ function BulkDialog({ pids, onClose, onDone }: { pids: number[]; onClose: () => 
   const [shift, setShift] = useState("");
   const [wfhOn, setWfhOn] = useState(false);
   const [wfh, setWfh] = useState<number[]>([1, 2]);
-  const leaders = leadersOf(s.cal, v.bid);
+  const leaders = [...new Map(v.scopeBranches.flatMap((b) => leadersOf(s.cal, b.id)).map((p) => [p.id, p])).values()];
   const names = pids.map((id) => s.cal.people.get(id)?.name ?? "").filter(Boolean);
   const nothing = !level && approver === "keep" && !shift && !wfhOn;
   return (

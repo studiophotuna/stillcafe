@@ -3,7 +3,7 @@
  * re-applied by the server (/api/cal/action) to the stored calendar.
  */
 import { fmtT } from "../workload/clock";
-import { ANNUAL, CARRY_MAX, CODES, LAW, LEVELS, TYPE_L, first, isLeader } from "./constants";
+import { CARRY_MAX, CODES, LAW, LEVELS, TYPE_L, first, isLeader } from "./constants";
 import { addDays, dowOf, fmtY, isWk, MONL } from "./dates";
 import { Cal, evState, logsDecision, logsSubmit } from "./engine";
 import { allocProblem, hcTeamOf, mkOrg, primaryTeamOf, teamDefaults, withHcChange, type Org } from "./org";

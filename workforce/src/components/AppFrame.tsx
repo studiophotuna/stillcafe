@@ -2,10 +2,11 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useEffect, useState, type ReactNode } from "react";
+import type { ReactNode } from "react";
 import { signOut } from "@/lib/session";
 import { BipoNotice, HolidayPrompt, PayrollNotice, QuickLinks } from "./AppExtras";
 import type { ViewAs } from "@/lib/workload/types";
+import type { NavSection } from "./adminNav";
 import { Blueprint, Icon, type IconName } from "./ui";
 
 export interface NavItem {
@@ -16,14 +17,15 @@ export interface NavItem {
 }
 
 /**
- * Shared shell for both modules: 248px sidebar (logo, "Workforce Management",
- * Calendar / Workload switch, nav, Admin group, user), sticky filter bar, main.
+ * Shared shell: 248px sidebar (logo, "Workforce Management", Calendar / Workload / Admin
+ * switch, nav, user), sticky filter bar, main. The Admin area shows the admin menu
+ * (sections) instead of the everyday pages.
  */
 export function AppFrame({
   module,
   top,
   nav,
-  adminNav,
+  admin,
   user,
   viewAs,
   setViewAs,
@@ -32,11 +34,12 @@ export function AppFrame({
   children,
   overlay,
 }: {
-  module: "calendar" | "workload";
+  module: "calendar" | "workload" | "admin";
   /** Above the nav, e.g. the Request leave button. */
   top?: ReactNode;
   nav: NavItem[];
-  adminNav: NavItem[];
+  /** The Admin area's menu; `show` = this person has it. */
+  admin: { show: boolean; sections: NavSection[] };
   user: { name: string; role: string };
   /** Sample data only: switch between the admin and employee views. Signed-in users get Sign out instead. */
   viewAs?: ViewAs;
@@ -48,29 +51,14 @@ export function AppFrame({
   overlay?: ReactNode;
 }) {
   const path = usePathname();
-  // The Admin group can be minimized; remembered per module on this device.
-  const adminKey = `wfm.adminNav.${module}`;
-  const [adminOpen, setAdminOpen] = useState(true);
-  useEffect(() => {
-    try {
-      if (localStorage.getItem(adminKey) === "closed") setAdminOpen(false);
-    } catch {}
-  }, [adminKey]);
-  const toggleAdmin = () => {
-    const next = !adminOpen;
-    setAdminOpen(next);
-    try {
-      localStorage.setItem(adminKey, next ? "open" : "closed");
-    } catch {}
-  };
-  const adminBadge = adminNav.reduce((a, n) => a + (n.badge ?? 0), 0);
+  const adminBadge = admin.sections.reduce((a, sec) => a + sec.items.reduce((b, n) => b + (n.badge ?? 0), 0), 0);
   const initials = user.name
     .split(" ")
     .map((w) => w[0])
     .slice(0, 2)
     .join("");
   const item = (n: NavItem) => {
-    const current = path === n.href || (n.href !== "/calendar" && n.href !== "/workload" && path.startsWith(n.href + "/"));
+    const current = path === n.href || (!["/calendar", "/workload", "/calendar/admin"].includes(n.href) && path.startsWith(n.href + "/"));
     return (
       <Link key={n.href} href={n.href} className="nav-item" aria-current={current ? "page" : undefined}>
         <Icon name={n.icon} />
@@ -91,21 +79,26 @@ export function AppFrame({
           <div className="side-switch">
             {module === "calendar" ? <span className="on">Calendar</span> : <Link href="/calendar">Calendar</Link>}
             {module === "workload" ? <span className="on">Workload</span> : <Link href="/workload">Workload</Link>}
+            {admin.show &&
+              (module === "admin" ? (
+                <span className="on">Admin</span>
+              ) : (
+                <Link href="/calendar/admin">
+                  Admin{adminBadge > 0 && <span className="side-switch-dot" aria-label={`${adminBadge} waiting`} />}
+                </Link>
+              ))}
           </div>
-          {top}
-          <nav aria-label="Main" className="side-nav">
-            {nav.map(item)}
-          </nav>
-          {adminNav.length > 0 && (
-            <nav aria-label="Admin" className="side-nav">
-              <button type="button" className="side-nav-label side-nav-toggle" aria-expanded={adminOpen} onClick={toggleAdmin}>
-                <span>Admin</span>
-                {!adminOpen && adminBadge > 0 && <span className="tag tag-accent">{adminBadge}</span>}
-                <span className="side-nav-chev" aria-hidden>
-                  {adminOpen ? "▾" : "▸"}
-                </span>
-              </button>
-              {adminOpen && adminNav.map(item)}
+          {module !== "admin" && top}
+          {module === "admin" ? (
+            admin.sections.map((sec) => (
+              <nav key={sec.title} aria-label={sec.title} className="side-nav">
+                <span className="side-nav-label">{sec.title}</span>
+                {sec.items.map(item)}
+              </nav>
+            ))
+          ) : (
+            <nav aria-label="Main" className="side-nav">
+              {nav.map(item)}
             </nav>
           )}
           <div className="side-user">

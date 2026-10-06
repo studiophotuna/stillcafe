@@ -9,6 +9,7 @@ import { breakFlags } from "@/lib/workload/breaks";
 import { rangeMs, todayRange } from "@/lib/workload/period";
 import { useWorkload } from "@/lib/workload/store";
 import { useUnit } from "@/lib/workload/useUnit";
+import { adminSections, hasAdminArea, isAdminPath, type AdminFlags } from "./adminNav";
 import { AppFrame, type NavItem } from "./AppFrame";
 import { Dialogs, Toasts } from "./Dialogs";
 import { AwayPopup, StaleNotice } from "./WorkloadBits";
@@ -44,33 +45,29 @@ export function Shell({ children }: { children: React.ReactNode }) {
   // Requests from teammates to take one of my tasks.
   const myClaims = data.tasks.filter((t) => t.assignee === me.id && t.claim && t.status !== "done").length;
   const cxQs = isAdmin ? cxQuestions(data).length : 0;
+  // Everyday pages; admin and approver pages are in the Admin area.
   const nav: NavItem[] = [
     { href: "/workload", icon: "my", label: "My work", badge: myClaims },
     { href: "/workload/queue", icon: "queue", label: "Queue", badge: openQ },
     { href: "/workload/history", icon: "reports", label: "Task history" },
-    ...(isAdmin ? [{ href: "/workload/dashboard", icon: "dash" as const, label: "Dashboard" }] : []),
     ...(!isAdmin && canUpload ? [{ href: "/workload/upload", icon: "intake" as const, label: "Upload tasks" }] : []),
-    ...(isApprover ? [{ href: "/workload/overtime", icon: "targets" as const, label: "Overtime", badge: otPending }] : []),
-    ...(isApprover ? [{ href: "/workload/breaks", icon: "check" as const, label: "Breaks", badge: brkFlags }] : []),
   ];
-  const adminNav: NavItem[] = isAdmin
-    ? [
-        { href: "/workload/admin/queue", icon: "queue", label: "Manage queue" },
-        { href: "/workload/admin/intake", icon: "intake", label: "Intake" },
-        { href: "/workload/admin/fields", icon: "fields", label: "Task fields" },
-        { href: "/workload/admin/allocation", icon: "rules", label: "Allocation" },
-        { href: "/workload/admin/sla", icon: "check", label: "SLA & task types" },
-        { href: "/workload/admin/complexity", icon: "fields", label: "Complexity", badge: cxQs },
-        { href: "/workload/admin/aht", icon: "dash", label: "Handling time" },
-        { href: "/workload/admin/targets", icon: "targets", label: "Targets" },
-      ]
-    : [];
+  // Calendar rights come from the same team admins and leaders.
+  const flags: AdminFlags = {
+    canApprove: isApprover,
+    teamAdmin: isAdmin,
+    anyAdmin: isAdmin,
+    leader: isApprover,
+    wlAdmin: isAdmin,
+    wlApprover: isApprover,
+    badges: { overtime: otPending, breaks: brkFlags, complexity: cxQs },
+  };
 
   return (
     <AppFrame
-      module="workload"
+      module={isAdminPath(path) ? "admin" : "workload"}
       nav={nav}
-      adminNav={adminNav}
+      admin={{ show: hasAdminArea(flags), sections: adminSections(flags) }}
       user={{
         name: me.name,
         role: (isAdmin ? `Admin · ${org.team.name}` : org.team.name) + // (a team that is its own single unit isn't repeated)

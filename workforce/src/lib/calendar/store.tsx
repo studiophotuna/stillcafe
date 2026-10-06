@@ -32,6 +32,8 @@ export interface Sel {
   branch: string;
   system: string;
   trade: string;
+  /** "team" (default), or every team you can see in the tower ("tower") or department ("dept"). */
+  span?: "team" | "tower" | "dept";
 }
 
 export type CalDialog =

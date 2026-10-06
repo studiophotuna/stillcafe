@@ -234,3 +234,13 @@ tr.role-row > td { background: var(--role-bg); }
 .qb-toggle { display: flex; align-items: center; gap: 8px; background: none; border: 0; padding: 0; font: inherit; color: inherit; cursor: pointer; text-align: left; }
 .bulk-bar { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; padding: 10px 14px; border: 1px solid var(--color-accent-200, var(--color-divider)); border-radius: var(--radius-md); background: var(--color-accent-100); font-size: 13.5px; }
 .claim-bar { border-color: #d99a1e; background: #fff8e8; }
+/* Calendar / Workload / Admin switch: three columns when the Admin area is available. */
+.side-switch:has(> :nth-child(3)) { grid-template-columns: 1fr 1fr 1fr; }
+.side-switch > * { position: relative; }
+.side-switch-dot { position: absolute; top: 7px; right: 8px; width: 7px; height: 7px; border-radius: 50%; background: #d99a1e; }
+.admin-hub { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 10px; }
+.admin-hub-card { display: flex; gap: 12px; align-items: flex-start; padding: 12px 14px; border: 1px solid var(--color-divider); border-radius: var(--radius-md); text-decoration: none; color: inherit; background: var(--color-card, transparent); }
+.admin-hub-card:hover { border-color: var(--color-accent-300); background: var(--color-accent-100); }
+.admin-hub-card > span { display: flex; flex-direction: column; gap: 2px; }
+.admin-hub-card strong { color: var(--color-accent-800); }
+.side-switch:has(> :nth-child(3)) > * { font-size: 12.5px; padding: 0 4px; }

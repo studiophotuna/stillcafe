@@ -80,7 +80,9 @@ export function CalendarGrid({ mgmt, edit }: { mgmt?: boolean; edit?: boolean })
   const dates = Array.from({ length: n }, (_, i) => isoOf(s.y, s.m, i + 1));
   const ql = q.trim().toLowerCase();
   const byName = (a: CalPerson, b: CalPerson) => a.name.localeCompare(b.name);
-  const bid = v.bid;
+  // One team: its own approval status in cells; several teams: the overall status.
+  const bid = v.cellBid;
+  const here = v.scopeId;
 
   type Row = { header: string } | { p: CalPerson; cells: Cell[] };
   let active: CalPerson[];
@@ -127,8 +129,9 @@ export function CalendarGrid({ mgmt, edit }: { mgmt?: boolean; edit?: boolean })
     if (mgmt)
       // Teams, or the tower / department for leaders allocated above team level.
       return [...new Set(p.assign.map((a) => (O.up(a, "branch") ?? O.by[a])?.name).filter(Boolean))].join(", ");
-    const inHere = p.assign.filter((a) => O.anc(a).includes(bid)).map((a) => O.sub(a)).filter(Boolean);
-    const other = O.branchesOf(p).filter((b) => b.id !== bid).map((b) => b.name);
+    if (v.multi) return O.branchesOf(p).map((b) => b.name + (O.sub(p.assign.find((a) => O.anc(a).includes(b.id)) ?? "") ? " · " + O.sub(p.assign.find((a) => O.anc(a).includes(b.id))!) : "")).join(", ");
+    const inHere = p.assign.filter((a) => O.anc(a).includes(here)).map((a) => O.sub(a)).filter(Boolean);
+    const other = O.branchesOf(p).filter((b) => b.id !== here).map((b) => b.name);
     return [inHere.join(", "), other.length ? "Also in " + other.join(", ") : ""].filter(Boolean).join(" · ");
   };
 
@@ -166,7 +169,8 @@ export function CalendarGrid({ mgmt, edit }: { mgmt?: boolean; edit?: boolean })
         { code: "", label: "Resigned", bg: HATCH, fg: "inherit", bd: "1px solid var(--color-divider)" },
       ]);
 
-  const admin = !mgmt && !!edit && v.isAdmin;
+  // Editing schedules: one team at a time (choose a team when all teams are shown).
+  const admin = !mgmt && !!edit && v.isAdmin && !v.multi;
   const onCell = (p: CalPerson, d: string, cell: Cell) => {
     if (cell.gone) return;
     if (admin) s.setDialog({ kind: "cell", pid: p.id, date: d });
