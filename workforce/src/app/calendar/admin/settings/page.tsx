@@ -2,7 +2,8 @@
 
 import { Chip, Seg } from "@/components/calendar/bits";
 import { Blueprint, Icon } from "@/components/ui";
-import { CODES, CODE_KEYS, POOL } from "@/lib/calendar/constants";
+import { CODES, CODE_KEYS, LEVELS, POOL } from "@/lib/calendar/constants";
+import { roleAdminsOf } from "@/lib/calendar/org";
 import { useCalendar } from "@/lib/calendar/store";
 import { useCalView } from "@/lib/calendar/useCalView";
 import type { CalAction } from "@/lib/calendar/actions";
@@ -15,6 +16,8 @@ export default function SettingsPage() {
   const v = useCalView();
   const b = v.branch;
   const admins = b.admins ?? [];
+  // Admins by role: the team's leads, its tower's managers and its department's directors.
+  const byRole = [...new Set(s.cal.O.anc(b.id).flatMap((n) => roleAdminsOf(s.cal.O, n)))].map((i) => s.cal.people.get(i)).filter((p) => !!p);
   const set = (patch: TeamPatch) => s.run({ type: "teamSettings", id: b.id, patch });
   const cands = s.data.people
     .filter((p) => s.cal.O.inN(p, b.id) && !admins.includes(p.id) && !(p.resign && p.resign < s.today))
@@ -79,6 +82,12 @@ export default function SettingsPage() {
                 </span>
               ))}
             </div>
+            {byRole.length > 0 && (
+              <span className="small" style={{ fontSize: 12 }}>
+                Also admins by role: {byRole.map((p) => `${p.name} (${LEVELS[p.level]})`).join(", ")}. Directors administer their department, managers their
+                tower and team leads their team, without being added here.
+              </span>
+            )}
             <select
               className="input"
               aria-label="Add an admin"

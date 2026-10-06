@@ -187,6 +187,28 @@ describe("leave entitlements (pro-rating, carry-over, Philippine law leave)", as
   });
 });
 
+describe("admin by role", async () => {
+  const { rightsOf } = await import("./authz");
+  it("directors administer their department, managers their tower, team leads their team", () => {
+    const d = fresh();
+    d.nodes = d.nodes.map((n) => ({ ...n, admins: [] })); // no admins added by hand
+    const c = new Cal(d, TODAY);
+    // Lead 24 (GPM, Rate Management): their team only.
+    expect(rightsOf(c, 24).teamAdmin("rm")).toBe(true);
+    expect(rightsOf(c, 24).teamAdmin("cs")).toBe(false);
+    // Manager 23 (allocated to Rate Management): its tower, not another tower's team.
+    expect(rightsOf(c, 23).teamAdmin("rm")).toBe(true);
+    expect(rightsOf(c, 23).teamAdmin("cs")).toBe(false);
+    // Manager 27 (Customer Service, another tower).
+    expect(rightsOf(c, 27).teamAdmin("cs")).toBe(true);
+    expect(rightsOf(c, 27).teamAdmin("rm")).toBe(false);
+    // Director 26: every team in the department.
+    expect(["rm", "cs"].every((b) => rightsOf(c, 26).teamAdmin(b))).toBe(true);
+    // Associates stay members.
+    expect(rightsOf(c, ANA).anyAdmin).toBe(false);
+  });
+});
+
 describe("people and org", () => {
   it("resignation cancels later requests", () => {
     const d = fresh();

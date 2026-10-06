@@ -55,6 +55,7 @@ export function Shell({ children }: { children: React.ReactNode }) {
   ];
   const adminNav: NavItem[] = isAdmin
     ? [
+        { href: "/workload/admin/queue", icon: "queue", label: "Manage queue" },
         { href: "/workload/admin/intake", icon: "intake", label: "Intake" },
         { href: "/workload/admin/fields", icon: "fields", label: "Task fields" },
         { href: "/workload/admin/allocation", icon: "rules", label: "Allocation" },

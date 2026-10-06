@@ -246,8 +246,8 @@ const subsIn = (O: Org, p: CalPerson, team: string | undefined) =>
 
 export function recordHcChanges(before: CalendarData, after: CalendarData, month: string): CalendarData {
   if (before.people === after.people && before.nodes === after.nodes) return after;
-  const Ob = mkOrg(before.nodes);
-  const Oa = after.nodes === before.nodes ? Ob : mkOrg(after.nodes);
+  const Ob = mkOrg(before.nodes, before.people);
+  const Oa = after.nodes === before.nodes ? Ob : mkOrg(after.nodes, after.people);
   const prev = new Map(before.people.map((p) => [p.id, p]));
   let changed = false;
   const people = after.people.map((p) => {

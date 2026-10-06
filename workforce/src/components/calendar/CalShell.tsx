@@ -16,6 +16,7 @@ const ROUTES: { href: string; access: Access }[] = [
   { href: "/calendar/dashboard", access: "leader" },
   { href: "/calendar/admin/approvals", access: "approver" },
   { href: "/calendar/admin/members", access: "teamAdmin" },
+  { href: "/calendar/admin/schedules", access: "teamAdmin" },
   { href: "/calendar/admin/settings", access: "teamAdmin" },
   { href: "/calendar/admin/shifts", access: "anyAdmin" },
   { href: "/calendar/admin/organization", access: "anyAdmin" },
@@ -60,6 +61,7 @@ export function CalShell({ children }: { children: React.ReactNode }) {
     ...(v.isAdmin
       ? [
           { href: "/calendar/admin/members", icon: "members" as const, label: "Members" },
+          { href: "/calendar/admin/schedules", icon: "calendar" as const, label: "Schedules" },
           { href: "/calendar/admin/settings", icon: "settings" as const, label: "Settings" },
         ]
       : []),

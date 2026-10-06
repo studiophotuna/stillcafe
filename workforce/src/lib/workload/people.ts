@@ -7,6 +7,7 @@
 import type { Cal } from "../calendar/engine";
 import type { OrgNode } from "../calendar/types";
 import { isLeader } from "../calendar/constants";
+import { approversOf } from "../calendar/org";
 import { dayKey, localHour } from "./clock";
 import type { Availability, Person, Trade, WlOrg } from "./types";
 
@@ -98,7 +99,7 @@ export function holidaysFor(c: Cal, teamId: string): string[] {
 /** Team admins of the team plus system admins. */
 export function workloadAdmins(c: Cal, teamId: string): number[] {
   // The team's admins and the admins of its tower and department.
-  const ids = new Set<number>(c.O.anc(teamId).flatMap((n) => c.O.by[n]?.admins ?? []));
+  const ids = new Set<number>(approversOf(c.O, teamId)); // listed admins and admins by role
   c.d.people.forEach((p) => p.sysAdmin && ids.add(p.id));
   return [...ids];
 }

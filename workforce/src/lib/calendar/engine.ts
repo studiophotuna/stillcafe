@@ -41,7 +41,7 @@ export class Cal {
     readonly d: CalendarData,
     readonly today: string,
   ) {
-    this.O = mkOrg(d.nodes);
+    this.O = mkOrg(d.nodes, d.people);
     this.people = new Map(d.people.map((p) => [p.id, p]));
     for (const h of d.holidays) {
       if (h.scope === "all") this.hols[h.date] = h.name;

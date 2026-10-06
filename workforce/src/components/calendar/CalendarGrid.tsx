@@ -32,8 +32,12 @@ export function MonthNav({ size = 30, minW = 190 }: { size?: number; minW?: numb
   );
 }
 
-/** Month grid: people × days. `mgmt` = leadership across the department, combined status. */
-export function CalendarGrid({ mgmt }: { mgmt?: boolean }) {
+/**
+ * Month grid: people × days. `mgmt` = leadership across the department, combined status.
+ * `edit` = the admin Schedules page: click any day to change a schedule, with the update and
+ * upload tools; elsewhere the calendar is a view (click your own row to make a request).
+ */
+export function CalendarGrid({ mgmt, edit }: { mgmt?: boolean; edit?: boolean }) {
   const s = useCalendar();
   const v = useCalView();
   const c = s.cal;
@@ -162,9 +166,10 @@ export function CalendarGrid({ mgmt }: { mgmt?: boolean }) {
         { code: "", label: "Resigned", bg: HATCH, fg: "inherit", bd: "1px solid var(--color-divider)" },
       ]);
 
+  const admin = !mgmt && !!edit && v.isAdmin;
   const onCell = (p: CalPerson, d: string, cell: Cell) => {
     if (cell.gone) return;
-    if (!mgmt && v.isAdmin) s.setDialog({ kind: "cell", pid: p.id, date: d });
+    if (admin) s.setDialog({ kind: "cell", pid: p.id, date: d });
     else if (p.id === s.me) s.setDialog(cell.code === "HOL" || cell.code === "HDY" ? { kind: "holWork", date: d } : { kind: "request", date: d });
   };
 
@@ -198,13 +203,13 @@ export function CalendarGrid({ mgmt }: { mgmt?: boolean }) {
             <Seg name="scope" value={scope} options={[["all", `Everyone (${active.length})`], ["me", "Just me"]]} onChange={setScope} />
           )}
           <Seg name="cellmode" value={cellMode} options={[["status", "Status"], ["shift", "Shift"]]} onChange={setCellMode} />
-          {!mgmt && v.isAdmin && (
+          {admin && (
             <button className="btn btn-secondary btn-36" onClick={() => s.setDialog({ kind: "schedule" })}>
               <Icon name="members" size={16} />
               Update schedules
             </button>
           )}
-          {!mgmt && v.isAdmin && (
+          {admin && (
             <button className="btn btn-secondary btn-36" onClick={() => s.setDialog({ kind: "upload", mode: "schedule" })}>
               <Icon name="upload" size={16} />
               Upload schedule
@@ -280,7 +285,7 @@ export function CalendarGrid({ mgmt }: { mgmt?: boolean }) {
                         ? CODES[cell.code].label + (cell.pending ? " – pending approval" : "") + (cell.note ? " – " + cell.note : "")
                         : "Weekend";
                     const title = `${r.p.name} · ${fmt(d)} · ${lab}` + (sh && WORKING.includes(cell.code as Code) ? ` · ${sh.name} ${sh.start}–${sh.end}` : "");
-                    const canClick = ((!mgmt && v.isAdmin) || r.p.id === s.me) && !cell.gone;
+                    const canClick = (admin || r.p.id === s.me) && !cell.gone;
                     return (
                       <div
                         key={d}
@@ -357,7 +362,7 @@ export function CalendarGrid({ mgmt }: { mgmt?: boolean }) {
       <p style={{ margin: 0, fontSize: 13, color: "var(--color-neutral-700)" }}>
         {mgmt
           ? "Click a day in your own row to request leave. Admins change schedules from the Calendar."
-          : v.isAdmin
+          : admin
             ? "Click any day to change someone’s schedule or record leave. Use “Request” for your own time off."
             : "Click a day in your own row to request leave or a schedule change for that date. On a holiday (HOL), click it to say you’re working."}
       </p>

@@ -21,7 +21,7 @@ export function rightsOf(c: Cal, me: number): Rights {
   const sys = !!p?.sysAdmin;
   // Admin of a node or anything above it (department / tower admins cover their teams).
   const teamAdmin = (bid: string) => sys || isNodeAdmin(c.O, bid, me);
-  const anyAdmin = sys || c.d.nodes.some((n) => (n.admins ?? []).includes(me));
+  const anyAdmin = sys || c.d.nodes.some((n) => (n.admins ?? []).includes(me)) || Object.values(c.O.role ?? {}).some((x) => x.includes(me));
   const adminOf = (pid: number) => {
     const x = c.people.get(pid);
     if (sys) return true;

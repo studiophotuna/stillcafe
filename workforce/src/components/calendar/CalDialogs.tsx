@@ -10,7 +10,7 @@ import {
 import { DOW, addDays, daysInMonth, dowOf, fmt, isWk, fmtY, MONL, rng2 } from "@/lib/calendar/dates";
 import { downloadMembersTemplate, downloadScheduleTemplate, readCalendarUpload } from "@/lib/calendar/excel";
 import { useCalendar, type Issued } from "@/lib/calendar/store";
-import { ALLOC_MIN, allocNeeds, allocProblem, primaryTeamOf } from "@/lib/calendar/org";
+import { ALLOC_MIN, allocNeeds, allocProblem, primaryTeamOf, roleAdminsOf } from "@/lib/calendar/org";
 import { parseOrgText, planOrgImport } from "@/lib/calendar/orgImport";
 import { checkUpload, type UploadRow } from "@/lib/calendar/uploads";
 import { useCalView } from "@/lib/calendar/useCalView";
@@ -1613,6 +1613,16 @@ function NodeAdminsDialog({ id }: { id: string }) {
           Admins of this {kind} have admin rights in every team under it: approvals, members, settings, schedules and Workload — the same as each
           team’s own admins.
         </Note>
+        {roleAdminsOf(O, id).length > 0 && (
+          <span className="small">
+            Admins by role (automatic):{" "}
+            {roleAdminsOf(O, id)
+              .map((pid) => s.cal.people.get(pid))
+              .filter((p) => !!p)
+              .map((p) => `${p!.name} (${LEVELS[p!.level]})`)
+              .join(", ")}
+          </span>
+        )}
         {admins.length ? (
           <table className="table">
             <tbody>
