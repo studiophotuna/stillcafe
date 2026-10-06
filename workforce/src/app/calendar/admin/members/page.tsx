@@ -54,10 +54,10 @@ export default function MembersPage() {
   };
   const mq = q.trim().toLowerCase();
   const shById = Object.fromEntries(s.data.shifts.map((x) => [x.id, x]));
-  // Directors and managers allocated to this team's department or tower are listed too.
-  const above = (p: CalPerson) => v.unitId === v.bid && !O.inN(p, v.bid) && p.assign.some((a) => O.by[a] && (O.by[a].type === "dept" || O.by[a].type === "tower") && O.anc(v.bid).includes(a));
+  // Directors and managers allocated to the tower or department above the teams are listed too.
+  const above = v.isAbove;
   const members = s.data.people
-    .filter((p) => (v.inUnit(p) || above(p)) && (!mq || p.name.toLowerCase().includes(mq)) && (role === "all" || p.level === role))
+    .filter((p) => v.inView(p) && (!mq || p.name.toLowerCase().includes(mq)) && (role === "all" || p.level === role))
     .sort((a, b) => Number(above(b)) - Number(above(a)) || a.name.localeCompare(b.name));
   // Team admins manage the people in their teams; system admins manage everyone.
   // Several teams shown: edit a person from their own team (the filter switches to it).

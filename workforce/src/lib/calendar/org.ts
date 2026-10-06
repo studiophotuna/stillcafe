@@ -146,5 +146,24 @@ export const isNodeAdmin = (O: Pick<Org, "anc" | "by"> & Partial<Pick<Org, "role
 /** Who approves a team's requests: its admins and the admins of its tower and department (listed or by role). */
 export const approversOf = (O: Pick<Org, "anc" | "by"> & Partial<Pick<Org, "role">>, id: string) =>
   [...new Set(O.anc(id).flatMap((n) => (O.by[n]?.admins ?? []).concat(O.role?.[n] ?? [])))];
+/** The towers and departments above these teams (people allocated there lead the whole tower / department). */
+export const aboveTeams = (O: Pick<Org, "anc" | "by">, branchIds: string[]) =>
+  new Set(branchIds.flatMap((b) => O.anc(b).filter((n) => O.by[n] && (O.by[n].type === "tower" || O.by[n].type === "dept"))));
+
+/**
+ * Who appears in a view of these teams: everyone in them, plus directors and managers
+ * allocated to the whole tower or department above them (not when a system or trade is
+ * picked, since they aren't in one).
+ */
+export const inViewOf = (O: Org, branchIds: string[], unitIds: string[], filtered: boolean) => {
+  const above = aboveTeams(O, branchIds);
+  return (p: CalPerson) => unitIds.some((u) => O.inN(p, u)) || (!filtered && p.assign.some((a) => above.has(a)));
+};
+/** Allocated only above the teams (whole tower / department), not in a team itself. */
+export const onlyAbove = (O: Org, branchIds: string[]) => {
+  const above = aboveTeams(O, branchIds);
+  return (p: CalPerson) => !branchIds.some((b) => O.inN(p, b)) && p.assign.some((a) => above.has(a));
+};
+
 /** Admins by role of a node itself (shown separately from the ones added by hand). */
 export const roleAdminsOf = (O: Partial<Pick<Org, "role">>, id: string) => O.role?.[id] ?? [];

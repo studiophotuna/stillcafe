@@ -101,7 +101,8 @@ export function CalendarGrid({ mgmt, edit }: { mgmt?: boolean; edit?: boolean })
       g.forEach((p) => rows.push({ p, cells: dates.map((d) => c.raw(p, d, null)) }));
     });
   } else {
-    active = s.data.people.filter((p) => v.inUnit(p) && c.alive(p, mStart)).sort(byName);
+    // Team members plus directors / managers allocated to the tower or department above.
+    active = s.data.people.filter((p) => v.inView(p) && c.alive(p, mStart)).sort(byName);
     active.forEach((p) => rawMap.set(p.id, dates.map((d) => c.raw(p, d, bid))));
     shown = scope === "me" ? active.filter((p) => p.id === s.me) : active;
     if (ql) shown = shown.filter((p) => p.name.toLowerCase().includes(ql));
@@ -129,6 +130,8 @@ export function CalendarGrid({ mgmt, edit }: { mgmt?: boolean; edit?: boolean })
     if (mgmt)
       // Teams, or the tower / department for leaders allocated above team level.
       return [...new Set(p.assign.map((a) => (O.up(a, "branch") ?? O.by[a])?.name).filter(Boolean))].join(", ");
+    // Allocated to a whole tower / department (directors, managers).
+    if (v.isAbove(p)) return p.assign.map((x) => O.by[x]).filter((n) => n && (n.type === "tower" || n.type === "dept")).map((n) => `${n!.name} · whole ${n!.type === "dept" ? "department" : "tower"}`).join(", ");
     if (v.multi) return O.branchesOf(p).map((b) => b.name + (O.sub(p.assign.find((a) => O.anc(a).includes(b.id)) ?? "") ? " · " + O.sub(p.assign.find((a) => O.anc(a).includes(b.id))!) : "")).join(", ");
     const inHere = p.assign.filter((a) => O.anc(a).includes(here)).map((a) => O.sub(a)).filter(Boolean);
     const other = O.branchesOf(p).filter((b) => b.id !== here).map((b) => b.name);

@@ -67,7 +67,7 @@ export default function MyWorkPage() {
   let idleText = "";
   if (!me.trades.length) {
     idleTitle = "No trades allocated";
-    idleText = "You aren’t allocated to a system and trade, so no tasks come to you. Ask an admin to allocate you in the Calendar › Admin › Members.";
+    idleText = "You aren’t allocated to a system and trade, so no tasks come to you. Ask an admin to allocate you (Admin › Members).";
   } else if (hol && !hol.working) {
     idleTitle = `Today is ${hol.name}`;
     idleText = "It’s a holiday, so tasks aren’t given to you. Working today? Tell us above and you can take tasks as usual.";
@@ -97,7 +97,7 @@ export default function MyWorkPage() {
       <PageHead
         title="My work"
         sub={me.trades.length ? `You work on ${trades} · shift ${me.shift}.` : mode === "db"
-            ? "You aren’t allocated to a system and trade in this team, so no tasks come to you. To take tasks, allocate yourself in Calendar › Admin › Members."
+            ? "You aren’t allocated to a system and trade in this team, so no tasks come to you. To take tasks, allocate yourself in Admin › Members; to manage the team’s work, use Admin › Manage queue and Workload dashboard."
             : "Admin view. Switch to employee (bottom of the menu) to see a member’s screen."}
       />
       <div className="grid-kpi">

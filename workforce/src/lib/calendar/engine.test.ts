@@ -209,6 +209,46 @@ describe("admin by role", async () => {
   });
 });
 
+describe("role functions across Calendar and Workload", async () => {
+  const { rightsOf, visibleTeams } = await import("./authz");
+  const { workloadAdmins, workloadApprovers } = await import("../workload/people");
+  const { canDecide } = await import("./approvals");
+  const { inViewOf } = await import("./org");
+  it("each role sees, administers and approves the right part of the org", () => {
+    const d = fresh();
+    d.nodes = d.nodes.map((n) => ({ ...n, admins: [] }));
+    // A director allocated to the whole department.
+    d.people.push({ ...d.people[0], id: 90, name: "Dee Director", email: "dee@example.com", level: "director", assign: ["bss"], approver: undefined, sysAdmin: false });
+    const c = new Cal(d, TODAY);
+    const teams = (id: number) => visibleTeams(c, id).map((b) => b.id).sort();
+    expect(teams(90)).toEqual(["cs", "rm"]); // director: every team in the department
+    expect(teams(23)).toEqual(["rm"]); // manager of Rate Management's tower
+    expect(teams(27)).toEqual(["cs"]); // manager of Customer Service's tower
+    expect(teams(24)).toEqual(["rm"]); // team lead
+    expect(teams(ANA)).toEqual(["cs", "rm"]); // associate in two teams: just their own
+    expect(["rm", "cs"].map((b) => rightsOf(c, 90).teamAdmin(b))).toEqual([true, true]);
+    expect(rightsOf(c, ANA).anyAdmin).toBe(false);
+    // Workload admins / approvers of Rate Management.
+    const wa = workloadAdmins(c, "rm");
+    expect([90, 23, 24].every((x) => wa.includes(x))).toBe(true);
+    expect(wa.includes(27) || wa.includes(ANA)).toBe(false);
+    expect(workloadApprovers(c, "rm")).toEqual(expect.arrayContaining([90, 23, 24]));
+    // Deciding a Rate Management request: its lead, manager and director; not another tower's manager.
+    const q = { pid: 5 };
+    expect([90, 23, 24].map((x) => canDecide(c, x, q, "rm"))).toEqual([true, true, true]);
+    expect(canDecide(c, 27, q, "rm")).toBe(false);
+    // Views: the director shows in the department view and each team view, not when a system is picked.
+    const p90 = c.person(90);
+    expect(inViewOf(c.O, ["rm", "cs"], ["rm", "cs"], false)(p90)).toBe(true);
+    expect(inViewOf(c.O, ["rm"], ["rm"], false)(p90)).toBe(true);
+    expect(inViewOf(c.O, ["rm"], ["gpm"], true)(p90)).toBe(false);
+    // The tower manager allocated to the whole tower shows in its team, not in another tower's.
+    const mgr = { ...c.person(23), assign: ["t_rm"] };
+    expect(inViewOf(c.O, ["rm"], ["rm"], false)(mgr)).toBe(true);
+    expect(inViewOf(c.O, ["cs"], ["cs"], false)(mgr)).toBe(false);
+  });
+});
+
 describe("people and org", () => {
   it("resignation cancels later requests", () => {
     const d = fresh();

@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo } from "react";
-import { isNodeAdmin } from "./org";
+import { inViewOf, isNodeAdmin, onlyAbove } from "./org";
 import { isLeader as isLeaderLevel } from "./constants";
 import { canDecide, seesApprovals, waitsOn } from "./approvals";
 import { useCalendar } from "./store";
@@ -65,6 +65,10 @@ export function useCalView() {
     const unitIds = multi ? scopeBranches.map((b) => b.id) : tradeIds.length ? tradeIds : [system !== "all" ? system : bid];
     const unitId = multi ? scopeId : unitIds[0];
     const inUnit = (p: CalPerson) => unitIds.some((u) => O.inN(p, u));
+    // Members of the teams plus directors / managers allocated to the tower or department above.
+    const scopeIds = scopeBranches.map((b) => b.id);
+    const inView = inViewOf(O, scopeIds, unitIds, system !== "all" || trade !== "all");
+    const isAbove = onlyAbove(O, scopeIds);
     const unitLabel = multi
       ? span === "dept"
         ? `All towers · ${dept.name.split(" (")[0]}`
@@ -97,7 +101,7 @@ export function useCalView() {
     return {
       canApprove, span, multi, scopeBranches, scopeId, cellBid, adminOfAll, towerTeams, deptTeams,
       meP, myBranches, viewBranches, mTowers, mTower, branch, dept, tower, bid, isAdmin, anyAdmin, isLeader, systems, system, trades, trade,
-      unitId, unitIds, inUnit, unitLabel, deptList, towerOpts, deptShort: dept.name.split(" (")[0], pendingCount,
+      unitId, unitIds, inUnit, inView, isAbove, unitLabel, deptList, towerOpts, deptShort: dept.name.split(" (")[0], pendingCount,
       branchOpts: viewBranches.filter((b) => O.up(b.id, "tower")!.id === tower.id),
     };
   }, [cal, me, sel, data]);
