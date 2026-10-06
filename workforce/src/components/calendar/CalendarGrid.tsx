@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Blueprint, Icon } from "@/components/ui";
 import { ANNUAL, BSTY, CODES, CODE_KEYS, LEVELS, isLeader, PEND, WORKING, type Chip as ChipStyle } from "@/lib/calendar/constants";
 import { DOW, MONL, dayOf, daysInMonth, dowOf, fmt, fmtY, isWk, isoOf } from "@/lib/calendar/dates";
@@ -55,6 +55,19 @@ export function CalendarGrid({ mgmt }: { mgmt?: boolean }) {
       localStorage.setItem("wfm.counts", o ? "open" : "closed");
     } catch {}
   };
+  // Legend: a side panel, closed by default; remembered in this browser.
+  const [legendOpen, setLegendOpenState] = useState(false);
+  useEffect(() => {
+    try {
+      if (localStorage.getItem("wfm.legend") === "open") setLegendOpenState(true);
+    } catch {}
+  }, []);
+  const setLegendOpen = (o: boolean) => {
+    setLegendOpenState(o);
+    try {
+      localStorage.setItem("wfm.legend", o ? "open" : "closed");
+    } catch {}
+  };
   const scope = scopeOverride ?? v.branch.defaultScope ?? "all";
   const shiftMode = cellMode === "shift";
   const shById = Object.fromEntries(s.data.shifts.map((x) => [x.id, x]));
@@ -89,16 +102,20 @@ export function CalendarGrid({ mgmt }: { mgmt?: boolean }) {
     shown.forEach((p) => rows.push({ p, cells: rawMap.get(p.id)! }));
   }
 
-  /** Today's shift as a short badge (e.g. "D"), with the full wording as a tooltip; null on rest days. */
-  const todayOf = (p: CalPerson): { tag: string; title: string } | null => {
+  /**
+   * The Shift column: today's shift hours ("08:00 - 17:00"). Not working today (leave, rest
+   * day): their usual hours, dimmed, with today's status (e.g. VL).
+   */
+  const shiftOf = (p: CalPerson): { hours: string; off: string; title: string } => {
     const cell = c.raw(p, s.today, mgmt ? null : bid);
-    if (cell.gone || !cell.code) return null;
-    if (WORKING.includes(cell.code as Code)) {
-      const id = c.shiftFor(p, s.today);
-      const sh = shById[id];
-      return { tag: id, title: `Today: ${sh ? `${sh.name} ${sh.start}–${sh.end}` : "working"} · ${CODES[cell.code as Code]?.label ?? cell.code}` };
-    }
-    return { tag: cell.code, title: `Today: ${CODES[cell.code as Code]?.label ?? cell.code}${cell.pending ? " (pending)" : ""}` };
+    const sh = shById[c.shiftFor(p, s.today)] ?? shById[p.shift];
+    const hours = sh ? `${sh.start} - ${sh.end}` : "—";
+    const name = sh ? `${sh.name} ${sh.start}–${sh.end}` : "No shift set";
+    if (cell.gone) return { hours, off: "", title: name };
+    if (cell.code && WORKING.includes(cell.code as Code)) return { hours, off: "", title: `Today: ${name} · ${CODES[cell.code as Code]?.label ?? cell.code}` };
+    const off = cell.code ?? "Off";
+    const what = cell.code ? `${CODES[cell.code as Code]?.label ?? cell.code}${cell.pending ? " (pending)" : ""}` : "Rest day";
+    return { hours, off, title: `Today: ${what} · usual shift ${name}` };
   };
 
   const subOf = (p: CalPerson) => {
@@ -201,20 +218,16 @@ export function CalendarGrid({ mgmt }: { mgmt?: boolean }) {
           </div>
         </div>
       </div>
-      <div className="legend">
-        {legend.map((l, i) => (
-          <div key={i}>
-            <Chip s={l}>{l.code}</Chip>
-            {l.label}
-          </div>
-        ))}
-      </div>
-      <Blueprint style={{ minWidth: 0 }}>
+      <div className="cal-body">
+      <Blueprint style={{ minWidth: 0, flex: 1 }}>
         <div className="grid-wrap">
           <div className="grid-inner" role="grid" aria-label={`${mgmt ? "Management" : v.unitLabel} calendar, ${MONL[s.m]} ${s.y}`}>
             <div className="grid-head" role="row">
               <div className="grid-namecol" role="columnheader">
                 Name · {shown.length}
+              </div>
+              <div className="grid-shiftcol" role="columnheader" title="Today's shift hours">
+                Shift
               </div>
               {dates.map((d) => {
                 const isToday = d === s.today;
@@ -243,19 +256,20 @@ export function CalendarGrid({ mgmt }: { mgmt?: boolean }) {
                   <div className="grid-name" role="rowheader">
                     <div>
                       <span>{r.p.name}</span>
-                      {(() => {
-                        const t = todayOf(r.p);
-                        return t ? (
-                          <span className="grid-today" title={t.title} aria-label={t.title}>
-                            {t.tag}
-                          </span>
-                        ) : null;
-                      })()}
                       {r.p.level !== "member" && <span className="tag tag-neutral">{LEVELS[r.p.level]}</span>}
                       {r.p.id === s.me && <span className="tag tag-accent">You</span>}
                     </div>
                     {subOf(r.p) && <span style={{ color: r.p.resign ? "var(--color-accent-700)" : "var(--color-neutral-700)" }}>{subOf(r.p)}</span>}
                   </div>
+                  {(() => {
+                    const t = shiftOf(r.p);
+                    return (
+                      <div className={"grid-shift" + (t.off ? " off" : "")} title={t.title}>
+                        <span>{t.hours}</span>
+                        {t.off && <span className="grid-shift-off">{t.off}</span>}
+                      </div>
+                    );
+                  })()}
                   {r.cells.map((cell, j) => {
                     const d = dates[j];
                     const st = cellStyle(cell);
@@ -321,6 +335,25 @@ export function CalendarGrid({ mgmt }: { mgmt?: boolean }) {
           </div>
         </div>
       </Blueprint>
+      <aside className={"cal-legend" + (legendOpen ? " open" : "")} aria-label="Legend">
+        <button className="cal-legend-toggle" onClick={() => setLegendOpen(!legendOpen)} aria-expanded={legendOpen} title={legendOpen ? "Hide legend" : "Show legend"}>
+          <span style={{ display: "grid", transform: legendOpen ? "rotate(-90deg)" : "rotate(90deg)" }}>
+            <Icon name="down" size={14} />
+          </span>
+          <span>Legend</span>
+        </button>
+        {legendOpen && (
+          <div className="legend legend-col">
+            {legend.map((l, i) => (
+              <div key={i}>
+                <Chip s={l}>{l.code}</Chip>
+                {l.label}
+              </div>
+            ))}
+          </div>
+        )}
+      </aside>
+      </div>
       <p style={{ margin: 0, fontSize: 13, color: "var(--color-neutral-700)" }}>
         {mgmt
           ? "Click a day in your own row to request leave. Admins change schedules from the Calendar."

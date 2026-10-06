@@ -2,7 +2,7 @@
 import { H, dur, fmtS, fmtT } from "./clock";
 import { AV, PR, ST, trPathOf } from "./constants";
 import type { Action } from "./actions";
-import { canTake, cxCheck, cxOn, cxText, due, holdPeriods, isBusy, overdueMs, personOf, slaOf, slaText, taskTypeOf, waitingMs, taskWorkMs, ticketOf, type WorkloadData } from "./engine";
+import { blocked, canTake, cxCheck, cxOn, cxText, due, holdPeriods, isBusy, overdueMs, personOf, slaOf, slaText, taskTypeOf, waitingMs, taskWorkMs, ticketOf, type WorkloadData } from "./engine";
 import type { Task } from "./types";
 
 export interface RowAction {
@@ -54,7 +54,7 @@ export function taskRow(d: WorkloadData, t: Task, me: number, isAdmin: boolean, 
   const od = t.status !== "done" && now > dueAt;
   const soon = !od && t.status !== "done" && dueAt - now < 2 * H;
   const meP = personOf(d, me) ?? { id: me, name: "", trades: [], avail: "available" as const, shift: "", shiftStart: 8 };
-  const busy = isBusy(d.tasks, me);
+  const busy = blocked(d, me);
   let action: RowAction | null = null;
   if (t.status === "new" && s.mode === "self" && canTake(d, meP, t))
     action = { kind: "take", id: t.id, label: meP.trades.includes(t.trade) ? "Take" : "Help", disabled: busy };

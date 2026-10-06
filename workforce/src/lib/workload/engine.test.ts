@@ -113,6 +113,14 @@ describe("start work (FIFO)", () => {
     expect(get(o.data, next.id).status).toBe("new");
   });
 
+  it("allows several tasks in progress when the team turns one-at-a-time off", () => {
+    const cur = task({ status: "in_progress", assignee: ANA, startedAt: NOW - M });
+    const next = task();
+    const o = startWork(data([cur, next], { oneAtATime: false }), ANA, NOW);
+    expect(get(o.data, next.id)).toMatchObject({ status: "in_progress", assignee: ANA });
+    expect(get(o.data, cur.id).status).toBe("in_progress");
+  });
+
   it("does not give work to unavailable people unless the team allows it", () => {
     const t = task({ trade: "eu" });
     expect(get(startWork(data([t]), ELI, NOW).data, t.id).status).toBe("new");

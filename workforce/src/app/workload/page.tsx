@@ -5,19 +5,23 @@ import { TaskTable } from "@/components/TaskTable";
 import { Blueprint, Icon, Kpi, PageHead, pct } from "@/components/ui";
 import { dur } from "@/lib/workload/clock";
 import { AV, trPathOf } from "@/lib/workload/constants";
-import { AWAY, awayLabel, basisUnit, typeTargets, canWork, currentAway, doneToday, endedToday, fmtMin, helpQueue, missingRequired, ownQueue, personMetrics, sortTasks } from "@/lib/workload/engine";
+import { AWAY, awayLabel, oneAtATime, basisUnit, typeTargets, canWork, currentAway, doneToday, endedToday, fmtMin, helpQueue, missingRequired, ownQueue, personMetrics, sortTasks } from "@/lib/workload/engine";
 import { fmtT } from "@/lib/workload/clock";
 import { TaskTimer } from "@/components/WorkloadBits";
 import { useWorkload } from "@/lib/workload/store";
 import { breakAllowance } from "@/lib/workload/breaks";
 import { taskDetail, taskRow } from "@/lib/workload/view";
+import type { Task } from "@/lib/workload/types";
 
 export default function MyWorkPage() {
   const { data, now, run, me, setDialog, setHolidayWork, mode } = useWorkload();
   const hol = me.holiday;
   const s = data.settings;
   const trades = me.trades.map((x) => trPathOf(data.org, x)).join(", ");
-  const cur = data.tasks.find((t) => t.assignee === me.id && t.status === "in_progress");
+  // In progress: one at a time, or several when the team allows it (oldest started first).
+  const curs = data.tasks.filter((t) => t.assignee === me.id && t.status === "in_progress").sort((a, b) => (a.startedAt ?? 0) - (b.startedAt ?? 0));
+  const cur = curs[0];
+  const multi = !oneAtATime(s);
   const myDone = doneToday(data.tasks.filter((t) => t.assignee === me.id), now);
   const avg = myDone.length ? dur(myDone.reduce((a, t) => a + (t.doneAt! - t.startedAt!), 0) / myDone.length) : "—";
   const metricF = data.fields.filter((f) => f.type === "number" && f.metric);
@@ -81,11 +85,9 @@ export default function MyWorkPage() {
       : `Tasks are assigned by an admin${s.mode === "rr" ? " (shared out automatically)" : ""}. Nothing is assigned to you right now.`;
   const showStart = !!me.trades.length && (s.mode === "fifo" || hasAssigned);
 
-  const c = cur ? taskDetail(data, cur, now) : null;
   const away = currentAway(data, me.id);
   const ended = endedToday(data, me.id, now);
   const onTeam = data.people.some((p) => p.id === me.id);
-  const curMissing = cur ? missingRequired(data.fields, cur.fields) : [];
 
   return (
     <>
@@ -185,55 +187,14 @@ export default function MyWorkPage() {
         </Blueprint>
       )}
 
-      {cur && c ? (
-        <Blueprint as="section" className="current">
-          <div className="current-top">
-            <div>
-              <div className="task-meta">
-                <span className="tag tag-accent">In progress</span>
-                <span className={"tag " + c.prCls}>{c.priority}</span>
-                <span>
-                  {cur.id} · {c.path} · {c.sourceLabel}
-                </span>
-              </div>
-              <h2>{cur.title}</h2>
-              <div style={{ display: "flex", gap: 16, alignItems: "baseline", flexWrap: "wrap" }}>
-                <TaskTimer task={cur} />
-                <span style={{ fontSize: 13.5, color: c.dueColor }}>{c.dueText}</span>
-              </div>
-              {curMissing.length > 0 && (
-                <span style={{ display: "block", fontSize: 13, color: "var(--color-accent-800)", marginTop: 4 }}>
-                  Needed before you can resolve it: {curMissing.join(", ")}
-                </span>
-              )}
-            </div>
-            <div className="row">
-              <button className="btn btn-secondary btn-md" onClick={() => setDialog({ kind: "hold", id: cur.id })}>
-                Pending
-              </button>
-              <Blueprint
-                as="button"
-                className="btn btn-primary btn-md"
-                style={{ padding: "0 20px", fontSize: 15 }}
-                onClick={() => setDialog({ kind: "done", id: cur.id })}
-              >
-                <Icon name="check" />
-                Resolve ticket
-              </Blueprint>
-            </div>
-          </div>
-          <div className="current-body">
-            <div className="kv">
-              {c.fieldRows.map((f) => [<span key={f.label + "k"}>{f.label}</span>, <span key={f.label + "v"}>{f.value}</span>])}
-            </div>
-            {cur.email && <EmailBox email={cur.email} received={c.receivedText} />}
-          </div>
-        </Blueprint>
-      ) : (
+      {curs.map((t) => (
+        <CurrentTask key={t.id} cur={t} />
+      ))}
+      {(!cur || (multi && showStart)) && (
         <Blueprint as="section" className="idle">
           <div>
-            <h2>{idleTitle}</h2>
-            <span>{idleText}</span>
+            <h2>{cur ? "Start another task" : idleTitle}</h2>
+            <span>{cur ? `Your team lets you work on several tasks at once (${curs.length} in progress).` : idleText}</span>
           </div>
           {showStart && (
             <Blueprint as="button" className="btn btn-primary btn-lg" disabled={unavailable || !!away || !!ended} onClick={() => run({ type: "startWork", pid: me.id })}>
@@ -259,5 +220,57 @@ export default function MyWorkPage() {
         </section>
       )}
     </>
+  );
+}
+
+/** A task in progress: timer, due time, fields and the Pending / Resolve buttons. */
+function CurrentTask({ cur }: { cur: Task }) {
+  const { data, now, setDialog } = useWorkload();
+  const c = taskDetail(data, cur, now);
+  const curMissing = missingRequired(data.fields, cur.fields);
+  return (
+    <Blueprint as="section" className="current">
+      <div className="current-top">
+        <div>
+          <div className="task-meta">
+            <span className="tag tag-accent">In progress</span>
+            <span className={"tag " + c.prCls}>{c.priority}</span>
+            <span>
+              {cur.id} · {c.path} · {c.sourceLabel}
+            </span>
+          </div>
+          <h2>{cur.title}</h2>
+          <div style={{ display: "flex", gap: 16, alignItems: "baseline", flexWrap: "wrap" }}>
+            <TaskTimer task={cur} />
+            <span style={{ fontSize: 13.5, color: c.dueColor }}>{c.dueText}</span>
+          </div>
+          {curMissing.length > 0 && (
+            <span style={{ display: "block", fontSize: 13, color: "var(--color-accent-800)", marginTop: 4 }}>
+              Needed before you can resolve it: {curMissing.join(", ")}
+            </span>
+          )}
+        </div>
+        <div className="row">
+          <button className="btn btn-secondary btn-md" onClick={() => setDialog({ kind: "hold", id: cur.id })}>
+            Pending
+          </button>
+          <Blueprint
+            as="button"
+            className="btn btn-primary btn-md"
+            style={{ padding: "0 20px", fontSize: 15 }}
+            onClick={() => setDialog({ kind: "done", id: cur.id })}
+          >
+            <Icon name="check" />
+            Resolve ticket
+          </Blueprint>
+        </div>
+      </div>
+      <div className="current-body">
+        <div className="kv">
+          {c.fieldRows.map((f) => [<span key={f.label + "k"}>{f.label}</span>, <span key={f.label + "v"}>{f.value}</span>])}
+        </div>
+        {cur.email && <EmailBox email={cur.email} received={c.receivedText} />}
+      </div>
+    </Blueprint>
   );
 }

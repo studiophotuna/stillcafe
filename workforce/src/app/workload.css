@@ -219,7 +219,7 @@ main.page { padding: 24px 32px 56px; display: flex; flex-direction: column; gap:
   background: var(--color-bg); border: none; font: inherit; font-size: 12.5px; font-weight: 500; color: var(--color-accent-700); cursor: pointer;
 }
 .grid-count-label {
-  width: 240px; flex: none; position: sticky; left: 0; background: var(--color-bg); padding: 6px 14px;
+  width: 344px; flex: none; position: sticky; left: 0; background: var(--color-bg); padding: 6px 14px;
   border-right: 1px solid var(--color-divider); font-size: 12px; color: var(--color-neutral-800); font-weight: 500;
 }
 .grid-count { width: 40px; flex: none; display: grid; place-items: center; font-size: 12px; font-variant-numeric: tabular-nums; border-right: 1px solid color-mix(in srgb, var(--color-text) 7%, transparent); }
@@ -343,3 +343,19 @@ button.org-tog:hover { color: var(--color-text); }
 
 .hc-name { background: none; border: 0; padding: 0; font: inherit; color: inherit; cursor: pointer; text-align: left; text-decoration: underline dotted; text-underline-offset: 3px; }
 .hc-name:hover { color: var(--color-accent-800); }
+
+/* Calendar: today's shift hours beside the name. */
+.grid-shiftcol, .grid-shift { width: 104px; flex: none; position: sticky; left: 240px; border-right: 1px solid var(--color-divider); background: var(--color-bg); }
+.grid-shiftcol { z-index: 4; padding: 10px 10px; display: flex; align-items: flex-end; font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--color-neutral-700); }
+.grid-shift { z-index: 2; padding: 4px 10px; display: flex; flex-direction: column; justify-content: center; font-size: 12px; font-variant-numeric: tabular-nums; white-space: nowrap; color: var(--color-neutral-900); }
+.grid-shift.off > span:first-child { color: var(--color-neutral-600); }
+.grid-shift-off { font-size: 10.5px; font-weight: 600; color: var(--color-accent-700); }
+/* Calendar body: grid plus a collapsible legend on the right. */
+.cal-body { display: flex; gap: 12px; align-items: flex-start; min-width: 0; }
+.cal-legend { flex: none; position: sticky; top: 12px; border: 1px solid var(--color-divider); border-radius: var(--radius-md); background: var(--color-card, var(--color-bg)); }
+.cal-legend.open { width: 210px; }
+.cal-legend-toggle { display: flex; align-items: center; gap: 6px; padding: 10px 12px; background: none; border: 0; font: inherit; font-size: 12.5px; font-weight: 600; color: var(--color-accent-700); cursor: pointer; }
+.cal-legend:not(.open) .cal-legend-toggle { writing-mode: vertical-rl; padding: 12px 8px; }
+.cal-legend:not(.open) .cal-legend-toggle > span:first-child { transform: none !important; }
+.legend.legend-col { flex-direction: column; align-items: flex-start; flex-wrap: nowrap; gap: 6px; padding: 0 12px 12px; }
+@media (max-width: 720px) { .cal-body { flex-direction: column; } .cal-legend { position: static; width: 100%; } .cal-legend:not(.open) .cal-legend-toggle { writing-mode: horizontal-tb; } }

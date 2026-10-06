@@ -120,6 +120,9 @@ export function sortTasks(list: Task[], c: SlaCtx): Task[] {
  */
 export const canWork = (p: Person, s: Settings) => !s.skipUnavail || p.avail === "available" || (p.avail === "offshift" && !!p.onToday);
 export const isBusy = (tasks: Task[], pid: number) => tasks.some((t) => t.assignee === pid && t.status === "in_progress");
+/** Whether the member must finish (or set pending) their task before starting another. */
+export const oneAtATime = (s: Settings) => s.oneAtATime !== false;
+export const blocked = (d: Pick<WorkloadData, "tasks" | "settings">, pid: number) => oneAtATime(d.settings) && isBusy(d.tasks, pid);
 
 const hist = (t: Task, at: number, text: string) => [...t.history, { at, text }];
 const patch = (d: WorkloadData, id: string, fn: (t: Task) => Task): WorkloadData => ({
@@ -185,11 +188,11 @@ const helping = (d: WorkloadData, me: Person, t: Task) =>
  * "Start work": the member's next assigned task, or in FIFO mode the next waiting
  * task in their own trades. When their trades are empty it offers work elsewhere
  * (same system first, then the team) and takes it only once they agree (`assist`).
- * One task in progress at a time.
+ * One task in progress at a time, unless the team allows several.
  */
 export function startWork(d: WorkloadData, pid: number, now: number, assist = false): Outcome {
   const me = personOf(d, pid);
-  if (!me || isBusy(d.tasks, pid)) return { data: d };
+  if (!me || blocked(d, pid)) return { data: d };
   const stop = notWorking(d, pid, now);
   if (stop) return { data: d, message: stop };
   if (!canWork(me, d.settings)) return { data: d, message: "You’re marked unavailable, so tasks aren’t given to you." };
@@ -208,7 +211,7 @@ export function startWork(d: WorkloadData, pid: number, now: number, assist = fa
 export function startTask(d: WorkloadData, id: string, pid: number, now: number): Outcome {
   const me = personOf(d, pid);
   const t = d.tasks.find((x) => x.id === id);
-  if (!me || !t || isBusy(d.tasks, pid)) return { data: d };
+  if (!me || !t || blocked(d, pid)) return { data: d };
   const stop = notWorking(d, pid, now);
   if (stop) return { data: d, message: stop };
   const take = d.settings.mode === "self" && canTake(d, me, t);
@@ -246,7 +249,7 @@ export function resumeTask(d: WorkloadData, id: string, pid: number, now: number
   const stop = notWorking(d, pid, now);
   if (stop) return { data: d, message: stop };
   const t = d.tasks.find((x) => x.id === id);
-  if (!t || t.assignee !== pid || t.status !== "on_hold" || isBusy(d.tasks, pid)) return { data: d };
+  if (!t || t.assignee !== pid || t.status !== "on_hold" || blocked(d, pid)) return { data: d };
   return { data: patch(d, id, (x) => ({ ...x, status: "in_progress", history: hist(x, now, "Resumed") })) };
 }
 
@@ -287,7 +290,8 @@ export function completeTask(d: WorkloadData, id: string, vals: Task["fields"], 
     history: hist(x, now, "Done" + note + (late ? ` · Delay: ${why}` : "")),
   }));
   const s = d.settings;
-  const feed = s.autoFeed && (s.mode === "fifo" || done.tasks.some((x) => x.assignee === pid && x.status === "assigned"));
+  // With several tasks allowed, don't feed another while they still have one in progress.
+  const feed = s.autoFeed && !isBusy(done.tasks, pid) && (s.mode === "fifo" || done.tasks.some((x) => x.assignee === pid && x.status === "assigned"));
   if (feed) {
     const n = startWork(done, pid, now);
     const rest = n.message && !n.ask ? " " + n.message.replace(/^Done\. /, "") : "";

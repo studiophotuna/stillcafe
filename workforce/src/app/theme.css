@@ -111,7 +111,7 @@ h1, .page-head h1 { color: var(--color-accent-800); letter-spacing: -0.01em; }
 .auth { background: linear-gradient(160deg, var(--color-accent-100), var(--color-bg) 60%); }
 .auth-card { border-radius: 16px; background: var(--color-card); }
 .grid-cell > button, .grid-day > span:last-child { border-radius: var(--radius-sm); }
-.grid-head, .grid-namecol, .grid-name, .grid-counts, .grid-count-label, .grid-counts-toggle { background: var(--color-card); }
+.grid-head, .grid-namecol, .grid-name, .grid-shiftcol, .grid-shift, .grid-counts, .grid-count-label, .grid-counts-toggle { background: var(--color-card); }
 .grid-wrap { border-radius: var(--radius-card); }
 
 /* — charts (src/components/Charts.tsx) — */

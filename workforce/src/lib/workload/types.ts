@@ -203,6 +203,8 @@ export interface Settings {
   order: OrderRule;
   skipUnavail: boolean;
   autoFeed: boolean;
+  /** One task in progress per member at a time (default yes); no = they can work several at once. */
+  oneAtATime?: boolean;
   sla: Record<Priority, number>;
   mailbox: string;
   mailTrade: string;

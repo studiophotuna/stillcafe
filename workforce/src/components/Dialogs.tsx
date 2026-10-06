@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { fieldOptions, trPathOf } from "@/lib/workload/constants";
 import { fmtT, nowMs } from "@/lib/workload/clock";
-import { due, fmtMin, missingRequired, otAvailMin, OT_KIND, type AssistOffer, slaText, otProcesses, suggestOtSplit, asksOtSplit, typesFor, cxLevels, cxTotal, cxField } from "@/lib/workload/engine";
+import { due, fmtMin, oneAtATime, missingRequired, otAvailMin, OT_KIND, type AssistOffer, slaText, otProcesses, suggestOtSplit, asksOtSplit, typesFor, cxLevels, cxTotal, cxField } from "@/lib/workload/engine";
 import { useWorkload } from "@/lib/workload/store";
 import type { Priority, Task, OtPart } from "@/lib/workload/types";
 import { assignOptions, taskDetail } from "@/lib/workload/view";
@@ -66,7 +66,7 @@ function TaskDialog({ id }: { id: string }) {
   const close = () => setDialog(null);
   const canAdmin = isAdmin && t.status !== "done";
   const canResume = t.assignee === me.id && t.status === "on_hold";
-  const busy = data.tasks.some((x) => x.assignee === me.id && x.status === "in_progress");
+  const busy = oneAtATime(data.settings) && data.tasks.some((x) => x.assignee === me.id && x.status === "in_progress");
   return (
     <Modal onClose={close} width={820}>
       <div className="dialog-scroll">
