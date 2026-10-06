@@ -8,10 +8,11 @@ import { addDays } from "../calendar/dates";
 import type { Code } from "../calendar/types";
 import { dayKey } from "./clock";
 import { visibleTeams } from "../calendar/authz";
-import { holidaysFor, orgFor, peopleFromCalendar, workloadAdmins, workloadApprovers } from "./people";
+import { billedFor, holidaysFor, orgFor, peopleFromCalendar, workloadAdmins, workloadApprovers } from "./people";
 import { applyAction, type Action } from "./actions";
 import type { WorkloadData } from "./engine";
 import { initialData } from "./seed";
+import { forViewer } from "./business";
 import type { Activity, Task } from "./types";
 
 /** Supabase persistence for the Workload module (schema `workforce`, see supabase/migrations). */
@@ -34,7 +35,7 @@ interface RawSnapshot {
   tasks: RawTask[];
 }
 
-type FromCal = Pick<WorkloadData, "people" | "admins" | "org" | "approvers" | "holidays">;
+type FromCal = Pick<WorkloadData, "people" | "admins" | "org" | "approvers" | "holidays" | "hc">;
 type RawActivity = Activity & { version: number };
 /** Activity loaded with the team: recent days (reports) plus anything ongoing or pending. */
 const ACTIVITY_DAYS = 35;
@@ -59,6 +60,7 @@ async function teamContext(token: string, me: number, want?: string | null): Pro
       approvers: workloadApprovers(c, team),
       org: orgFor(c, team, teams),
       holidays: holidaysFor(c, team),
+      hc: billedFor(c, team),
     },
   };
 }
@@ -148,7 +150,7 @@ async function loadOrCreate(token: string, team: string, ctx: FromCal): Promise<
 /** Current data for a team person `me` can open; creates the team's Workload (no tasks) the first time. */
 export async function getData(token: string, me: number, want?: string | null): Promise<WorkloadData> {
   const { team, ctx } = await teamContext(token, me, want);
-  return (await loadOrCreate(token, team, ctx)).data;
+  return forViewer((await loadOrCreate(token, team, ctx)).data, me);
 }
 
 /**
@@ -166,7 +168,7 @@ export async function runAction(token: string, me: number, action: Action, want?
     const out = applyAction(s.data, auth.action, Date.now());
     try {
       await save(token, team, s, out.data);
-      return { data: out.data, message: out.message };
+      return { data: forViewer(out.data, me), message: out.message };
     } catch (e) {
       if (!(e instanceof ConflictError)) throw e;
     }

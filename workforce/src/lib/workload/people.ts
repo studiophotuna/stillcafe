@@ -8,8 +8,9 @@ import type { Cal } from "../calendar/engine";
 import type { OrgNode } from "../calendar/types";
 import { isLeader } from "../calendar/constants";
 import { approversOf } from "../calendar/org";
+import { teamHeadcount } from "../calendar/headcount";
 import { dayKey, localHour } from "./clock";
-import type { Availability, Person, Trade, WlOrg } from "./types";
+import type { Availability, BillRow, Person, Trade, WlOrg } from "./types";
 
 const workingOn = (o: string | undefined) => (o === "WFH" ? "WFH" : o && o !== "HOL" ? "RTO" : null);
 
@@ -116,4 +117,13 @@ export function workloadApprovers(c: Cal, teamId: string): number[] {
     if (c.O.inN(p, teamId) || p.assign.some((a) => above.has(a))) ids.add(p.id);
   });
   return [...ids];
+}
+
+/** The team's billed FTE this year by person and month (Calendar › Headcount, with overrides), for the business case. */
+export function billedFor(c: Cal, teamId: string): { year: number; rows: BillRow[] } | undefined {
+  const team = c.O.by[teamId];
+  if (!team) return undefined;
+  const year = Number(c.today.slice(0, 4));
+  const hc = teamHeadcount(c, team, year);
+  return { year, rows: hc.rows.map((r) => ({ pid: r.pid, name: r.name, level: r.level, billed: r.months.map((m) => m.billed) })) };
 }

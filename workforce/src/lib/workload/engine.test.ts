@@ -1071,3 +1071,63 @@ describe("break and lunch over the allowance", async () => {
     expect(f[0]).toMatchObject({ pid: ANA, min: 105, allowed: 90, over: 15 });
   });
 });
+
+describe("business case: fixed against unit pricing", async () => {
+  const B = await import("./business");
+  const { applyAction } = await import("./actions");
+  const { authorizeWl } = await import("./authz");
+  const at = (d: string) => Date.parse(`2026-${d}T10:00:00+08:00`);
+  const types = [{ id: "doc", name: "Doc review", sla: 4, trades: [], keywords: [] }];
+  const hc = {
+    year: 2026,
+    rows: [
+      { pid: 0, name: "Ana", level: "member" as const, billed: Array(12).fill(1) },
+      { pid: 1, name: "Ben", level: "senior" as const, billed: [...Array(8).fill(1), 0.5, 1, 1, 1] },
+      { pid: 23, name: "Sam", level: "manager" as const, billed: Array(12).fill(0) },
+    ],
+  };
+  const bill = (p = {}) => ({ mode: "fixed" as const, currency: "USD", roleRates: { member: 2000, senior: 3000 }, unitRates: { "": 10, doc: 25 }, unit: "tasks", when: "resolved" as const, ...p });
+  const tasks = [
+    task({ status: "done", doneAt: at("09-02"), received: at("08-30"), fields: { contracts: 3 } }),
+    task({ status: "done", doneAt: at("09-03"), received: at("09-01"), ttype: "doc", fields: { contracts: 2 } }),
+    task({ status: "new", received: at("09-04"), ttype: "doc", fields: { contracts: 5 } }),
+    task({ status: "done", doneAt: at("08-20"), received: at("08-20"), ttype: "gone" }),
+  ];
+  const mk = (p = {}) => ({ ...data(tasks, { taskTypes: types, billing: bill(p) }), hc });
+
+  it("prices billed FTE per role per month and transactions per task type", () => {
+    const bc = B.businessCase(mk(), 2026, 9);
+    const sep = bc.months[8];
+    expect(bc.months).toHaveLength(9);
+    expect(sep).toMatchObject({ fte: 1.5, fixed: 2000 + 1500, units: 2, unit: 10 + 25 });
+    expect(sep.roles.map((r) => r.id)).toEqual(["member", "senior"]); // the manager isn't billed
+    expect(bc.months[7]).toMatchObject({ units: 1, unit: 0 }); // a removed type has no price
+    expect(bc.unpricedTypes).toEqual(["Removed task type"]);
+    expect(bc.total.fixed).toBe(8 * 5000 + 3500);
+  });
+
+  it("counts what the admin chooses: per ticket or a number field, when resolved or received", () => {
+    const rec = B.businessCase(mk({ when: "received" }), 2026, 9).months[8];
+    expect(rec).toMatchObject({ units: 2, unit: 25 + 25 }); // the open doc review counts; the August one doesn't
+    const field = B.businessCase(mk({ unit: "contracts" }), 2026, 9).months[8];
+    expect(field).toMatchObject({ units: 5, unit: 3 * 10 + 2 * 25 });
+  });
+
+  it("flags roles with billed FTE but no rate, and keeps rates from admins only", () => {
+    const bc = B.businessCase(mk({ roleRates: { member: 2000 } }), 2026, 9);
+    expect(bc.unpricedRoles).toEqual(["senior"]);
+    const d = mk();
+    expect(B.forViewer(d, 23)).toBe(d);
+    const emp = B.forViewer(d, ANA);
+    expect(emp.settings.billing).toBeUndefined();
+    expect(emp.hc).toBeUndefined();
+    expect(authorizeWl({ type: "setSettings", patch: { billing: bill() } }, d, ANA)).toHaveProperty("error");
+  });
+
+  it("cleans rates saved from the page", () => {
+    const r = applyAction(mk(), { type: "setSettings", patch: { billing: { ...bill(), mode: "x" as never, currency: " eur ", roleRates: { member: -5, senior: 2500 }, unitRates: { doc: Number.NaN, "": 12 } } } }, NOW);
+    expect(r.data.settings.billing).toEqual({ mode: "fixed", currency: "EUR", roleRates: { senior: 2500 }, unitRates: { "": 12 }, unit: "tasks", when: "resolved" });
+    // Other settings and every task stay as they were.
+    expect(r.data.tasks).toBe(mk().tasks);
+  });
+});

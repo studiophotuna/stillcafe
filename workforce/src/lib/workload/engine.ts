@@ -6,7 +6,7 @@
 import { H, M, TZ_OFFSET_H, addHours, dayKey, fmtT, localHour, spanMs, weekend } from "./clock";
 import { CARRIERS, PR, fieldOptions, lc, sysName, trPathOf } from "./constants";
 import { SAMPLE_MAIL } from "./seed";
-import type { Activity, ActivityKind, CxLevel, OtPart, Person, Priority, Settings, Task, TaskField, TaskType, WlOrg } from "./types";
+import type { Activity, ActivityKind, BillRow, CxLevel, OtPart, Person, Priority, Settings, Task, TaskField, TaskType, WlOrg } from "./types";
 
 export interface WorkloadData {
   tasks: Task[];
@@ -31,6 +31,8 @@ export interface WorkloadData {
   approvers: number[];
   /** Calendar holidays for this team (yyyy-mm-dd), skipped in SLA time unless the team counts them. */
   holidays: string[];
+  /** Business case: the team's billed FTE this year by person and month (Workload admins only). */
+  hc?: { year: number; rows: BillRow[] };
 }
 
 export const personOf = (d: Pick<WorkloadData, "people">, id: number | null) =>

@@ -34,7 +34,8 @@ import {
   type UploadRow,
   type WorkloadData,
 } from "./engine";
-import type { ActivityKind, OtPart, Priority, Settings, Task, TaskField } from "./types";
+import type { ActivityKind, Billing, OtPart, Priority, Settings, Task, TaskField } from "./types";
+import { cleanBilling } from "./business";
 
 export type Action =
   | { type: "startWork"; pid: number; assist?: boolean }
@@ -66,7 +67,7 @@ export type Action =
   | { type: "setFields"; fields: TaskField[] };
 
 const SETTING_KEYS: (keyof Settings)[] = [
-  "mode", "order", "skipUnavail", "autoFeed", "multiPick", "sla", "mailbox", "mailTrade", "work", "targets", "memberTargets", "prodBasis", "uploaders", "staleDays", "ticketField", "slaWeekends", "slaHolidays", "taskTypes", "complexity",
+  "mode", "order", "skipUnavail", "autoFeed", "multiPick", "sla", "mailbox", "mailTrade", "work", "targets", "memberTargets", "prodBasis", "uploaders", "staleDays", "ticketField", "slaWeekends", "slaHolidays", "taskTypes", "complexity", "billing",
 ];
 
 export function applyAction(d: WorkloadData, a: Action, now: number): Outcome {
@@ -99,6 +100,7 @@ export function applyAction(d: WorkloadData, a: Action, now: number): Outcome {
     case "importRows": return importRows(d, checkRows(a.rows, d.fields, d.org, now, d.settings.taskTypes), now);
     case "setSettings": {
       const patch = Object.fromEntries(Object.entries(a.patch).filter(([k]) => SETTING_KEYS.includes(k as keyof Settings)));
+      if (patch.billing) patch.billing = cleanBilling(patch.billing as Billing);
       return { data: { ...d, settings: { ...d.settings, ...patch } } };
     }
     case "setFields": return { data: { ...d, fields: a.fields } };

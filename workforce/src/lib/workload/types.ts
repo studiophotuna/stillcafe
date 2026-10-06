@@ -237,6 +237,35 @@ export interface Settings {
   taskTypes?: TaskType[];
   /** Complexity of contracts in a ticket (Simple / Medium / Complex …), each with its own target and handling time. */
   complexity?: Complexity;
+  /** Business case: how the team bills (fixed per role and month, or per transaction) and the agreed rates. Admins only. */
+  billing?: Billing;
+}
+
+/** Roles as in the Calendar (rates for the fixed model are set per role). */
+export type BillRole = "member" | "specialist" | "senior" | "lead" | "manager" | "director";
+
+export interface Billing {
+  /** How the team bills: "fixed" (billed FTE × monthly rate per role) or "unit" (transactions × price per task type). */
+  mode: "fixed" | "unit";
+  /** Currency of the rates, e.g. USD, EUR, PHP. */
+  currency: string;
+  /** Fixed: monthly rate per billed FTE, by role. */
+  roleRates: Partial<Record<BillRole, number>>;
+  /** Unit: price per transaction by task type id ("" = standard requests without a type). */
+  unitRates: Record<string, number>;
+  /** What one transaction is: "tasks" (each ticket counts 1) or a number field summed per ticket (e.g. contracts). */
+  unit: string;
+  /** The month a transaction counts in: when it was resolved (resolved tickets only) or when it was received (all tickets). */
+  when: "resolved" | "received";
+}
+
+/** A person's billed FTE per month of a year (Calendar › Headcount, with admin overrides). */
+export interface BillRow {
+  pid: number;
+  name: string;
+  level: BillRole;
+  /** 12 months; null = not in the team that month. */
+  billed: (number | null)[];
 }
 
 export interface Toast {

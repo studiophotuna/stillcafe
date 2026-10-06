@@ -827,6 +827,15 @@ describe("rest day overtime", async () => {
     d.overrides[`${ANA}|${SAT}`] = "RTO"; // a regular weekend shift
     expect(ana().otDay).toBeUndefined();
   });
+  it("gives Workload the team's billed FTE from Headcount for the business case", async () => {
+    const { billedFor } = await import("../workload/people");
+    const { teamHeadcount } = await import("./headcount");
+    const c = new Cal(fresh(), TODAY);
+    const b = billedFor(c, "rm")!;
+    expect(b.year).toBe(2026);
+    expect(b.rows.map((r) => [r.pid, r.billed])).toEqual(teamHeadcount(c, c.O.by.rm, 2026).rows.map((r) => [r.pid, r.months.map((m) => m.billed)]));
+    expect(billedFor(c, "nope")).toBeUndefined();
+  });
 });
 
 describe("attendance summary, reports, payroll and approvers", async () => {

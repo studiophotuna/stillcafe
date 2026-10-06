@@ -1,5 +1,5 @@
-import { H, M } from "./clock";
-import { CARRIERS, DEMO_ORG, FIELDS0, PEOPLE, person, tradeOf } from "./constants";
+import { H, M, dayKey } from "./clock";
+import { ADMIN_ID, CARRIERS, DEMO_ORG, FIELDS0, PEOPLE, person, tradeOf } from "./constants";
 import type { WorkloadData } from "./engine";
 import type { Priority, Task, TaskStatus } from "./types";
 
@@ -153,6 +153,20 @@ export const SAMPLE_MAIL: [string, string, string, string[]][] = [
   ["ops@dsv.com", "Question about last week’s filing", "Could someone confirm the filing reference?", []],
 ];
 
+/** Sample billed headcount: everyone 1 FTE from January, the manager not billed (as in Calendar › Headcount). */
+function sampleHc(now: number) {
+  const year = Number(dayKey(now).slice(0, 4));
+  return {
+    year,
+    rows: PEOPLE.map((p) => ({
+      pid: p.id,
+      name: p.name,
+      level: p.id === ADMIN_ID ? ("manager" as const) : ("member" as const),
+      billed: Array.from({ length: 12 }, () => (p.id === ADMIN_ID ? 0 : 1)),
+    })),
+  };
+}
+
 /**
  * A team's starting data: default settings and fields. Sample data (not `empty`)
  * adds the sample tasks, people and org; a real team gets those from the Calendar.
@@ -178,7 +192,9 @@ export function initialData(now: number, empty = false): WorkloadData {
       work: { shift: 9, b1: 60, b2: 30, prod: 6.8 },
       targets: empty ? {} : { fewb: 8, inas: 6, eu: 7, us: 6, asla: 6, lcl: 8 },
       memberTargets: {},
+      ...(empty ? {} : { billing: { mode: "fixed" as const, currency: "USD", roleRates: { member: 2400 }, unitRates: { "": 9 }, unit: "tasks", when: "resolved" as const } }),
     },
+    ...(empty ? {} : { hc: sampleHc(now) }),
     seq: 2000,
     mailCount: 0,
   };

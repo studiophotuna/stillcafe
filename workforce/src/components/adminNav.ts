@@ -74,6 +74,7 @@ export function adminSections(f: AdminFlags): NavSection[] {
     ...(f.wlAdmin
       ? [
           { href: "/workload/admin/aht", icon: "dash" as const, label: "Handling time" },
+          { href: "/workload/admin/business", icon: "reports" as const, label: "Business case" },
           { href: "/workload/admin/complexity", icon: "fields" as const, label: "Complexity", badge: b.complexity },
           { href: "/workload/admin/intake", icon: "intake" as const, label: "Intake" },
           { href: "/workload/admin/allocation", icon: "rules" as const, label: "Allocation" },
