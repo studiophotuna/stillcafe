@@ -9,6 +9,7 @@ import type { OrgNode } from "../calendar/types";
 import { isLeader } from "../calendar/constants";
 import { approversOf } from "../calendar/org";
 import { teamHeadcount } from "../calendar/headcount";
+import { activeCovers } from "../calendar/covers";
 import { dayKey, localHour } from "./clock";
 import type { Availability, BillRow, Person, Trade, WlOrg } from "./types";
 
@@ -124,6 +125,8 @@ export function workloadApprovers(c: Cal, teamId: string): number[] {
     if (!isLeader(p.level) || !c.alive(p, c.today)) return;
     if (c.O.inN(p, teamId) || p.assign.some((a) => above.has(a))) ids.add(p.id);
   });
+  // Stand-ins covering for one of them (leave cover).
+  for (const x of activeCovers(c.d, c.today)) if (ids.has(x.leader) && c.people.has(x.standIn)) ids.add(x.standIn);
   return [...ids];
 }
 

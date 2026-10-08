@@ -4,7 +4,7 @@
  */
 import { fmtT } from "../workload/clock";
 import { CARRY_MAX, CODES, LAW, LEVELS, TYPE_L, first, isLeader } from "./constants";
-import { addDays, dowOf, fmtY, isWk, MONL } from "./dates";
+import { addDays, dowOf, fmtY, isWk, MONL, rng2 } from "./dates";
 import { Cal, evState, logsDecision, logsSubmit } from "./engine";
 import { allocProblem, hcTeamOf, mkOrg, primaryTeamOf, teamDefaults, withHcChange, type Org } from "./org";
 import { planOrgImport, type OrgRow } from "./orgImport";
@@ -53,6 +53,8 @@ export type CalAction =
   | { type: "removeFromTeam"; pid: number; bid: string }
   | { type: "deleteMember"; pid: number; bid: string }
   | { type: "setKpi"; team: string; period: string; patch: KpiPatch; actor: number }
+  | { type: "setCover"; id?: string; leader: number; standIn: number; from: string; to: string; actor: number }
+  | { type: "endCover"; id: string }
   | { type: "saveIssue"; issue: IssueForm; actor: number }
   | { type: "deleteIssue"; id: string }
   | { type: "setResign"; pid: number; date: string | null }
@@ -438,6 +440,59 @@ function applyInner(d: CalendarData, a: CalAction, today: string, now: number): 
       if (p.schedPeriod === "week" || p.schedPeriod === "month") patch.schedPeriod = p.schedPeriod;
       if (!c.O.by[a.id] || !Object.keys(patch).length) return { data: d };
       return { data: setNode(d, a.id, patch), message: "Saved." };
+    }
+    case "setCover": {
+      // Leave cover: the stand-in approves and monitors for the leader on these dates.
+      const L = c.people.get(a.leader);
+      const S = c.people.get(a.standIn);
+      if (!L || !isLeader(L.level)) return { data: d, error: "Only team leads, managers and directors can have cover." };
+      if (!S || S.id === L.id || !c.alive(S, today)) return { data: d, error: "Choose who covers for you." };
+      const depts = (p: CalPerson) => new Set(p.assign.flatMap((x) => c.O.anc(x)).filter((n) => c.O.by[n]?.type === "dept"));
+      const ld = depts(L);
+      if (![...depts(S)].some((x) => ld.has(x))) return { data: d, error: `${S.name} isn’t in your department.` };
+      const okDate = (x: string) => /^\d{4}-\d{2}-\d{2}$/.test(x ?? "");
+      if (!okDate(a.from) || !okDate(a.to) || a.to < a.from) return { data: d, error: "Enter the first and last day of the cover." };
+      if (a.to < today) return { data: d, error: "The cover has to end today or later." };
+      if (Date.parse(a.to) - Date.parse(a.from) > 92 * 86_400_000) return { data: d, error: "A cover can be up to 3 months." };
+      const list = d.covers ?? [];
+      const clash = list.find((x) => x.leader === L.id && x.id !== a.id && x.to >= today && x.from <= a.to && a.from <= x.to);
+      if (clash) return { data: d, error: `You already have cover from ${fmtY(clash.from)} to ${fmtY(clash.to)}. Change or end that one.` };
+      const old = a.id ? list.find((x) => x.id === a.id && x.leader === L.id) : undefined;
+      if (a.id && !old) return { data: d };
+      const cover = { id: old?.id ?? `CV${d.seq}`, leader: L.id, standIn: S.id, from: a.from, to: a.to, by: a.actor, at: today };
+      // Drop covers that ended over 90 days ago.
+      const kept = list.filter((x) => x.id !== cover.id && x.to >= addDays(today, -90));
+      const next: CalendarData = { ...d, covers: kept.concat(cover), seq: old ? d.seq : d.seq + 1 };
+      const when = rng2(a.from, a.to);
+      return {
+        data: pushLogs(next, [
+          {
+            kind: "email",
+            at: fmtT(now),
+            did: primaryTeamOf(c.O, L) ?? "",
+            toIds: [S.id],
+            toLine: `${S.name} <${S.email}>`,
+            toShort: S.name,
+            subject: `You’re covering for ${L.name} · ${when}`,
+            lines: [
+              `Hi ${first(S.name)},`,
+              `${L.name} asked you to cover for them from ${fmtY(a.from)} to ${fmtY(a.to)}.`,
+              "During those days you can approve or decline their team’s leave, schedule, overtime and break requests, and see their dashboards, trackers and calendars (Admin).",
+              "Your access ends by itself after the last day.",
+            ],
+          },
+        ]),
+        message: `${S.name} covers for ${first(L.name)} ${when}.`,
+      };
+    }
+    case "endCover": {
+      // Ending early: from today the leader is back (a cover not started yet is removed).
+      const list = d.covers ?? [];
+      const x = list.find((y) => y.id === a.id);
+      if (!x || x.to < today) return { data: d };
+      const end = addDays(today, -1);
+      const covers = end < x.from ? list.filter((y) => y.id !== a.id) : list.map((y) => (y.id === a.id ? { ...y, to: end } : y));
+      return { data: { ...d, covers }, message: "Cover ended." };
     }
     case "setKpi": {
       // OT / KPI trackers: remarks (up to 1,000 characters) and entered figures for a team and period.

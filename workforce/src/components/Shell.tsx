@@ -36,7 +36,8 @@ export function Shell({ children }: { children: React.ReactNode }) {
   const towers = [...new Set(org.teams.map((t) => t.tower))];
   const path = usePathname();
   const router = useRouter();
-  const blocked = (!isAdmin && isAdminRoute(path)) || (path === "/workload/admin/business" && !(isAdmin && canPrice(data, me.id))) || (!canUpload && path === "/workload/upload") || (!isApprover && (path === "/workload/overtime" || path === "/workload/breaks"));
+  // The Workload dashboard is also for approvers (leads, and stand-ins covering for them).
+  const blocked = (!isAdmin && isAdminRoute(path) && !(isApprover && path === "/workload/dashboard")) || (path === "/workload/admin/business" && !(isAdmin && canPrice(data, me.id))) || (!canUpload && path === "/workload/upload") || (!isApprover && (path === "/workload/overtime" || path === "/workload/breaks"));
 
   useEffect(() => {
     if (blocked) router.replace("/workload");

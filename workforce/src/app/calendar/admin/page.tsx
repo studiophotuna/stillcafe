@@ -1,5 +1,6 @@
 "use client";
 
+import { CoverPanel } from "@/components/calendar/CoverPanel";
 import Link from "next/link";
 import { useState } from "react";
 import { adminSections, type AdminFlags } from "@/components/adminNav";
@@ -88,6 +89,7 @@ export default function AdminHome() {
           Workload keep the everyday pages.
         </span>
       </div>
+      <CoverPanel />
       <div className="row" style={{ gap: 10, flexWrap: "wrap" }}>
         <input
           className="input"

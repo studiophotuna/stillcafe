@@ -9,6 +9,7 @@ import type { Code } from "../calendar/types";
 import { dayKey } from "./clock";
 import { rightsOf, visibleTeams } from "../calendar/authz";
 import { isLeader } from "../calendar/constants";
+import { coveredLeaders } from "../calendar/covers";
 import type { WlStats } from "../calendar/trackers";
 import type { OrgNode } from "../calendar/types";
 import { trackerStats } from "./metrics";
@@ -98,7 +99,8 @@ export async function trackerStatsAll(token: string, me: number, from: number, t
   const c = new Cal(await getCalendar(token), dayKey(Date.now()));
   const p = c.people.get(me);
   const r = rightsOf(c, me);
-  if (!p || !(isLeader(p.level) || r.anyAdmin)) throw new ForbiddenError("Only leads, managers, directors and admins can see the trackers.");
+  const covering = coveredLeaders(c.d, me, c.today).length > 0;
+  if (!p || !(isLeader(p.level) || r.anyAdmin || covering)) throw new ForbiddenError("Only leads, managers, directors and admins can see the trackers.");
   const teams = visibleTeams(c, me);
   const out: Record<string, WlStats> = {};
   await Promise.all(

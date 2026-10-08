@@ -5,6 +5,7 @@
  */
 import { isLeader } from "./constants";
 import type { Cal } from "./engine";
+import { coveredLeaders } from "./covers";
 import { isNodeAdmin, primaryTeamOf } from "./org";
 import type { CalPerson, LeaveRequest } from "./types";
 
@@ -23,8 +24,14 @@ export function leadersOf(c: Cal, bid: string): CalPerson[] {
     .sort((a, b) => a.name.localeCompare(b.name));
 }
 
-/** Whether `me` may approve or decline this request for team `bid`. */
+/** Whether `me` may approve or decline this request for team `bid` (also as a leader's stand-in). */
 export function canDecide(c: Cal, me: number, q: Pick<LeaveRequest, "pid">, bid: string): boolean {
+  if (q.pid === me) return false;
+  if (decidesOwn(c, me, q, bid)) return true;
+  return coveredLeaders(c.d, me, c.today).some((l) => l !== q.pid && decidesOwn(c, l, q, bid));
+}
+
+function decidesOwn(c: Cal, me: number, q: Pick<LeaveRequest, "pid">, bid: string): boolean {
   if (q.pid === me) return false;
   const meP = c.people.get(me);
   if (!meP) return false;
@@ -49,6 +56,8 @@ export function decidingTeam(c: Cal, q: Pick<LeaveRequest, "pid" | "approvals">)
 /** Waiting on team `bid`: pending there, and `bid` is the team that decides it. */
 export const waitsOn = (c: Cal, q: LeaveRequest, bid: string) => q.approvals[bid] === "pending" && decidingTeam(c, q) === bid;
 
-/** Whether `me` sees a team's approvals: its admins and its leaders. */
-export const seesApprovals = (c: Cal, me: number, bid: string) =>
+/** Whether `me` sees a team's approvals: its admins and its leaders, and their stand-ins while covering. */
+export const seesApprovals = (c: Cal, me: number, bid: string): boolean =>
+  seesOwn(c, me, bid) || coveredLeaders(c.d, me, c.today).some((l) => seesOwn(c, l, bid));
+const seesOwn = (c: Cal, me: number, bid: string) =>
   !!c.people.get(me)?.sysAdmin || isNodeAdmin(c.O, bid, me) || leadersOf(c, bid).some((p) => p.id === me);

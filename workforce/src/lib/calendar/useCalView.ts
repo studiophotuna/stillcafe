@@ -3,6 +3,8 @@
 import { useMemo } from "react";
 import { inViewOf, isNodeAdmin, onlyAbove } from "./org";
 import { isLeader as isLeaderLevel } from "./constants";
+import { visibleTeams } from "./authz";
+import { coveredLeaders } from "./covers";
 import { canDecide, seesApprovals, waitsOn } from "./approvals";
 import { useCalendar } from "./store";
 import type { CalPerson, OrgNode } from "./types";
@@ -26,9 +28,12 @@ export function useCalView() {
     data.nodes.forEach((n) => {
       if (n.type === "branch" && !myBranches.includes(n) && !scoped.includes(n) && isNodeAdmin(O, n.id, me)) scoped.push(n);
     });
+    // Covering for a leader on leave: their teams too.
+    const covering = coveredLeaders(data, me, cal.today);
+    const coverTeams = visibleTeams(cal, me).filter((b) => !myBranches.includes(b) && !scoped.includes(b));
     const viewBranches = meP.sysAdmin
       ? myBranches.concat(data.nodes.filter((n) => n.type === "branch" && !myBranches.includes(n)))
-      : myBranches.concat([...new Set(scoped)]);
+      : myBranches.concat([...new Set(scoped)], covering.length ? coverTeams : []);
     const branch: OrgNode =
       viewBranches.find((b) => b.id === sel.branch && O.up(b.id, "dept")?.id === sel.dept) ||
       viewBranches.find((b) => b.id === sel.branch) ||
@@ -40,7 +45,8 @@ export function useCalView() {
     const sys = !!meP.sysAdmin;
     const isAdmin = sys || isNodeAdmin(O, branch.id, me);
     const anyAdmin = sys || data.nodes.some((n) => (n.admins ?? []).includes(me) && O.anc(n.id).includes(dept.id));
-    const isLeader = isLeaderLevel(meP.level);
+    // Leaders, and stand-ins while covering, get the leader views (dashboards, trackers).
+    const isLeader = isLeaderLevel(meP.level) || covering.length > 0;
     // All teams in the tower / all towers in the department, within what this person can see
     // (directors: their department, managers: their tower, leads: their team).
     const towerTeams = viewBranches.filter((b) => O.up(b.id, "tower")!.id === tower.id);
@@ -101,7 +107,7 @@ export function useCalView() {
     // Admin of every team shown (several teams: each one).
     const adminOfAll = sys || scopeBranches.every((b) => isNodeAdmin(O, b.id, me));
     return {
-      canApprove, span, multi, scopeBranches, scopeId, cellBid, adminOfAll, towerTeams, deptTeams,
+      covering, canApprove, span, multi, scopeBranches, scopeId, cellBid, adminOfAll, towerTeams, deptTeams,
       meP, myBranches, viewBranches, mTowers, mTower, branch, dept, tower, bid, isAdmin, anyAdmin, isLeader, systems, system, trades, trade,
       unitId, unitIds, inUnit, inView, isAbove, unitLabel, deptList, towerOpts, deptShort: dept.name.split(" (")[0], pendingCount,
       branchOpts: viewBranches.filter((b) => O.up(b.id, "tower")!.id === tower.id),

@@ -75,10 +75,8 @@ export function adminSections(f: AdminFlags): NavSection[] {
           { href: "/calendar/dashboard", icon: "dash", label: "Attendance" },
           { href: "/calendar/management", icon: "mgmt", label: "Management calendar" },
         ]),
-        ...when(f.wlAdmin, [
-          { href: "/workload/dashboard", icon: "dash", label: "Workload" },
-          { href: "/workload/admin/aht", icon: "dash", label: "Handling time" },
-        ]),
+        ...when(f.wlAdmin || f.wlApprover, [{ href: "/workload/dashboard", icon: "dash", label: "Workload" }]),
+        ...when(f.wlAdmin, [{ href: "/workload/admin/aht", icon: "dash", label: "Handling time" }]),
       ],
     },
     {

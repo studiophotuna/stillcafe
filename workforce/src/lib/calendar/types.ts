@@ -176,6 +176,20 @@ export interface NotifLog {
   att?: string[];
 }
 
+/**
+ * Leave cover: from `from` to `to` (inclusive), `standIn` approves requests and monitors
+ * (dashboards, trackers, calendars) for `leader`'s teams. It ends by itself after `to`.
+ */
+export interface Cover {
+  id: string;
+  leader: number;
+  standIn: number;
+  from: string;
+  to: string;
+  by: number;
+  at: string;
+}
+
 /** A team's tracker entry for a period: remarks, and figures for teams that don't use Workload. */
 export interface KpiEntry {
   /** KPI tracker remarks. */
@@ -226,6 +240,8 @@ export interface CalendarData {
   checkins: Record<string, Record<number, Checkin>>;
   logs: NotifLog[];
   seq: number;
+  /** Leave cover: someone approving and monitoring for a leader while they're away. */
+  covers?: Cover[];
   /** OT and KPI trackers: remarks and figures entered by leads, per team and period ("team|2026-W40" or "team|2026-09"). */
   kpi?: Record<string, KpiEntry>;
   /** Accuracy issues logged by leads (each counts as one error against the team's resolved tickets). */

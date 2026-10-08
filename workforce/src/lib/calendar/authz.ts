@@ -5,6 +5,7 @@
  */
 import { canDecide } from "./approvals";
 import { canTrack } from "./trackers";
+import { coveredLeaders } from "./covers";
 import type { CalAction } from "./actions";
 import type { Cal } from "./engine";
 import { isNodeAdmin } from "./org";
@@ -36,8 +37,16 @@ export function rightsOf(c: Cal, me: number): Rights {
  * Teams a person can open: their own teams, teams they administer, and every team
  * under a department or tower they're allocated to. System admins: all teams.
  */
-export function visibleTeams(c: Cal, me: number): OrgNode[] {
+export function visibleTeams(c: Cal, me: number, cover = true): OrgNode[] {
   const p = c.people.get(me);
+  // A stand-in also sees the teams of the leaders they cover for.
+  if (cover) {
+    const extra = coveredLeaders(c.d, me, c.today).flatMap((l) => visibleTeams(c, l, false));
+    if (extra.length) {
+      const own = visibleTeams(c, me, false);
+      return own.concat(extra.filter((b) => !own.includes(b)));
+    }
+  }
   const all = c.d.nodes.filter((n) => n.type === "branch");
   if (!p) return [];
   if (p.sysAdmin) return all;
@@ -116,6 +125,16 @@ export function authorizeCal(a: CalAction, c: Cal, me: number): { action: CalAct
       return ok(r.teamAdmin(a.bid));
     case "removeFromTeam":
       return ok(r.teamAdmin(a.bid) && a.pid !== me);
+    case "setCover": {
+      // The leader themself, or an admin over them (e.g. setting it up for a lead who's away).
+      const ok0 = a.leader === me || (r.adminOf(a.leader) && a.leader !== a.standIn);
+      const old = a.id ? (c.d.covers ?? []).find((x) => x.id === a.id) : undefined;
+      return ok(ok0 && (!old || old.leader === a.leader), { ...a, actor: me });
+    }
+    case "endCover": {
+      const x = (c.d.covers ?? []).find((y) => y.id === a.id);
+      return ok(!!x && (x.leader === me || r.adminOf(x.leader)));
+    }
     case "setKpi":
       return ok(canTrack(c, me, a.team), { ...a, actor: me });
     case "saveIssue": {

@@ -1,5 +1,6 @@
 "use client";
 
+import { CoverPanel } from "@/components/calendar/CoverPanel";
 import { Chip } from "@/components/calendar/bits";
 import { Blueprint } from "@/components/ui";
 import { APPR_TAG, APPR_WORD, CARRY_MAX, CODES, LAW } from "@/lib/calendar/constants";
@@ -45,6 +46,7 @@ export default function MyRequestsPage() {
         <h1>My requests</h1>
         <span>Balances cover January to December {year}. If you’re in several teams, your main team approves your requests and the decision shows in all of them.</span>
       </div>
+      <CoverPanel />
       <div className="grid-kpi" style={{ gridTemplateColumns: "repeat(auto-fit,minmax(220px,1fr))" }}>
         {balances.map((b) => (
           <Blueprint key={b.k} className="card kpi">

@@ -1133,3 +1133,71 @@ describe("OT and KPI trackers", async () => {
     expect("error" in authorizeCal({ type: "deleteIssue", id }, c, ANA)).toBe(true);
   });
 });
+
+describe("leave cover", async () => {
+  const { canDecide, seesApprovals } = await import("./approvals");
+  const { authorizeCal, visibleTeams } = await import("./authz");
+  const { workloadApprovers } = await import("../workload/people");
+  const { coveredLeaders } = await import("./covers");
+  const leadOf = (d: CalendarData) => new Cal(d, TODAY).d.people.find((p) => p.level === "lead" && new Cal(d, TODAY).O.inN(p, "rm"))!;
+  // A Customer Service member (not in Rate Management) covers for a Rate Management lead.
+  const csOnly = (d: CalendarData) => d.people.find((p) => p.level === "member" && p.assign.length && p.assign.every((a) => new Cal(d, TODAY).O.anc(a).includes("cs")))!;
+
+  it("gives the stand-in the leader's approvals and views on the cover dates only", () => {
+    const d = fresh();
+    const lead = leadOf(d);
+    const sub = csOnly(d);
+    const q = { pid: ANA };
+    const c0 = new Cal(d, TODAY);
+    expect(canDecide(c0, sub.id, q, "rm")).toBe(false);
+    const o = run(d, { type: "setCover", leader: lead.id, standIn: sub.id, from: TODAY, to: "2026-09-26", actor: lead.id });
+    expect(o.error).toBeUndefined();
+    expect(o.data.logs[0].subject).toMatch(/^You’re covering for/);
+    const c = new Cal(o.data, TODAY);
+    expect(coveredLeaders(c.d, sub.id, TODAY)).toEqual([lead.id]);
+    expect(canDecide(c, sub.id, q, "rm")).toBe(true);
+    expect(seesApprovals(c, sub.id, "rm")).toBe(true);
+    expect(canDecide(c, sub.id, { pid: sub.id }, "cs")).toBe(false); // never their own
+    expect(visibleTeams(c, sub.id).map((b) => b.id)).toContain("rm");
+    expect(workloadApprovers(c, "rm")).toContain(sub.id);
+    expect("action" in authorizeCal({ type: "decide", rid: "x", bid: "rm", st: "approved", actor: sub.id }, c, sub.id)).toBe(false); // no such request
+    // No admin rights: members, settings.
+    expect("error" in authorizeCal({ type: "teamSettings", id: "rm", patch: {} }, c, sub.id)).toBe(true);
+    // After the last day it's gone.
+    const after = new Cal(o.data, "2026-09-27");
+    expect(canDecide(after, sub.id, q, "rm")).toBe(false);
+    expect(visibleTeams(after, sub.id).map((b) => b.id)).not.toContain("rm");
+    expect(workloadApprovers(after, "rm")).not.toContain(sub.id);
+  });
+
+  it("checks who, when and overlaps; the leader (or their admin) sets and ends it", () => {
+    const d = fresh();
+    const lead = leadOf(d);
+    const sub = csOnly(d);
+    expect(run(d, { type: "setCover", leader: ANA, standIn: sub.id, from: TODAY, to: TODAY, actor: ANA }).error).toMatch(/Only team leads/);
+    expect(run(d, { type: "setCover", leader: lead.id, standIn: lead.id, from: TODAY, to: TODAY, actor: lead.id }).error).toMatch(/Choose who/);
+    expect(run(d, { type: "setCover", leader: lead.id, standIn: sub.id, from: "2026-09-20", to: "2026-09-21", actor: lead.id }).error).toMatch(/end today or later/);
+    expect(run(d, { type: "setCover", leader: lead.id, standIn: sub.id, from: TODAY, to: "2027-03-01", actor: lead.id }).error).toMatch(/3 months/);
+    const o = run(d, { type: "setCover", leader: lead.id, standIn: sub.id, from: "2026-09-28", to: "2026-10-02", actor: lead.id }).data;
+    expect(run(o, { type: "setCover", leader: lead.id, standIn: ANA, from: "2026-10-01", to: "2026-10-05", actor: lead.id }).error).toMatch(/already have cover/);
+    const id = o.covers![0].id;
+    // Changing it keeps one cover.
+    const ch = run(o, { type: "setCover", id, leader: lead.id, standIn: ANA, from: "2026-09-29", to: "2026-10-02", actor: lead.id }).data;
+    expect(ch.covers).toHaveLength(1);
+    expect(ch.covers![0]).toMatchObject({ standIn: ANA, from: "2026-09-29" });
+    // Ending one not started removes it; a running one ends yesterday (the leader is back today).
+    expect(run(ch, { type: "endCover", id }).data.covers).toEqual([]);
+    const running = run(d, { type: "setCover", leader: lead.id, standIn: sub.id, from: "2026-09-22", to: "2026-09-30", actor: lead.id });
+    expect(running.error).toBeUndefined();
+    const ended = run(running.data, { type: "endCover", id: running.data.covers![0].id }).data;
+    expect(ended.covers![0].to).toBe("2026-09-23");
+    expect(coveredLeaders(ended, sub.id, TODAY)).toEqual([]);
+    // Who may: the leader or an admin over them; not the stand-in or others.
+    const c = new Cal(running.data, TODAY);
+    const cid = running.data.covers![0].id;
+    expect("action" in authorizeCal({ type: "endCover", id: cid }, c, lead.id)).toBe(true);
+    expect("action" in authorizeCal({ type: "endCover", id: cid }, c, SAM)).toBe(true);
+    expect("error" in authorizeCal({ type: "endCover", id: cid }, c, sub.id)).toBe(true);
+    expect("error" in authorizeCal({ type: "setCover", leader: lead.id, standIn: ANA, from: TODAY, to: TODAY, actor: ANA }, c, ANA)).toBe(true);
+  });
+});
