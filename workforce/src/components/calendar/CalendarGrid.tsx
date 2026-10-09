@@ -96,7 +96,7 @@ export function CalendarGrid({ mgmt, edit }: { mgmt?: boolean; edit?: boolean })
     const inScope = (p: CalPerson) => O.inN(p, v.dept.id) && (v.mTower === "all" || O.inN(p, v.mTower) || p.assign.includes(v.dept.id));
     active = s.data.people.filter((p) => inScope(p) && isLeader(p.level) && c.alive(p, mStart));
     shown = active.filter((p) => !ql || p.name.toLowerCase().includes(ql));
-    (["director", "manager", "lead"] as const).forEach((lv) => {
+    (["director", "manager", "supervisor", "srlead", "lead"] as const).forEach((lv) => {
       const g = shown.filter((p) => p.level === lv).sort(byName);
       if (!g.length) return;
       rows.push({ header: `${LEVELS[lv]}s · ${g.length}` });
@@ -330,8 +330,7 @@ export function CalendarGrid({ mgmt, edit }: { mgmt?: boolean; edit?: boolean })
             {!rows.length && (
               <div style={{ padding: "32px 14px", color: "var(--color-neutral-700)" }}>{ql ? `No one matches “${q}”.` : mgmt ? "No directors, managers or team leads here yet." : "No one is allocated here yet."}</div>
             )}
-            {/* Daily counts (attendance summary): leads and above, admins, and stand-ins covering for a leader. */}
-            {!mgmt && (leads || v.covering.length > 0) && (
+            {!mgmt && (
               <div className="grid-counts">
                 <div style={{ display: "flex" }}>
                   <button className="grid-counts-toggle" onClick={() => setCountsOpen(!countsOpen)} aria-expanded={countsOpen}>

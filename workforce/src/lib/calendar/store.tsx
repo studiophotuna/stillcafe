@@ -3,9 +3,9 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 import { loadMe, toLogin } from "../session";
 import { dayKey, fmtT, nowMs, setRealClock } from "../workload/clock";
+import { isViewAs, personaId } from "../workload/constants";
 import type { Toast, ViewAs } from "../workload/types";
 import { applyCalAction, type CalAction } from "./actions";
-import { ADMIN_ID, EMPLOYEE_ID } from "./constants";
 import { Cal } from "./engine";
 import { initialCalendar } from "./seed";
 import type { CalendarData } from "./types";
@@ -169,7 +169,7 @@ export function CalendarProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     try {
       const v = localStorage.getItem("wfm.viewAs");
-      if (v === "admin" || v === "employee") setViewAsState(v);
+      if (isViewAs(v)) setViewAsState(v);
     } catch {}
   }, []);
 
@@ -242,7 +242,7 @@ export function CalendarProvider({ children }: { children: React.ReactNode }) {
             toasts,
             viewAs,
             setViewAs: mode === "demo" ? setViewAs : undefined,
-            me: mode === "db" && sessionId !== null ? sessionId : viewAs === "employee" ? EMPLOYEE_ID : ADMIN_ID,
+            me: mode === "db" && sessionId !== null ? sessionId : personaId(viewAs),
             issued,
             showIssued: setIssued,
             sel,

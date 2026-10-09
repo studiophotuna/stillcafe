@@ -6,7 +6,8 @@ import type { CalPerson, CalendarData, Checkin, Code, Level, LeaveRequest, Notif
 
 /** Org seed: BSS › 5 towers › Rate Management (GPM/RCM trades) and Customer Service. */
 export const NODES0: OrgNode[] = [
-  { id: "bss", type: "dept", name: "BSS (Business Support Services)", parent: null },
+  // Sample: Diego (director) is admin of the department.
+  { id: "bss", type: "dept", name: "BSS (Business Support Services)", parent: null, admins: [26] },
   { id: "t_ops", type: "tower", name: "A&S Support - Operational", parent: "bss" },
   { id: "t_ie", type: "tower", name: "A&S Support - Import & Export", parent: "bss" },
   // Sample: Sam (manager) is admin of the tower, so of every team in it.
@@ -31,7 +32,7 @@ const ASSIGN: Record<number, string[]> = {
   8: ["rm"], 18: ["rm"], 28: ["rm"], 23: ["rm"], 24: ["gpm"], 14: ["rcm"], 15: ["lcl"], 16: ["lcl"], 19: ["lcl"],
   20: ["lcl"], 22: ["lcl"], 25: ["us"], 26: ["rm", "cs"], 27: ["cs"], 29: ["asla"], 30: ["asla"], 31: ["cs"],
 };
-const LEVEL0: Record<number, Level> = { 23: "manager", 26: "director", 27: "manager", 24: "lead", 21: "lead", 14: "lead", 1: "senior", 5: "senior", 2: "specialist", 7: "specialist", 10: "specialist" };
+const LEVEL0: Record<number, Level> = { 23: "manager", 26: "director", 27: "manager", 24: "srlead", 21: "supervisor", 14: "lead", 1: "senior", 5: "senior", 2: "specialist", 7: "specialist", 10: "specialist" };
 const HOL0: [string, string, "regular" | "special" | "company", string?][] = [
   ["2026-08-21", "Ninoy Aquino Day", "special"],
   ["2026-08-31", "National Heroes Day", "regular"],
@@ -166,7 +167,24 @@ export function initialCalendar(today: string): CalendarData {
     "3|2026-09-22": "RTO", "7|2026-09-24": "WFH", "12|2026-09-26": "RTO",
     "23|2026-11-30": "HDY", "14|2026-11-30": "HDY", "25|2026-11-30": "HDY", "5|2026-10-16": "HDY", "9|2026-10-16": "HDY",
   };
-  return { ...data, logs, roster, bcpReady, bcpEvents, checkins, overrides, seq: 100 + data.requests.length };
+  // Trackers: Customer Service doesn't use Workload, so its lead enters KPIs and overtime;
+  // Rate Management's come from Workload, with remarks and a few accuracy issues.
+  const kpi: CalendarData["kpi"] = {
+    "cs|2026-W38": { util: 86.4, prod: 97.2, time: 95.1, acc: 99.2, reg: 12, rd: 4, hol: 0, remark: "Peak in booking amendments.", otRemark: "Approved for backlog clean-up.", by: 27, at: "2026-09-21" },
+    "cs|2026-W39": { util: 88.9, prod: 101.5, time: 96.8, acc: 98.7, reg: 9.5, rd: 0, hol: 0, remark: "", by: 27, at: "2026-09-24" },
+    "cs|2026-09": { util: 87.1, prod: 99.0, time: 95.6, acc: 98.9, reg: 31, rd: 8, hol: 0, by: 27, at: "2026-09-24" },
+    "cs|2026-08": { util: 84.0, prod: 95.3, time: 93.8, acc: 99.4, reg: 26, rd: 6, hol: 8, remark: "Holiday duty on 31 Aug.", by: 27, at: "2026-09-01" },
+    "rm|2026-W38": { remark: "Two new members still ramping up on LCL.", otRemark: "GRI season: overtime on US and ASLA.", by: 14, at: "2026-09-21" },
+    "rm|2026-09": { remark: "Accuracy below target: see the Accuracy log.", by: 23, at: "2026-09-24" },
+  };
+  const issues: CalendarData["issues"] = [
+    { id: "I3", team: "rm", date: "2026-09-23", ticket: "RM-10482", desc: "Surcharge filed under the wrong validity window.", root: "Effective date read from the old tariff.", preventive: "Checklist step: confirm the validity against the carrier notice.", corrective: "Refiled with the correct dates; customer informed.", by: 14, at: "2026-09-23" },
+    { id: "I2", team: "rm", date: "2026-09-15", ticket: "RM-10377", desc: "Rate sheet uploaded with a missing port pair.", root: "Template filter hid blank rows.", preventive: "Template updated; filter removed.", corrective: "Missing lane added and re-published.", by: 24, at: "2026-09-16" },
+    { id: "I1", team: "rm", date: "2026-09-08", desc: "Wrong currency used on a spot quote (no ticket, e-mail request).", root: "Manual entry outside the tool.", preventive: "Spot quotes go through a ticket.", corrective: "Quote reissued in USD.", by: 14, at: "2026-09-08" },
+  ];
+  // Kim is away 5–6 Oct; Carlo approves and monitors for them on those days.
+  const covers: CalendarData["covers"] = [{ id: "C1", leader: 14, standIn: 24, from: "2026-10-05", to: "2026-10-06", by: 14, at: "2026-09-22" }];
+  return { ...data, logs, roster, bcpReady, bcpEvents, checkins, overrides, kpi, issues, covers, seq: 100 + data.requests.length };
 }
 
 /**

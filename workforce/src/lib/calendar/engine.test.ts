@@ -8,7 +8,8 @@ import type { CalendarData, LeaveRequest } from "./types";
 
 const TODAY = "2026-09-24";
 const NOW = Date.parse("2026-09-24T10:30:00+08:00");
-const fresh = () => initialCalendar(TODAY);
+// The sample calendar without its demo tracker entries and leave cover, so tests start from none.
+const fresh = () => ({ ...initialCalendar(TODAY), kpi: {}, issues: [], covers: [] });
 const run = (d: CalendarData, a: Parameters<typeof applyCalAction>[1]) => applyCalAction(d, a, TODAY, NOW);
 const ANA = 0; // LCL (Rate Management) + Customer Service; pattern B; employee view
 const SAM = 23; // Rate Management admin
@@ -560,6 +561,7 @@ describe("department and tower admins", async () => {
   it("lets a department or tower lose its last admin, not a team", () => {
     let d = run(fresh(), { type: "addAdmin", id: "bss", pid: SAM }).data;
     d = run(d, { type: "removeAdmin", id: "bss", pid: SAM }).data;
+    d = run(d, { type: "removeAdmin", id: "bss", pid: 26 }).data; // the sample director
     expect(d.nodes.find((n) => n.id === "bss")!.admins).toEqual([]);
     const only = fresh().nodes.find((n) => n.id === "rm")!.admins!;
     if (only.length === 1) expect(run(fresh(), { type: "removeAdmin", id: "rm", pid: only[0] }).data.nodes.find((n) => n.id === "rm")!.admins).toEqual(only);
@@ -836,8 +838,27 @@ describe("roles", async () => {
   const { teamHeadcount, headcount, byRoles } = await import("./headcount");
   const { isLeader, LEVELS } = await import("./constants");
   it("has Associate to Director, and only team leads and above lead", () => {
-    expect(Object.values(LEVELS)).toEqual(["Associate", "Specialist", "Sr. Specialist", "Team lead", "Manager", "Director"]);
-    expect((["member", "specialist", "senior", "lead", "manager", "director"] as const).map(isLeader)).toEqual([false, false, false, true, true, true]);
+    expect(Object.values(LEVELS)).toEqual(["Associate", "Specialist", "Sr. Specialist", "Team lead", "Sr. Team Lead", "Supervisor", "Manager", "Director"]);
+    expect((["member", "specialist", "senior", "lead", "srlead", "supervisor", "manager", "director"] as const).map(isLeader)).toEqual([false, false, false, true, true, true, true, true]);
+  });
+  it("Sr. Team Leads and Supervisors lead and administer their teams like team leads", async () => {
+    const { rightsOf, visibleTeams } = await import("./authz");
+    const { canDecide } = await import("./approvals");
+    const { workloadApprovers } = await import("../workload/people");
+    const d = fresh();
+    const lead = d.people.find((p) => p.level === "lead" && new Cal(d, TODAY).O.inN(p, "rm"))!;
+    for (const level of ["srlead", "supervisor"] as const) {
+      const x = { ...d, people: d.people.map((p) => (p.id === lead.id ? { ...p, level } : p)) };
+      const c = new Cal(x, TODAY);
+      expect(rightsOf(c, lead.id).teamAdmin("rm")).toBe(true);
+      expect(rightsOf(c, lead.id).teamAdmin("cs")).toBe(false);
+      expect(canDecide(c, lead.id, { pid: ANA }, "rm")).toBe(true);
+      expect(workloadApprovers(c, "rm")).toContain(lead.id);
+      expect(visibleTeams(c, lead.id).map((b) => b.id)).toContain("rm");
+    }
+    // Uploads read the new role names.
+    const row = (Role: string) => ({ Name: "New Person", Email: `np.${Role.length}@example.com`, Role, Department: "BSS", Tower: "A&S Support - Rate Management", Team: "Rate Management" });
+    expect(checkUpload(new Cal(d, TODAY), "members", [row("Sr. Team Lead"), row("Supervisor"), row("Senior Team Leader")], "rm").map((x) => x.stText)).toEqual(["New", "New", "New"]);
   });
   it("reads roles from uploads, including the old names", () => {
     const d = fresh();

@@ -173,6 +173,8 @@ details.table-view[open] > summary { margin-bottom: 8px; }
    Associates stay plain so the other roles stand out. */
 .lv-director { --role: #6b3fa0; --role-bg: rgb(107 63 160 / 0.1); }
 .lv-manager { --role: #0b2265; --role-bg: rgb(11 34 101 / 0.09); }
+.lv-supervisor { --role: #0e7c86; --role-bg: rgb(14 124 134 / 0.1); }
+.lv-srlead { --role: #1d4fa3; --role-bg: rgb(29 79 163 / 0.1); }
 .lv-lead { --role: #2a78d6; --role-bg: rgb(42 120 214 / 0.1); }
 .lv-senior { --role: #138a60; --role-bg: rgb(27 175 122 / 0.1); }
 .lv-specialist { --role: #c4531f; --role-bg: rgb(235 104 52 / 0.1); }

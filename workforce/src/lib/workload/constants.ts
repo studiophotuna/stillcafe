@@ -1,4 +1,4 @@
-import type { AllocationMode, Availability, Person, Priority, TaskField, TaskStatus, Trade, WlOrg } from "./types";
+import type { AllocationMode, Availability, Person, Priority, TaskField, TaskStatus, Trade, ViewAs, WlOrg } from "./types";
 
 /** Sample-data org (demo mode): Rate Management › GPM / RCM › trades. With a database the org comes from the Calendar. */
 const TEAM = { id: "rm", name: "Rate Management" };
@@ -65,6 +65,16 @@ export const PEOPLE: Person[] = PEOPLE_SEED.map(([id, name, trades]) => ({
 /** Prototype identities: admin = Sam Delgado, employee = Ana Reyes. */
 export const ADMIN_ID = 23;
 export const EMPLOYEE_ID = 0;
+
+/** Sample-data personas for demos: who "view as" signs in as. */
+export const PERSONAS: { v: ViewAs; id: number; label: string }[] = [
+  { v: "director", id: 26, label: "Director (Diego Samonte)" },
+  { v: "admin", id: ADMIN_ID, label: "Manager (Sam Delgado)" },
+  { v: "lead", id: 14, label: "Team lead (Kim Bautista)" },
+  { v: "employee", id: EMPLOYEE_ID, label: "Employee (Ana Reyes)" },
+];
+export const personaId = (v: ViewAs) => PERSONAS.find((x) => x.v === v)?.id ?? ADMIN_ID;
+export const isViewAs = (v: unknown): v is ViewAs => PERSONAS.some((x) => x.v === v);
 
 export const person = (id: number) => PEOPLE.find((p) => p.id === id);
 

@@ -194,7 +194,7 @@ export function initialData(now: number, empty = false): WorkloadData {
       memberTargets: {},
       ...(empty ? {} : { billing: { mode: "fixed" as const, currency: "USD", roleRates: { member: 2400 }, unitRates: { "": 9 }, unit: "tasks", when: "resolved" as const } }),
     },
-    ...(empty ? {} : { hc: sampleHc(now), pricers: [ADMIN_ID] }),
+    ...(empty ? {} : { hc: sampleHc(now), pricers: [ADMIN_ID, 26] }),
     seq: 2000,
     mailCount: 0,
   };

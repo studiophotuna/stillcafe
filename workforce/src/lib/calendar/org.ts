@@ -20,7 +20,7 @@ export interface Org {
 }
 
 /** The node type a role administers: a director their department, a manager their tower, a team lead their team. */
-export const ROLE_SCOPE: Partial<Record<Level, NodeType>> = { director: "dept", manager: "tower", lead: "branch" };
+export const ROLE_SCOPE: Partial<Record<Level, NodeType>> = { director: "dept", manager: "tower", supervisor: "branch", srlead: "branch", lead: "branch" };
 
 export function mkOrg(nodes: OrgNode[], people: CalPerson[] = []): Org {
   const by: Record<string, OrgNode> = {};
@@ -92,7 +92,7 @@ export const teamDefaults = (o: Partial<OrgNode> = {}): Partial<OrgNode> => ({
  * Deeper allocations (a manager on a team) are always fine.
  */
 const DEPTH: Record<NodeType, number> = { dept: 0, tower: 1, branch: 2, system: 3, trade: 4 };
-export const ALLOC_MIN: Record<Level, NodeType> = { director: "dept", manager: "tower", lead: "branch", senior: "branch", specialist: "branch", member: "branch" };
+export const ALLOC_MIN: Record<Level, NodeType> = { director: "dept", manager: "tower", supervisor: "branch", srlead: "branch", lead: "branch", senior: "branch", specialist: "branch", member: "branch" };
 export const allocNeeds = (level: Level) =>
   ALLOC_MIN[level] === "dept" ? "a department" : ALLOC_MIN[level] === "tower" ? "a department and tower" : "a department, tower and team";
 

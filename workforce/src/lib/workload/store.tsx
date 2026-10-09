@@ -4,7 +4,7 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useRef, use
 import { applyAction, type Action } from "./actions";
 import { dayKey, nowMs, setRealClock } from "./clock";
 import { loadMe, toLogin } from "../session";
-import { ADMIN_ID, EMPLOYEE_ID, person } from "./constants";
+import { isViewAs, person, personaId } from "./constants";
 import { canUpload } from "./authz";
 import { personOf, type AssistOffer, type WorkloadData } from "./engine";
 import { initialData } from "./seed";
@@ -174,7 +174,7 @@ export function WorkloadProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     try {
       const v = localStorage.getItem("wfm.viewAs");
-      if (v === "admin" || v === "employee") setViewAsState(v);
+      if (isViewAs(v)) setViewAsState(v);
     } catch {}
   }, []);
 
@@ -304,8 +304,16 @@ export function WorkloadProvider({ children }: { children: React.ReactNode }) {
               shift: "—",
               shiftStart: 8,
             })
-          : person(viewAs === "employee" ? EMPLOYEE_ID : ADMIN_ID)!,
-      isAdmin: mode === "db" ? !!session && data.admins.includes(session.id) : viewAs !== "employee",
+          : (person(personaId(viewAs)) ?? {
+              // A sample persona outside the Workload team (the director): can look, not take work.
+              id: personaId(viewAs),
+              name: "Diego Samonte",
+              trades: [],
+              avail: "available",
+              shift: "Day 08:00–17:00",
+              shiftStart: 8,
+            }),
+      isAdmin: mode === "db" ? !!session && data.admins.includes(session.id) : viewAs === "admin" || viewAs === "director",
       canUpload: mode === "db" ? !!session && canUpload(data, session.id) : viewAs !== "employee",
       isApprover: mode === "db" ? !!session && data.approvers.includes(session.id) : viewAs !== "employee",
       sys,

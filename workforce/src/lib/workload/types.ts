@@ -5,7 +5,7 @@ export type AllocationMode = "fifo" | "self" | "manual" | "rr";
 export type OrderRule = "priority" | "received";
 export type Availability = "available" | "leave" | "offshift";
 export type FieldType = "text" | "number" | "date" | "select";
-export type ViewAs = "admin" | "employee";
+export type ViewAs = "admin" | "employee" | "lead" | "director";
 
 /**
  * A unit tasks are routed to: a trade, or a system / team that has no trades
@@ -253,7 +253,7 @@ export interface Settings {
 }
 
 /** Roles as in the Calendar (rates for the fixed model are set per role). */
-export type BillRole = "member" | "specialist" | "senior" | "lead" | "manager" | "director";
+export type BillRole = "member" | "specialist" | "senior" | "lead" | "srlead" | "supervisor" | "manager" | "director";
 
 export interface Billing {
   /** How the team bills: "fixed" (billed FTE × monthly rate per role) or "unit" (transactions × price per task type). */

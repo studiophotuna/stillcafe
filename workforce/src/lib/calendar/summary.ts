@@ -8,7 +8,7 @@
  *   WFH - 15
  *   SL - 1
  */
-import { BUCKETS, WORKING, isLeader } from "./constants";
+import { BUCKETS, TEAM_LEADS, WORKING, isLeader } from "./constants";
 import type { Cal } from "./engine";
 import type { CalPerson, Code, OrgNode } from "./types";
 
@@ -129,7 +129,7 @@ export function leadSummary(c: Cal, scope: string, date: string): (SummaryBlock 
   if (!node) return [];
   const alive = (p: CalPerson) => c.alive(p, date) && (!p.hire || p.hire <= date);
   const inScope = c.d.people.filter((p) => O.inN(p, scope) && alive(p));
-  const leads = inScope.filter((p) => p.level === "lead").sort((a, b) => a.name.localeCompare(b.name));
+  const leads = inScope.filter((p) => TEAM_LEADS.includes(p.level)).sort((a, b) => a.name.localeCompare(b.name));
   const leadIds = new Set(leads.map((l) => l.id));
   // Each member's lead: their approver when that's a lead, else the one lead allocated nearest
   // above them. When several leads are equally near (e.g. all allocated to the whole team),

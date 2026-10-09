@@ -5,6 +5,7 @@ import { usePathname } from "next/navigation";
 import type { ReactNode } from "react";
 import { signOut } from "@/lib/session";
 import { BipoNotice, HolidayPrompt, PayrollNotice, QuickLinks } from "./AppExtras";
+import { PERSONAS } from "@/lib/workload/constants";
 import type { ViewAs } from "@/lib/workload/types";
 import { sectionOf, type NavSection } from "./adminNav";
 import { Blueprint, Icon, type IconName } from "./ui";
@@ -122,8 +123,11 @@ export function AppFrame({
             <label className="side-demo">
               Sample data · view as
               <select className="input" value={viewAs} onChange={(e) => setViewAs(e.target.value as ViewAs)}>
-                <option value="admin">Admin (Sam Delgado)</option>
-                <option value="employee">Employee (Ana Reyes)</option>
+                {PERSONAS.map((x) => (
+                  <option key={x.v} value={x.v}>
+                    {x.label}
+                  </option>
+                ))}
               </select>
             </label>
           ) : (

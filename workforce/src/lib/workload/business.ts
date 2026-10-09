@@ -9,12 +9,14 @@ import { dayKey } from "./clock";
 import type { WorkloadData } from "./engine";
 import type { BillRole, Billing, Task } from "./types";
 
-export const ROLE_ORDER: BillRole[] = ["member", "specialist", "senior", "lead", "manager", "director"];
+export const ROLE_ORDER: BillRole[] = ["member", "specialist", "senior", "lead", "srlead", "supervisor", "manager", "director"];
 export const ROLE_NAME: Record<BillRole, string> = {
   member: "Associate",
   specialist: "Specialist",
   senior: "Sr. Specialist",
   lead: "Team lead",
+  srlead: "Sr. Team Lead",
+  supervisor: "Supervisor",
   manager: "Manager",
   director: "Director",
 };

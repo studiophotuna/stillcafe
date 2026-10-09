@@ -1,6 +1,6 @@
 export type NodeType = "dept" | "tower" | "branch" | "system" | "trade";
 /** Role. "member" is shown as Associate (the key is kept so saved data stays valid). */
-export type Level = "member" | "specialist" | "senior" | "lead" | "manager" | "director";
+export type Level = "member" | "specialist" | "senior" | "lead" | "srlead" | "supervisor" | "manager" | "director";
 export type ApprovalState = "approved" | "pending" | "declined";
 /** RDOT: rest day overtime (a weekend or rest day worked as overtime). */
 export type Code = "RTO" | "WFH" | "VL" | "SL" | "EL" | "HD" | "BT" | "HOL" | "HDY" | "RD" | "RDOT" | "ML" | "PL" | "SPL";

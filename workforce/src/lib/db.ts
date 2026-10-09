@@ -9,6 +9,8 @@ import { createClient, type SupabaseClient } from "@supabase/supabase-js";
  * workforce_* functions. That key is public, so anyone holding it can read and
  * change the data: fine for fictional sample data, not for real data.
  * Set WORKFORCE_DB=off to force in-memory sample data.
+ * Set WORKFORCE_DEMO=1 for a demo / preview site: sample data only, and the database can't be
+ * reached at all (db() refuses), whatever other variables are set.
  */
 
 /** Public values (safe to commit): the stillcafe project URL and its publishable key. */
@@ -17,12 +19,16 @@ const DEFAULT_PUBLISHABLE_KEY = "sb_publishable__c_JHm0ZJqEm1dPwUdgEsA_y52JhRCV"
 
 let client: SupabaseClient | null = null;
 
-export const dbConfigured = () => process.env.WORKFORCE_DB !== "off";
+/** A demo / preview deployment: never connected to the database. */
+export const demoOnly = () => process.env.WORKFORCE_DEMO === "1";
+
+export const dbConfigured = () => !demoOnly() && process.env.WORKFORCE_DB !== "off";
 
 /** Which key the server uses: "secret" or "publishable". */
 export const keyKind = () => (process.env.SUPABASE_SECRET_KEY ? "secret" : "publishable");
 
 export function db() {
+  if (demoOnly()) throw new Error("This is a demo site: it has no database.");
   client ??= createClient(
     process.env.SUPABASE_URL || DEFAULT_URL,
     process.env.SUPABASE_SECRET_KEY || process.env.SUPABASE_PUBLISHABLE_KEY || DEFAULT_PUBLISHABLE_KEY,

@@ -67,16 +67,20 @@ export const LEVELS: Record<Level, string> = {
   specialist: "Specialist",
   senior: "Sr. Specialist",
   lead: "Team lead",
+  srlead: "Sr. Team Lead",
+  supervisor: "Supervisor",
   manager: "Manager",
   director: "Director",
 };
 /** Roles from the top down (for sorting and filters). */
-export const LEVEL_ORDER: Level[] = ["director", "manager", "lead", "senior", "specialist", "member"];
+export const LEVEL_ORDER: Level[] = ["director", "manager", "supervisor", "srlead", "lead", "senior", "specialist", "member"];
 export const LEVEL_RANK = Object.fromEntries(LEVEL_ORDER.map((l, i) => [l, i])) as Record<Level, number>;
-/** Team leads, managers and directors lead people (approve, see the management view). */
-export const isLeader = (l: Level) => l === "lead" || l === "manager" || l === "director";
+/** Team leads and above (Sr. Team Lead, Supervisor, Manager, Director) lead people (approve, see the management view). */
+export const isLeader = (l: Level) => l === "lead" || l === "srlead" || l === "supervisor" || l === "manager" || l === "director";
+/** Team-level leaders (Team lead, Sr. Team Lead, Supervisor): admins of their own teams by role. */
+export const TEAM_LEADS: Level[] = ["supervisor", "srlead", "lead"];
 /** Other names accepted for a role in uploads. */
-export const LEVEL_ALIAS: Record<string, Level> = { member: "member", "sr specialist": "senior", "senior specialist": "senior", "team leader": "lead" };
+export const LEVEL_ALIAS: Record<string, Level> = { member: "member", "sr specialist": "senior", "senior specialist": "senior", "team leader": "lead", "sr team lead": "srlead", "sr. team lead": "srlead", "senior team lead": "srlead", "sr team leader": "srlead", "senior team leader": "srlead" };
 export const TYPE_L: Record<NodeType, string> = { dept: "Department", tower: "Tower", branch: "Team", system: "System", trade: "Trade" };
 export const HTYPE: Record<HolidayType, string> = {
   regular: "Regular holiday",
