@@ -28,6 +28,7 @@ import {
   startTask,
   pickTask,
   pauseTask,
+  planOt,
   claimTask,
   answerClaim,
   cancelClaim,
@@ -55,6 +56,7 @@ export type Action =
   | { type: "editDone"; id: string; vals: Task["fields"]; by: number; edit?: TicketEdit }
   | { type: "away"; kind: ActivityKind; pid: number }
   | { type: "back"; pid: number }
+  | { type: "planOt"; pid: number; yes: boolean; note: string }
   | { type: "endWork"; otMin: number; pid: number; split?: OtPart[] | null }
   | { type: "undoEnd"; pid: number }
   | { type: "decideOt"; id: string; st: "approved" | "declined"; by: number }
@@ -70,7 +72,7 @@ export type Action =
   | { type: "setFields"; fields: TaskField[] };
 
 const SETTING_KEYS: (keyof Settings)[] = [
-  "mode", "order", "skipUnavail", "autoFeed", "multiPick", "sla", "mailbox", "mailTrade", "work", "targets", "memberTargets", "prodBasis", "uploaders", "staleDays", "ticketField", "slaWeekends", "slaHolidays", "taskTypes", "complexity", "billing",
+  "mode", "order", "skipUnavail", "autoFeed", "multiPick", "sla", "mailbox", "mailTrade", "work", "targets", "memberTargets", "prodBasis", "uploaders", "staleDays", "ticketField", "slaWeekends", "slaHolidays", "taskTypes", "complexity", "billing", "otPrompt",
 ];
 
 export function applyAction(d: WorkloadData, a: Action, now: number): Outcome {
@@ -90,6 +92,7 @@ export function applyAction(d: WorkloadData, a: Action, now: number): Outcome {
     case "editDone": return editDone(d, a.id, a.vals, a.by, now, a.edit);
     case "away": return startAway(d, a.pid, a.kind, now);
     case "back": return backToWork(d, a.pid, now);
+    case "planOt": return planOt(d, a.pid, a.yes, a.note, now);
     case "endWork": return endWork(d, a.pid, a.otMin, now, a.split);
     case "undoEnd": return undoEndWork(d, a.pid, now);
     case "decideOt": return decideOt(d, a.id, a.st, a.by, now);

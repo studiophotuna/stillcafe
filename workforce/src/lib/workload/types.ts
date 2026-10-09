@@ -18,7 +18,7 @@ export interface Trade {
 }
 
 /** Time away from tasks, or the end of the working day. */
-export type ActivityKind = "break" | "lunch" | "meeting" | "adhoc" | "training" | "idle" | "end";
+export type ActivityKind = "break" | "lunch" | "meeting" | "adhoc" | "training" | "idle" | "end" | "otplan";
 export type OtStatus = "pending" | "approved" | "declined";
 
 /**
@@ -40,6 +40,9 @@ export interface Activity {
   otSplit?: OtPart[] | null;
   /** The whole day was overtime: holiday duty or rest day OT (weekend / rest day worked). */
   otKind?: "holiday" | "restday" | null;
+  /** "otplan": the member's answer to the overtime pre-approval prompt, and their remarks. */
+  plan?: "yes" | "no" | null;
+  note?: string | null;
 }
 
 /** Part of a day's overtime: a process (trade id) and optionally a task type. */
@@ -236,6 +239,13 @@ export interface Settings {
   slaHolidays?: boolean;
   /** Request types with their own SLA. Tasks without a type use the standard SLA (by priority). */
   taskTypes?: TaskType[];
+  /**
+   * Overtime pre-approval: `before` hours before a member's shift ends, while the queue is
+   * still busy (at least `queue` tasks waiting in their trades, or `due` tasks due by the end
+   * of the shift or overdue), they're asked whether they expect overtime, with remarks.
+   * Only a Yes lets them report overtime at End work.
+   */
+  otPrompt?: { on: boolean; before: number; queue: number; due: number };
   /** Complexity of contracts in a ticket (Simple / Medium / Complex …), each with its own target and handling time. */
   complexity?: Complexity;
   /** Business case: how the team bills (fixed per role and month, or per transaction) and the agreed rates. Admins only. */

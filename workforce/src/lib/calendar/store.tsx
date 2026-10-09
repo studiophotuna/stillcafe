@@ -38,7 +38,7 @@ export interface Sel {
 
 export type CalDialog =
   | { kind: "request"; date?: string }
-  | { kind: "cell"; pid: number; date: string }
+  | { kind: "cell"; pid: number; date: string; bid?: string }
   | { kind: "holWork"; date: string }
   | { kind: "schedule"; pids?: number[]; date?: string }
   | { kind: "resign"; pid: number }

@@ -29,6 +29,7 @@ export function authorizeWl(a: Action, d: WorkloadData, me: number): { action: A
     case "complete":
     case "away":
     case "back":
+    case "planOt":
     case "endWork":
     case "undoEnd":
       return { action: { ...a, pid: me } };

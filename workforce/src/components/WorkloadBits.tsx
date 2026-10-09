@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 import { Blueprint } from "@/components/ui";
 import { fmtT, nowMs } from "@/lib/workload/clock";
-import { awayLabel, currentAway, fmtMin, staleTasks, taskWorkMs, ticketOf } from "@/lib/workload/engine";
+import { awayLabel, currentAway, fmtMin, otPromptNow, staleTasks, taskWorkMs, ticketOf } from "@/lib/workload/engine";
 import { useWorkload } from "@/lib/workload/store";
 
 /** Current time, re-rendering every second (for running timers). */
@@ -171,5 +171,45 @@ export function TaskTimer({ task }: { task: import("@/lib/workload/types").Task 
         {away ? "paused · " : ""}started {fmtT(task.startedAt).split(", ").pop()}
       </span>
     </span>
+  );
+}
+
+/**
+ * Overtime pre-approval: near the end of the member's shift, while their queue is still
+ * busy, ask whether they expect overtime (with remarks). Only a Yes lets them report
+ * overtime at End work; their leads see the answer on the Overtime page.
+ */
+export function OtPrompt() {
+  const { data, me, run } = useWorkload();
+  const t = useTick(30_000);
+  const [note, setNote] = useState("");
+  const ask = otPromptNow(data, me, t);
+  if (!ask) return null;
+  const end = fmtT(ask.shiftEnd).split(", ").pop();
+  return (
+    <div className="away-pop" role="dialog" aria-modal="true" aria-label="Overtime pre-approval">
+      <Blueprint className="away-card" style={{ gap: 10, maxWidth: 460, textAlign: "left", alignItems: "stretch" }}>
+        <span className="small" style={{ textTransform: "uppercase", letterSpacing: "0.1em", color: "var(--color-accent-700)" }}>
+          Overtime pre-approval
+        </span>
+        <strong style={{ fontSize: 18 }}>Do you expect to work overtime today?</strong>
+        <span className="small">
+          Your shift ends at {end}. In your trades {ask.waiting} task{ask.waiting === 1 ? " is" : "s are"} still waiting and {ask.due} {ask.due === 1 ? "is" : "are"} due by then or overdue.
+          If you answer Yes, you can report overtime at End work for your lead to approve. If No, End work just ends your day.
+        </span>
+        <div className="field">
+          <label htmlFor="otp-note">Remarks (needed for Yes)</label>
+          <textarea id="otp-note" className="input" rows={3} maxLength={500} value={note} placeholder="e.g. Month-end volume: 6 EU rate requests due today" onChange={(e) => setNote(e.target.value)} />
+        </div>
+        <div className="row" style={{ gap: 8, justifyContent: "flex-end" }}>
+          <button className="btn btn-secondary btn-40" onClick={() => run({ type: "planOt", pid: me.id, yes: false, note })}>
+            No
+          </button>
+          <Blueprint as="button" className="btn btn-primary btn-40" style={{ padding: "0 18px" }} disabled={!note.trim()} onClick={() => run({ type: "planOt", pid: me.id, yes: true, note })}>
+            Yes, I expect overtime
+          </Blueprint>
+        </div>
+      </Blueprint>
+    </div>
   );
 }

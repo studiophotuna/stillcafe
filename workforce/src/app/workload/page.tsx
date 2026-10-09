@@ -6,7 +6,7 @@ import { TaskTable } from "@/components/TaskTable";
 import { Blueprint, Icon, Kpi, PageHead, pct } from "@/components/ui";
 import { M, dur } from "@/lib/workload/clock";
 import { AV, trPathOf } from "@/lib/workload/constants";
-import { personOf, AWAY, canPause, awayLabel, basisUnit, typeTargets, canWork, currentAway, doneToday, endedToday, fmtMin, helpQueue, missingRequired, ownQueue, personMetrics, sortTasks } from "@/lib/workload/engine";
+import { personOf, AWAY, canPause, otAllowed, awayLabel, basisUnit, typeTargets, canWork, currentAway, doneToday, endedToday, fmtMin, helpQueue, missingRequired, ownQueue, personMetrics, sortTasks } from "@/lib/workload/engine";
 import { fmtT } from "@/lib/workload/clock";
 import { TaskTimer } from "@/components/WorkloadBits";
 import { useWorkload } from "@/lib/workload/store";
@@ -201,7 +201,7 @@ export default function MyWorkPage() {
                     {l}
                   </button>
                 ))}
-                <button className="btn btn-secondary btn-36" style={{ marginLeft: 10 }} disabled={!!cur} title={cur ? "Resolve your ticket or set it to pending first" : undefined} onClick={() => setDialog({ kind: "endWork" })}>
+                <button className="btn btn-secondary btn-36" style={{ marginLeft: 10 }} disabled={!!cur} title={cur ? "Resolve your ticket or set it to pending first" : undefined} onClick={() => (otAllowed(data, me, now) ? setDialog({ kind: "endWork" }) : run({ type: "endWork", otMin: 0, pid: me.id }))}>
                   End work
                 </button>
               </div>

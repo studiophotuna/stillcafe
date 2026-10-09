@@ -138,7 +138,7 @@ export function CalShell({ children }: { children: React.ReactNode }) {
             if (b) s.setSel({ branch: b.id, system: "all", trade: "all", span: v.span === "dept" ? "tower" : v.span });
           },
           220,
-          multiOk && v.towerOpts.length > 0 ? "All towers" : undefined,
+          multiOk && v.canAll && v.towerOpts.length > 0 ? "All towers" : undefined,
         )}
       {!vMgmt && !vBcp && v.branchOpts.length > 0 && !(multiOk && v.span === "dept") &&
         sel(
@@ -148,7 +148,7 @@ export function CalShell({ children }: { children: React.ReactNode }) {
           v.branchOpts,
           (val) => (val === "all" ? s.setSel({ span: "tower", system: "all", trade: "all" }) : s.setSel({ branch: val, system: "all", trade: "all", span: "team" })),
           180,
-          multiOk && v.branchOpts.length > 0 ? "All teams" : undefined,
+          multiOk && v.canAll && v.branchOpts.length > 0 ? "All teams" : undefined,
         )}
       {showSub && v.systems.length > 0 &&
         sel("f-sys", "System", v.system, v.systems, (val) => s.setSel({ system: val, trade: "all" }), 150, "All systems")}

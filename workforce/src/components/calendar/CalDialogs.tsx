@@ -399,12 +399,15 @@ function ScheduleDialog({ pids: pids0, date }: { pids?: number[]; date?: string 
 }
 
 // ── Admin: change one person's day ──
-function CellDialog({ pid, date }: { pid: number; date: string }) {
+function CellDialog({ pid, date, bid: bid0 }: { pid: number; date: string; bid?: string }) {
   const s = useCalendar();
   const v = useCalView();
   const c = s.cal;
+  // The person's team in this view (a calendar showing several teams passes it).
+  const bid = bid0 && c.O.by[bid0] ? bid0 : v.bid;
+  const branch = c.O.by[bid] ?? v.branch;
   const p = c.person(pid);
-  const cell = c.raw(p, date, v.bid);
+  const cell = c.raw(p, date, bid);
   const close = () => s.setDialog(null);
   // Weekends: a regular shift (RTO / WFH) or rest day overtime (RDOT).
   const codes: Code[] = (c.holFor(p, date) ? (["HDY"] as Code[]) : []).concat(
@@ -421,7 +424,7 @@ function CellDialog({ pid, date }: { pid: number; date: string }) {
       {cell.req && (
         <div className="banner" style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10, fontSize: 13.5 }}>
           <span>
-            {CODES[cell.req.type].label} {rng2(cell.req.start, cell.req.end)} · {APPR_WORD[cell.req.approvals[v.bid]]}
+            {CODES[cell.req.type].label} {rng2(cell.req.start, cell.req.end)} · {APPR_WORD[cell.req.approvals[bid]]}
           </span>
           <button
             className="btn btn-ghost"
@@ -448,7 +451,7 @@ function CellDialog({ pid, date }: { pid: number; date: string }) {
                   type: "submitRequest",
                   pid,
                   form: { type: k, start: date, end: date, half: "AM", reason: "Entered by " + v.meP.name },
-                  adminBid: v.bid,
+                  adminBid: bid,
                   actor: s.me,
                 });
               else s.run({ type: "setOverride", pid, date, code: k });
@@ -475,10 +478,10 @@ function CellDialog({ pid, date }: { pid: number; date: string }) {
         style={{ alignSelf: "flex-start", paddingLeft: 0 }}
         onClick={() => s.setDialog({ kind: "schedule", pids: [pid], date })}
       >
-        Change {first(p.name)}’s whole {v.branch.schedPeriod === "month" ? "month" : "week"}…
+        Change {first(p.name)}’s whole {branch.schedPeriod === "month" ? "month" : "week"}…
       </button>
       <span className="small">
-        Leave you enter here is approved for {v.branch.name}. Other teams {first(p.name)} belongs to follow their own approval setting.
+        Leave you enter here is approved for {branch.name}. Other teams {first(p.name)} belongs to follow their own approval setting.
       </span>
       <div className="dialog-actions" style={{ justifyContent: "space-between", gap: 10 }}>
         <button
@@ -1696,7 +1699,7 @@ export function CalDialogs() {
     case "holWork":
       return <HolidayWorkDialog date={d.date} />;
     case "cell":
-      return <CellDialog key={d.pid + d.date} pid={d.pid} date={d.date} />;
+      return <CellDialog key={d.pid + d.date} pid={d.pid} date={d.date} bid={d.bid} />;
     case "resign":
       return <ResignDialog pid={d.pid} />;
     case "member":

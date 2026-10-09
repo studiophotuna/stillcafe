@@ -5,6 +5,7 @@ import { Blueprint, Icon } from "@/components/ui";
 import { ANNUAL, BSTY, CODES, CODE_KEYS, LEVELS, isLeader, PEND, WORKING, type Chip as ChipStyle } from "@/lib/calendar/constants";
 import { DOW, MONL, dayOf, daysInMonth, dowOf, fmt, fmtY, isWk, isoOf } from "@/lib/calendar/dates";
 import type { Cell } from "@/lib/calendar/engine";
+import { rightsOf } from "@/lib/calendar/authz";
 import { useCalendar } from "@/lib/calendar/store";
 import { useCalView } from "@/lib/calendar/useCalView";
 import type { CalPerson, Code } from "@/lib/calendar/types";
@@ -173,11 +174,17 @@ export function CalendarGrid({ mgmt, edit }: { mgmt?: boolean; edit?: boolean })
         { code: "", label: "Resigned", bg: HATCH, fg: "inherit", bd: "1px solid var(--color-divider)" },
       ]);
 
-  // Editing schedules: one team at a time (choose a team when all teams are shown).
+  // Whole-schedule updates and uploads: one team at a time (choose a team when all teams are shown).
   const admin = !mgmt && !!edit && v.isAdmin && !v.multi;
+  // Changing someone's day: leads and above (and admins) for the people they manage, on the
+  // Calendar and on Schedules, in any view; on the Calendar your own day is a request.
+  const rights = rightsOf(c, s.me);
+  const leads = isLeader(v.meP.level) || v.anyAdmin;
+  const rowTeam = (p: CalPerson) => (v.multi ? (O.branchesOf(p).find((b) => v.scopeBranches.some((x) => x.id === b.id))?.id ?? v.bid) : v.bid);
+  const edits = (p: CalPerson) => !mgmt && (edit ? (!v.multi && v.isAdmin) || rights.adminOf(p.id) : leads && p.id !== s.me && rights.adminOf(p.id));
   const onCell = (p: CalPerson, d: string, cell: Cell) => {
     if (cell.gone) return;
-    if (admin) s.setDialog({ kind: "cell", pid: p.id, date: d });
+    if (edits(p)) s.setDialog({ kind: "cell", pid: p.id, date: d, bid: rowTeam(p) });
     else if (p.id === s.me) s.setDialog(cell.code === "HOL" || cell.code === "HDY" ? { kind: "holWork", date: d } : { kind: "request", date: d });
   };
 
@@ -294,7 +301,7 @@ export function CalendarGrid({ mgmt, edit }: { mgmt?: boolean; edit?: boolean })
                         ? CODES[cell.code].label + (cell.pending ? " – pending approval" : "") + (cell.note ? " – " + cell.note : "")
                         : "Weekend";
                     const title = `${r.p.name} · ${fmt(d)} · ${lab}` + (sh && WORKING.includes(cell.code as Code) ? ` · ${sh.name} ${sh.start}–${sh.end}` : "");
-                    const canClick = (admin || r.p.id === s.me) && !cell.gone;
+                    const canClick = (edits(r.p) || r.p.id === s.me) && !cell.gone;
                     return (
                       <div
                         key={d}
@@ -323,7 +330,8 @@ export function CalendarGrid({ mgmt, edit }: { mgmt?: boolean; edit?: boolean })
             {!rows.length && (
               <div style={{ padding: "32px 14px", color: "var(--color-neutral-700)" }}>{ql ? `No one matches “${q}”.` : mgmt ? "No directors, managers or team leads here yet." : "No one is allocated here yet."}</div>
             )}
-            {!mgmt && (
+            {/* Daily counts (attendance summary): leads and above, admins, and stand-ins covering for a leader. */}
+            {!mgmt && (leads || v.covering.length > 0) && (
               <div className="grid-counts">
                 <div style={{ display: "flex" }}>
                   <button className="grid-counts-toggle" onClick={() => setCountsOpen(!countsOpen)} aria-expanded={countsOpen}>

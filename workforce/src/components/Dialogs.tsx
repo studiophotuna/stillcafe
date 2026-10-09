@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { fieldOptions, trPathOf } from "@/lib/workload/constants";
 import { H, TZ_OFFSET_H, fmtT, nowMs } from "@/lib/workload/clock";
-import { due, fmtMin, missingRequired, otAvailMin, OT_KIND, type AssistOffer, slaText, otProcesses, suggestOtSplit, asksOtSplit, typesFor, cxLevels, cxTotal, cxField, cxOn, cxOver, personOf } from "@/lib/workload/engine";
+import { due, fmtMin, missingRequired, otAvailMin, OT_KIND, type AssistOffer, slaText, otProcesses, suggestOtSplit, asksOtSplit, typesFor, cxLevels, cxTotal, cxField, cxOn, cxOver, personOf, otAllowed } from "@/lib/workload/engine";
 import { useWorkload } from "@/lib/workload/store";
 import type { Priority, Task, OtPart } from "@/lib/workload/types";
 import { assignOptions, taskDetail } from "@/lib/workload/view";
@@ -482,7 +482,7 @@ function EndWorkDialog() {
   const { data, run, me, setDialog } = useWorkload();
   const [nowAt] = useState(() => nowMs());
   // Holiday duty / rest day: all time worked today; otherwise the time past the shift.
-  const past = otAvailMin(data, me, nowAt);
+  const past = otAllowed(data, me, nowAt) ? otAvailMin(data, me, nowAt) : 0;
   const [h, setH] = useState(() => String(Math.floor(past / 60)));
   const [m, setM] = useState(() => String(past % 60));
   const close = () => setDialog(null);

@@ -1018,7 +1018,7 @@ export function otAvailMin(d: Pick<WorkloadData, "tasks" | "activities" | "setti
   const starts = d.tasks
     .filter((t) => t.assignee === p.id && t.startedAt && dayKey(t.startedAt) === today)
     .map((t) => t.startedAt!)
-    .concat(d.activities.filter((a) => a.pid === p.id && a.kind !== "end" && dayKey(a.start) === today).map((a) => a.start));
+    .concat(d.activities.filter((a) => a.pid === p.id && !notAway(a) && dayKey(a.start) === today).map((a) => a.start));
   if (!starts.length) return 0;
   return Math.max(0, Math.min(16 * 60, Math.round((now - Math.min(...starts)) / M)));
 }
@@ -1036,11 +1036,62 @@ export function pastShiftMin(p: Person, s: Settings, now: number) {
  * End the working day. The member reports overtime only when they end after their
  * shift (at most the time past it); it waits for approval by an admin or lead.
  */
+// ── overtime pre-approval ──
+
+/** Activity that isn't time away: end of work and the overtime pre-approval answer. */
+export const notAway = (a: Pick<Activity, "kind">) => a.kind === "end" || a.kind === "otplan";
+
+/** The member's answer to today's overtime pre-approval prompt, if any. */
+export const otPlanToday = (d: Pick<WorkloadData, "activities">, pid: number, now: number) =>
+  d.activities.find((a) => a.pid === pid && a.kind === "otplan" && sameDay(a.start, now));
+
+/**
+ * Whether the member may report overtime at End work: always, unless the team uses the
+ * pre-approval prompt; then on holiday duty / rest days, or after answering Yes today.
+ */
+export function otAllowed(d: WorkloadData, p: Person, now: number) {
+  if (!d.settings.otPrompt?.on || p.otDay) return true;
+  return otPlanToday(d, p.id, now)?.plan === "yes";
+}
+
+/**
+ * Whether to ask the member now: the team uses the prompt, it's within `before` hours of the
+ * end of their shift (still on shift, not ended work, not asked yet today), and the queue is
+ * still busy in their trades. Returns what's waiting, for the message.
+ */
+export function otPromptNow(d: WorkloadData, p: Person, now: number): { waiting: number; due: number; shiftEnd: number } | null {
+  const o = d.settings.otPrompt;
+  if (!o?.on || p.otDay || p.avail === "leave" || p.onToday === false || !p.trades.length) return null;
+  if (endedToday(d, p.id, now) || otPlanToday(d, p.id, now)) return null;
+  const [, end] = shiftWindow(p, d.settings, now);
+  if (now >= end || now < end - Math.max(0, o.before) * H) return null;
+  const mine = d.tasks.filter((t) => t.status !== "done" && p.trades.includes(t.trade) && (t.assignee === null || t.assignee === p.id));
+  const waiting = mine.filter((t) => t.status === "new").length;
+  const dueN = mine.filter((t) => due(t, d) <= end).length;
+  if (waiting < Math.max(1, o.queue) && dueN < Math.max(1, o.due)) return null;
+  return { waiting, due: dueN, shiftEnd: end };
+}
+
+/** Answer the overtime pre-approval prompt (once a day; answering again replaces it). Yes needs remarks. */
+export function planOt(d: WorkloadData, pid: number, yes: boolean, note: string, now: number): Outcome {
+  const me = personOf(d, pid);
+  if (!me || endedToday(d, pid, now)) return { data: d };
+  const n = String(note ?? "").trim().slice(0, 500);
+  if (yes && !n) return { data: d, message: "Add remarks: what you'll work on in overtime." };
+  const old = otPlanToday(d, pid, now);
+  const a = newActivity(pid, "otplan", now, { end: now, plan: yes ? "yes" : "no", note: n || null });
+  return {
+    data: { ...d, activities: old ? d.activities.map((x) => (x.id === old.id ? { ...old, plan: a.plan, note: a.note } : x)) : d.activities.concat(a) },
+    message: yes ? "Noted: overtime expected. Report it at End work; your lead approves it." : "Noted: no overtime today.",
+  };
+}
+
 export function endWork(d: WorkloadData, pid: number, otMin: number, now: number, split?: OtPart[] | null): Outcome {
   const me = personOf(d, pid);
   if (!me || endedToday(d, pid, now)) return { data: d };
   if (isBusy(d.tasks, pid)) return { data: d, message: "Resolve your ticket or set it to pending before you end work." };
-  const avail = otAvailMin(d, me, now);
+  // With the pre-approval prompt, overtime only after answering Yes (or on holiday duty / rest days).
+  const avail = otAllowed(d, me, now) ? otAvailMin(d, me, now) : 0;
   const ot = Math.max(0, Math.min(Math.round(Number(otMin) || 0), avail));
   // The breakdown must use this team's processes and task types and add up to the overtime.
   let parts: OtPart[] | null = null;
@@ -1172,7 +1223,7 @@ export function dayActivity(d: WorkloadData, pid: number, now: number) {
   const away: Record<string, number> = {};
   let awayMs = 0;
   for (const a of mine) {
-    if (a.kind === "end") continue;
+    if (notAway(a)) continue;
     const ms = (a.end ?? now) - a.start;
     away[a.kind] = (away[a.kind] ?? 0) + Math.round(ms / 60000);
     // Idle (paused) time stays in the time available, so it lowers utilization.

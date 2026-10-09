@@ -12,7 +12,7 @@ import { useUnit } from "@/lib/workload/useUnit";
 import { adminSections, hasAdminArea, isAdminPath, type AdminFlags } from "./adminNav";
 import { AppFrame, type NavItem } from "./AppFrame";
 import { Dialogs, Toasts } from "./Dialogs";
-import { AwayPopup, StaleNotice } from "./WorkloadBits";
+import { AwayPopup, OtPrompt, StaleNotice } from "./WorkloadBits";
 import { canPrice } from "@/lib/workload/business";
 
 /** Admin-only routes; members are sent back to My work. */
@@ -83,6 +83,7 @@ export function Shell({ children }: { children: React.ReactNode }) {
           <Dialogs />
           <Toasts />
           <AwayPopup />
+          <OtPrompt />
           <StaleNotice />
         </>
       }

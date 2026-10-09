@@ -1243,3 +1243,48 @@ describe("business case: fixed against unit pricing", async () => {
     expect(r.data.tasks).toBe(mk().tasks);
   });
 });
+
+describe("overtime pre-approval", async () => {
+  const E = await import("./engine");
+  const at = (hm: string) => Date.parse(`2026-09-24T${hm}:00+08:00`);
+  // Ana: LCL, shift 08:00–17:00. Ask 2 h before the end when ≥ 3 wait or ≥ 1 is due / overdue.
+  const on = { otPrompt: { on: true, before: 2, queue: 3, due: 1 } };
+  const waiting = (n: number, received: number) => Array.from({ length: n }, () => task({ status: "new", trade: "lcl", received, pr: "low" }));
+  const ana = (d: WorkloadData) => d.people.find((p) => p.id === ANA)!;
+
+  it("asks near the end of the shift only while the queue is busy, once a day", () => {
+    const busy = data(waiting(3, at("14:00")), on); // low priority: not due today
+    expect(E.otPromptNow(busy, ana(busy), at("14:30"))).toBeNull(); // too early (before 15:00)
+    expect(E.otPromptNow(busy, ana(busy), at("15:30"))).toMatchObject({ waiting: 3, due: 0, shiftEnd: at("17:00") });
+    expect(E.otPromptNow(busy, ana(busy), at("17:01"))).toBeNull(); // shift over
+    const quiet = data(waiting(2, at("14:00")), on);
+    expect(E.otPromptNow(quiet, ana(quiet), at("15:30"))).toBeNull();
+    // One due (high priority, 4 h SLA) is enough.
+    const due = data([task({ status: "new", trade: "lcl", pr: "high", received: at("12:00") })], on);
+    expect(E.otPromptNow(due, ana(due), at("15:30"))).toMatchObject({ waiting: 1, due: 1 });
+    // Off: never; answered: not again.
+    expect(E.otPromptNow(data(waiting(5, at("14:00"))), ana(busy), at("15:30"))).toBeNull();
+    const answered = E.planOt(busy, ANA, false, "", at("15:30")).data;
+    expect(E.otPromptNow(answered, ana(answered), at("16:00"))).toBeNull();
+  });
+
+  it("Yes (with remarks) lets them report overtime at End work; No ends the day without it", () => {
+    const d = data(waiting(3, at("14:00")), on);
+    expect(E.planOt(d, ANA, true, " ", at("15:30")).message).toMatch(/Add remarks/);
+    const yes = E.planOt(d, ANA, true, "Month-end EU rates", at("15:30")).data;
+    expect(E.otPlanToday(yes, ANA, at("16:00"))).toMatchObject({ kind: "otplan", plan: "yes", note: "Month-end EU rates" });
+    expect(E.otAllowed(yes, ana(yes), at("18:00"))).toBe(true);
+    expect(E.endWork(yes, ANA, 60, at("18:00")).data.activities.at(-1)).toMatchObject({ kind: "end", otMin: 60, otStatus: "pending" });
+    const no = E.planOt(d, ANA, false, "", at("15:30")).data;
+    expect(E.otAllowed(no, ana(no), at("18:00"))).toBe(false);
+    expect(E.endWork(no, ANA, 60, at("18:00")).data.activities.at(-1)).toMatchObject({ kind: "end", otMin: 0, otStatus: null });
+    // Not answered: no overtime either (the team uses the prompt); a holiday duty / rest day still can.
+    expect(E.otAllowed(d, ana(d), at("18:00"))).toBe(false);
+    expect(E.otAllowed(d, { ...ana(d), otDay: "restday" }, at("18:00"))).toBe(true);
+    // The answer isn't time away.
+    expect(E.dayActivity(yes, ANA, at("16:00")).awayMs).toBe(0);
+    expect(E.dayActivity(yes, ANA, at("16:00")).away.otplan).toBeUndefined();
+    // Without the prompt, End work works as before.
+    expect(E.otAllowed(data([]), ana(d), at("18:00"))).toBe(true);
+  });
+});

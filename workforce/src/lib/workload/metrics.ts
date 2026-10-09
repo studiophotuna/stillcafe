@@ -77,6 +77,7 @@ export function personPeriod(d: WorkloadData, p: Person, x: PeriodInput): Person
       }
       continue;
     }
+    if (a.kind === "otplan") continue;
     const ms = clip(a.start, a.end ?? x.now, x.from, until);
     if (!ms) continue;
     away[a.kind] = (away[a.kind] ?? 0) + Math.round(ms / 60000);

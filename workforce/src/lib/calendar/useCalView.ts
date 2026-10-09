@@ -51,10 +51,17 @@ export function useCalView() {
     // (directors: their department, managers: their tower, leads: their team).
     const towerTeams = viewBranches.filter((b) => O.up(b.id, "tower")!.id === tower.id);
     const deptTeams = viewBranches.filter((b) => O.up(b.id, "dept")!.id === dept.id);
-    const span: "team" | "tower" | "dept" =
-      // Tower and department views also show their managers and directors, so they're
-      // available even with one team.
-      sel.span === "dept" && deptTeams.length > 0 ? "dept" : sel.span && sel.span !== "team" && towerTeams.length > 0 ? "tower" : "team";
+    // "All teams" / "All towers": leads and above, admins, and stand-ins covering for a leader.
+    const canAll = isLeader || anyAdmin;
+    const span: "team" | "tower" | "dept" = !canAll
+      ? "team"
+      : // Tower and department views also show their managers and directors, so they're
+        // available even with one team.
+        sel.span === "dept" && deptTeams.length > 0
+        ? "dept"
+        : sel.span && sel.span !== "team" && towerTeams.length > 0
+          ? "tower"
+          : "team";
     const multi = span !== "team";
     const scopeBranches = span === "dept" ? deptTeams : span === "tower" ? towerTeams : [branch];
     const scopeId = span === "dept" ? dept.id : span === "tower" ? tower.id : bid;
@@ -107,7 +114,7 @@ export function useCalView() {
     // Admin of every team shown (several teams: each one).
     const adminOfAll = sys || scopeBranches.every((b) => isNodeAdmin(O, b.id, me));
     return {
-      covering, canApprove, span, multi, scopeBranches, scopeId, cellBid, adminOfAll, towerTeams, deptTeams,
+      covering, canAll, canApprove, span, multi, scopeBranches, scopeId, cellBid, adminOfAll, towerTeams, deptTeams,
       meP, myBranches, viewBranches, mTowers, mTower, branch, dept, tower, bid, isAdmin, anyAdmin, isLeader, systems, system, trades, trade,
       unitId, unitIds, inUnit, inView, isAbove, unitLabel, deptList, towerOpts, deptShort: dept.name.split(" (")[0], pendingCount,
       branchOpts: viewBranches.filter((b) => O.up(b.id, "tower")!.id === tower.id),
