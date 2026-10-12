@@ -45,7 +45,7 @@ export default function NotificationsPage() {
             <h2 style={{ fontSize: 24 }}>{L.subject}</h2>
             <div className="email-head" style={{ fontSize: 13, gap: "4px 12px", paddingBottom: 12, borderBottom: "1px solid var(--color-divider)" }}>
               <span>From</span>
-              <span>Workforce Management &lt;no-reply@dsv.com&gt;</span>
+              <span>Workforce Management &lt;no-reply@{s.mode === "demo" ? "demobss.com" : "dsv.com"}&gt;</span>
               <span>To</span>
               <span>{L.toLine}</span>
               {L.kind === "invite" && (

@@ -5,12 +5,12 @@ import type { Priority, Task, TaskStatus } from "./types";
 
 const KINDS = ["Rate filing", "Contract amendment", "New contract upload", "Surcharge update", "Rate sheet review"];
 const SENDERS = [
-  "pricing.eu@dsv.com",
-  "sales.lcl@dsv.com",
-  "tlm.fewb@dsv.com",
-  "procurement.asla@dsv.com",
-  "pricing.us@dsv.com",
-  "kam.inas@dsv.com",
+  "pricing.eu@demobss.com",
+  "sales.lcl@demobss.com",
+  "tlm.fewb@demobss.com",
+  "procurement.asla@demobss.com",
+  "pricing.us@demobss.com",
+  "kam.inas@demobss.com",
 ];
 
 interface Opts {
@@ -76,7 +76,7 @@ export function seedTasks(now: number): Task[] {
       const attachments = [car + "_rates.xlsx"].concat(r() < 0.4 ? ["contract_" + car + ".pdf"] : []);
       t.email = {
         from,
-        cc: "rm.team@dsv.com",
+        cc: "rm.team@demobss.com",
         subject: (pr === "high" ? "URGENT: " : "") + kind + " – " + car + trName,
         body: `Hi team,\n\nPlease process the attached ${kind.toLowerCase()} for ${car}. Effective date is next Monday.\n\nThank you.`,
         attachments,
@@ -147,10 +147,10 @@ export function seedTasks(now: number): Task[] {
 
 /** Sample emails used by "Check mailbox now" until Microsoft Graph intake is connected. */
 export const SAMPLE_MAIL: [string, string, string, string[]][] = [
-  ["sales.lcl@dsv.com", "LCL rate request – CMDU Manila to Singapore", "Hi team,\n\nCustomer needs LCL rates for next week. Details attached.", ["CMDU_LCL_request.xlsx"]],
-  ["pricing.eu@dsv.com", "URGENT: EU surcharge update – HLCU", "Please update the ENS surcharge for HLCU effective 1 October.", ["HLCU_surcharge.pdf"]],
-  ["kam.inas@dsv.com", "Contract amendment – ONEY INAS", "Amendment 3 for the ONEY contract is attached.", ["ONEY_amd3.pdf"]],
-  ["ops@dsv.com", "Question about last week’s filing", "Could someone confirm the filing reference?", []],
+  ["sales.lcl@demobss.com", "LCL rate request – CMDU Manila to Singapore", "Hi team,\n\nCustomer needs LCL rates for next week. Details attached.", ["CMDU_LCL_request.xlsx"]],
+  ["pricing.eu@demobss.com", "URGENT: EU surcharge update – HLCU", "Please update the ENS surcharge for HLCU effective 1 October.", ["HLCU_surcharge.pdf"]],
+  ["kam.inas@demobss.com", "Contract amendment – ONEY INAS", "Amendment 3 for the ONEY contract is attached.", ["ONEY_amd3.pdf"]],
+  ["ops@demobss.com", "Question about last week’s filing", "Could someone confirm the filing reference?", []],
 ];
 
 /** Sample billed headcount: everyone 1 FTE from January, the manager not billed (as in Calendar › Headcount). */
@@ -187,7 +187,7 @@ export function initialData(now: number, empty = false): WorkloadData {
       skipUnavail: true,
       autoFeed: true,
       sla: { high: 4, normal: 24, low: 72 },
-      mailbox: empty ? "" : "rm.requests@dsv.com",
+      mailbox: empty ? "" : "rm.requests@demobss.com",
       mailTrade: "",
       work: { shift: 9, b1: 60, b2: 30, prod: 6.8 },
       targets: empty ? {} : { fewb: 8, inas: 6, eu: 7, us: 6, asla: 6, lcl: 8 },

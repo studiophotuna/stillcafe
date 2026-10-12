@@ -153,6 +153,6 @@ export const EMPLOYEE_ID = 0;
 export const first = (n: string) => n.split(" ")[0];
 export const emailOf = (n: string) => {
   const w = n.toLowerCase().split(" ");
-  return `${w[0]}.${w[w.length - 1]}@dsv.com`;
+  return `${w[0]}.${w[w.length - 1]}@demobss.com`;
 };
 export const lc = (v: unknown) => String(v ?? "").trim().toLowerCase();

@@ -575,7 +575,7 @@ export function checkMail(d: WorkloadData, now: number): Outcome {
       pr: /urgent/i.test(subject) ? ("high" as const) : ("normal" as const),
       source: "outlook" as const,
       fields: { carrier: CARRIERS.find((c) => subject.includes(c)) ?? "" },
-      email: { from, cc: "rm.team@dsv.com", subject, body, attachments },
+      email: { from, cc: "rm.team@demobss.com", subject, body, attachments },
       history: [{ at: rec, text: "Received from Outlook" + (tr ? "" : " · waiting for an admin to set the trade") }],
     };
   }).map((t) => withSla(t, d.settings));

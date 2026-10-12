@@ -32,7 +32,7 @@ const settings = (p: Partial<Settings> = {}): Settings => ({
   skipUnavail: true,
   autoFeed: true,
   sla: { high: 4, normal: 24, low: 72 },
-  mailbox: "rm.requests@dsv.com",
+  mailbox: "rm.requests@demobss.com",
   mailTrade: "",
   work: { shift: 9, b1: 60, b2: 30, prod: 6.8 },
   targets: { fewb: 8, inas: 6, eu: 7, us: 6, asla: 6, lcl: 8 },

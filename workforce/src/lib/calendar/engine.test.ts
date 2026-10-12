@@ -343,11 +343,11 @@ describe("uploads", () => {
     const d = fresh();
     const c = new Cal(d, TODAY);
     const rows = [
-      { Email: "ana.reyes@dsv.com", Date: "2026-09-24", Code: "WFH" }, // unchanged
-      { Email: "ana.reyes@dsv.com", Date: "2026-10-05", Code: "VL" },
-      { Email: "ana.reyes@dsv.com", Date: "2026-10-06", Code: "XX" },
-      { Email: "nobody@dsv.com", Date: "2026-10-06", Code: "WFH" },
-      { Email: "ana.reyes@dsv.com", Date: "2026-10-07", Code: "", Shift: "MID" },
+      { Email: "ana.reyes@demobss.com", Date: "2026-09-24", Code: "WFH" }, // unchanged
+      { Email: "ana.reyes@demobss.com", Date: "2026-10-05", Code: "VL" },
+      { Email: "ana.reyes@demobss.com", Date: "2026-10-06", Code: "XX" },
+      { Email: "nobody@demobss.com", Date: "2026-10-06", Code: "WFH" },
+      { Email: "ana.reyes@demobss.com", Date: "2026-10-07", Code: "", Shift: "MID" },
     ];
     const chk = checkUpload(c, "schedule", rows, "rm");
     expect(chk[0].skip).toBe(true);
@@ -366,8 +366,8 @@ describe("uploads", () => {
   it("members: new people and extra allocations", () => {
     const d = fresh();
     const rows = [
-      { Name: "Juan Dela Cruz", Email: "juan.delacruz@dsv.com", Role: "Member", Department: "BSS", Tower: "A&S Support - Rate Management", Team: "Rate Management", System: "RCM", Trade: "LCL" },
-      { Name: "Ana Reyes", Email: "ana.reyes@dsv.com", Role: "Member", Department: "BSS", Tower: "A&S Support - Rate Management", Team: "Rate Management", System: "GPM", Trade: "EU" },
+      { Name: "Juan Dela Cruz", Email: "juan.delacruz@demobss.com", Role: "Member", Department: "BSS", Tower: "A&S Support - Rate Management", Team: "Rate Management", System: "RCM", Trade: "LCL" },
+      { Name: "Ana Reyes", Email: "ana.reyes@demobss.com", Role: "Member", Department: "BSS", Tower: "A&S Support - Rate Management", Team: "Rate Management", System: "GPM", Trade: "EU" },
       { Name: "X", Email: "bad", Department: "BSS" },
     ];
     const chk = checkUpload(new Cal(d, TODAY), "members", rows, "rm");
