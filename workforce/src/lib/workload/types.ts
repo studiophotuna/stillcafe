@@ -216,6 +216,12 @@ export interface Settings {
   autoFeed: boolean;
   /** Members pick mode: members may pick several waiting tasks into their own list (still one in progress at a time). */
   multiPick?: boolean;
+  /**
+   * Helping other trades / systems before their own is clear: a member may take work
+   * elsewhere once this many tickets or fewer wait in their own trades (or system), as long as
+   * none of those is due today or overdue. 0 / missing: only once their own is empty.
+   */
+  helpBelow?: number;
   sla: Record<Priority, number>;
   mailbox: string;
   mailTrade: string;

@@ -1288,3 +1288,52 @@ describe("overtime pre-approval", async () => {
     expect(E.otAllowed(data([]), ana(d), at("18:00"))).toBe(true);
   });
 });
+
+describe("helping elsewhere before your own trades are clear", async () => {
+  const { canTake, clearEnough } = await import("./engine");
+  const ana = PEOPLE.find((p) => p.id === ANA)!;
+  // Due in 5 days (low priority, 72 h SLA plus the weekend): not due today.
+  const later = () => task({ trade: "lcl", pr: "low", received: NOW - H });
+  const dueToday = () => task({ trade: "lcl", pr: "high", received: NOW - H });
+  const us = () => task({ trade: "us", received: NOW - 2 * H }); // same system (TariffPro)
+  const eu = () => task({ trade: "eu", received: NOW - 3 * H }); // another system (RateHub)
+  const withLimit = (ts: Task[], n?: number) => ({ ...data(ts), settings: { ...data(ts).settings, helpBelow: n } });
+
+  it("is off by default: only once the member's own trades are empty", () => {
+    const d = withLimit([later(), us()]);
+    expect(canTake(d, ana, d.tasks[1], NOW)).toBe(false);
+    expect(clearEnough(d, [d.tasks[0]], NOW)).toBe(false);
+  });
+
+  it("allows it at or below the setting when none of their own is due today or overdue", () => {
+    const own = [later(), later()];
+    const d = withLimit([...own, us()], 2);
+    expect(canTake(d, ana, d.tasks[2], NOW)).toBe(true);
+    // Three waiting with a limit of 2: not yet.
+    const d3 = withLimit([later(), later(), later(), us()], 2);
+    expect(canTake(d3, ana, d3.tasks[3], NOW)).toBe(false);
+    // Within the limit but one is due today: not yet.
+    const dd = withLimit([later(), dueToday(), us()], 4);
+    expect(canTake(dd, ana, dd.tasks[2], NOW)).toBe(false);
+  });
+
+  it("goes to another system only when their own system is low too, and asks on Start work", () => {
+    const d = withLimit([later(), us(), eu()], 1);
+    const [, u, e] = d.tasks;
+    expect(canTake(d, ana, u, NOW)).toBe(true);
+    expect(canTake(d, ana, e, NOW)).toBe(false); // own + same system = 2 waiting, over the limit
+    const d2 = withLimit([later(), eu()], 1);
+    expect(canTake(d2, ana, d2.tasks[1], NOW)).toBe(true); // own system low, nothing else in it
+    // FIFO: Start work asks first; the member can carry on with their own or help.
+    const r = startWork(d, ANA, NOW);
+    expect(r.ask).toMatchObject({ own: 1, system: 1 });
+    expect(r.data).toBe(d);
+    const mine = startWork(d, ANA, NOW, "own");
+    expect(mine.data.tasks.find((t) => t.id === d.tasks[0].id)).toMatchObject({ status: "in_progress", assignee: ANA });
+    const help = startWork(d, ANA, NOW, true);
+    expect(help.data.tasks.find((t) => t.id === u.id)).toMatchObject({ status: "in_progress", assignee: ANA });
+    // Their own is due today: no question, their own comes first.
+    const due = withLimit([dueToday(), us()], 3);
+    expect(startWork(due, ANA, NOW).ask).toBeUndefined();
+  });
+});

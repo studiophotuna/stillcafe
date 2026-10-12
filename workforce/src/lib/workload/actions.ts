@@ -41,7 +41,7 @@ import type { ActivityKind, Billing, OtPart, Priority, Settings, Task, TaskField
 import { cleanBilling } from "./business";
 
 export type Action =
-  | { type: "startWork"; pid: number; assist?: boolean }
+  | { type: "startWork"; pid: number; assist?: boolean | "own" }
   | { type: "startTask"; id: string; pid: number }
   | { type: "pickTask"; id: string; pid: number }
   | { type: "pauseTask"; id: string; pid: number }
@@ -72,12 +72,12 @@ export type Action =
   | { type: "setFields"; fields: TaskField[] };
 
 const SETTING_KEYS: (keyof Settings)[] = [
-  "mode", "order", "skipUnavail", "autoFeed", "multiPick", "sla", "mailbox", "mailTrade", "work", "targets", "memberTargets", "prodBasis", "uploaders", "staleDays", "ticketField", "slaWeekends", "slaHolidays", "taskTypes", "complexity", "billing", "otPrompt",
+  "mode", "order", "skipUnavail", "autoFeed", "multiPick", "helpBelow", "sla", "mailbox", "mailTrade", "work", "targets", "memberTargets", "prodBasis", "uploaders", "staleDays", "ticketField", "slaWeekends", "slaHolidays", "taskTypes", "complexity", "billing", "otPrompt",
 ];
 
 export function applyAction(d: WorkloadData, a: Action, now: number): Outcome {
   switch (a.type) {
-    case "startWork": return startWork(d, a.pid, now, !!a.assist);
+    case "startWork": return startWork(d, a.pid, now, a.assist === "own" ? "own" : !!a.assist);
     case "startTask": return startTask(d, a.id, a.pid, now);
     case "pauseTask": return pauseTask(d, a.id, a.pid, now);
     case "pickTask": return pickTask(d, a.id, a.pid, now);

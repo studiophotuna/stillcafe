@@ -7,7 +7,7 @@ import { loadMe, toLogin } from "../session";
 import { isViewAs, person, personaId } from "./constants";
 import { canUpload } from "./authz";
 import { personOf, type AssistOffer, type WorkloadData } from "./engine";
-import { initialData } from "./seed";
+import { demoTeamData } from "./demoTeams";
 import type { Person, Toast, ViewAs } from "./types";
 
 /**
@@ -149,7 +149,7 @@ export function WorkloadProvider({ children }: { children: React.ReactNode }) {
       if (next === "db") setRealClock();
       modeRef.current = next;
       setMode(next);
-      commit(saved ?? initialData(nowMs()));
+      commit(saved ?? demoTeamData("rm", nowMs()));
     })();
     return () => {
       live = false;
@@ -219,9 +219,19 @@ export function WorkloadProvider({ children }: { children: React.ReactNode }) {
     [commit, toast, refresh],
   );
 
+  // Sample data: each team's sample, kept while switching between teams.
+  const demoCache = useRef<Record<string, WorkloadData>>({});
   const setTeam = useCallback(
     async (id: string) => {
-      if (modeRef.current !== "db" || id === teamRef.current) return;
+      if (id === teamRef.current) return;
+      if (modeRef.current === "demo") {
+        if (dataRef.current) demoCache.current[teamRef.current] = dataRef.current;
+        setSysState("all");
+        setTr("all");
+        commit(demoCache.current[id] ?? demoTeamData(id, nowMs()));
+        return;
+      }
+      if (modeRef.current !== "db") return;
       try {
         localStorage.setItem(TEAM_KEY, id);
       } catch {}
@@ -304,7 +314,8 @@ export function WorkloadProvider({ children }: { children: React.ReactNode }) {
               shift: "—",
               shiftStart: 8,
             })
-          : (person(personaId(viewAs)) ?? {
+          : (personOf(data, personaId(viewAs)) ??
+            person(personaId(viewAs)) ?? {
               // A sample persona outside the Workload team (the director): can look, not take work.
               id: personaId(viewAs),
               name: "Diego Samonte",

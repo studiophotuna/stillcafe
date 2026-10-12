@@ -442,9 +442,13 @@ function AssistDialog({ offer }: { offer: AssistOffer }) {
     <Modal onClose={close} width={500}>
       <div className="dialog-scroll" style={{ gap: 12, padding: 20 }}>
         <div className="dialog-title" style={{ fontSize: 26 }}>
-          Your trades are clear
+          {offer.own ? "Help other trades?" : "Your trades are clear"}
         </div>
-        <span>Nothing is waiting in your trades right now. Will you help with other trades’ volume?</span>
+        <span>
+          {offer.own
+            ? `Only ${offer.own} ${offer.own === 1 ? "task waits" : "tasks wait"} in your trades and none is due today. You can help with other trades’ volume or carry on with yours.`
+            : "Nothing is waiting in your trades right now. Will you help with other trades’ volume?"}
+        </span>
         <ul style={{ margin: 0, paddingLeft: 18, fontSize: 14, lineHeight: 1.6 }}>
           {offer.system > 0 && (
             <li>
@@ -454,8 +458,14 @@ function AssistDialog({ offer }: { offer: AssistOffer }) {
           {offer.team > 0 && <li>{offer.team} waiting elsewhere in the team</li>}
         </ul>
         <div className="dialog-actions" style={{ gap: 10 }}>
-          <button className="btn btn-secondary btn-40" onClick={close}>
-            Not now
+          <button
+            className="btn btn-secondary btn-40"
+            onClick={() => {
+              close();
+              if (offer.own) run({ type: "startWork", pid: me.id, assist: "own" });
+            }}
+          >
+            {offer.own ? "Carry on with mine" : "Not now"}
           </button>
           <Blueprint
             as="button"

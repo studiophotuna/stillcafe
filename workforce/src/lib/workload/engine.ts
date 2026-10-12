@@ -47,6 +47,8 @@ export interface AssistOffer {
   systemNames: string[];
   /** Waiting elsewhere in the team. */
   team: number;
+  /** Still waiting in the member's own trades (few and none due: they may help or carry on). */
+  own?: number;
 }
 
 /** Result of an action: the new data plus an optional message for a toast. */
@@ -180,13 +182,31 @@ export function assistOffer(d: WorkloadData, me: Person): AssistOffer | undefine
  * always; another trade in their system once their trades are clear; another system once
  * their whole system is clear.
  */
-export function canTake(d: WorkloadData, me: Person, t: Task) {
+export function canTake(d: WorkloadData, me: Person, t: Task, now?: number) {
   if (t.status !== "new" || !canWork(me, d.settings)) return false;
   if (me.trades.includes(t.trade)) return true;
-  if (!t.trade || !me.trades.length || ownQueue(d, me).length) return false;
+  if (!t.trade || !me.trades.length) return false;
   const h = helpQueue(d, me);
   const mine = h.find((x) => x.t.id === t.id);
-  return !!mine && (mine.sameSystem || !h.some((x) => x.sameSystem));
+  if (!mine) return false;
+  const at = now ?? Date.now();
+  // Another trade of their system: once their own trades are clear (or low, with none due).
+  if (!clearEnough(d, ownQueue(d, me), at)) return false;
+  if (mine.sameSystem) return true;
+  // Another system: once their system is clear too (or low, with none due).
+  return clearEnough(d, ownQueue(d, me).concat(h.filter((x) => x.sameSystem).map((x) => x.t)), at);
+}
+
+/** Due today (team time) or already overdue. */
+const dueNow = (d: WorkloadData, t: Task, now: number) => dayKey(due(t, d)) <= dayKey(now);
+/**
+ * Whether what still waits is low enough to help elsewhere: nothing, or (when the admin set
+ * Settings.helpBelow) that many tickets or fewer with none due today or overdue.
+ */
+export function clearEnough(d: WorkloadData, waiting: Task[], now: number) {
+  if (!waiting.length) return true;
+  const n = d.settings.helpBelow ?? 0;
+  return n > 0 && waiting.length <= n && !waiting.some((t) => dueNow(d, t, now));
 }
 
 const helping = (d: WorkloadData, me: Person, t: Task) =>
@@ -198,17 +218,24 @@ const helping = (d: WorkloadData, me: Person, t: Task) =>
  * (same system first, then the team) and takes it only once they agree (`assist`).
  * One task in progress at a time.
  */
-export function startWork(d: WorkloadData, pid: number, now: number, assist = false): Outcome {
+export function startWork(d: WorkloadData, pid: number, now: number, assist: boolean | "own" = false): Outcome {
   const me = personOf(d, pid);
   if (!me || isBusy(d.tasks, pid)) return { data: d };
   const stop = notWorking(d, pid, now);
   if (stop) return { data: d, message: stop };
   if (!canWork(me, d.settings)) return { data: d, message: "You’re marked unavailable, so tasks aren’t given to you." };
   const s = d.settings;
-  const next = sortTasks(d.tasks.filter((t) => t.assignee === pid && t.status === "assigned"), d)[0] ?? (s.mode === "fifo" ? ownQueue(d, me)[0] : undefined);
-  if (next) return { data: begin(d, next.id, me, now), message: `Started ${next.id}.` };
+  const assigned = sortTasks(d.tasks.filter((t) => t.assignee === pid && t.status === "assigned"), d)[0];
+  if (assigned) return { data: begin(d, assigned.id, me, now), message: `Started ${assigned.id}.` };
+  const own = s.mode === "fifo" ? ownQueue(d, me) : [];
+  // A few left in their trades and none due: they may help elsewhere instead (asked first).
+  const mayHelp = own.length > 0 && assist !== "own" && clearEnough(d, own, now) && helpQueue(d, me).some((x) => canTake(d, me, x.t, now));
+  if (own.length && !(mayHelp && assist === true)) {
+    if (mayHelp) return { data: d, ask: { ...assistOffer(d, me)!, own: own.length } };
+    return { data: begin(d, own[0].id, me, now), message: `Started ${own[0].id}.` };
+  }
   if (s.mode !== "fifo" || !me.trades.length) return { data: d, message: "Done. No more tasks waiting in your trades right now." };
-  const help = helpQueue(d, me)[0];
+  const help = helpQueue(d, me).find((x) => canTake(d, me, x.t, now));
   if (!help) return { data: d, message: "Done. Nothing is waiting in the team right now." };
   if (!assist) return { data: d, ask: assistOffer(d, me) };
   const note = helping(d, me, help.t);
@@ -222,7 +249,7 @@ export function startTask(d: WorkloadData, id: string, pid: number, now: number)
   if (!me || !t || isBusy(d.tasks, pid)) return { data: d };
   const stop = notWorking(d, pid, now);
   if (stop) return { data: d, message: stop };
-  const take = d.settings.mode === "self" && canTake(d, me, t);
+  const take = d.settings.mode === "self" && canTake(d, me, t, now);
   const mine = t.status === "assigned" && t.assignee === pid;
   if (!take && !mine) return { data: d };
   // A task the member paused carries on where it stopped (its start time and worked time stay).
@@ -238,7 +265,7 @@ export function startTask(d: WorkloadData, id: string, pid: number, now: number)
 export function pickTask(d: WorkloadData, id: string, pid: number, now: number): Outcome {
   const me = personOf(d, pid);
   const t = d.tasks.find((x) => x.id === id);
-  if (!me || !t || d.settings.mode !== "self" || !d.settings.multiPick || !canTake(d, me, t)) return { data: d };
+  if (!me || !t || d.settings.mode !== "self" || !d.settings.multiPick || !canTake(d, me, t, now)) return { data: d };
   const stop = notWorking(d, pid, now);
   if (stop) return { data: d, message: stop };
   const note = helping(d, me, t);

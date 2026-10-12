@@ -56,7 +56,7 @@ export function taskRow(d: WorkloadData, t: Task, me: number, isAdmin: boolean, 
   const meP = personOf(d, me) ?? { id: me, name: "", trades: [], avail: "available" as const, shift: "", shiftStart: 8 };
   const busy = isBusy(d.tasks, me);
   let action: RowAction | null = null;
-  if (t.status === "new" && s.mode === "self" && canTake(d, meP, t))
+  if (t.status === "new" && s.mode === "self" && canTake(d, meP, t, now))
     action = s.multiPick
       ? { kind: "pick", id: t.id, label: "Pick", disabled: false }
       : { kind: "take", id: t.id, label: meP.trades.includes(t.trade) ? "Take" : "Help", disabled: busy };
