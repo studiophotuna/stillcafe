@@ -20,7 +20,9 @@ export default function ReportsPage() {
   const [from, setFrom] = useState(mS);
   const [to0, setTo] = useState(mE);
   const [ev, setEv] = useState("");
-  const scope = O.by[scope0] ? scope0 : v.dept.id;
+  // Only the department / towers / teams this person administers.
+  const scopeOpts = bcpScopeOpts(s, v.dept.id);
+  const scope = scopeOpts.some((o) => o.id === scope0) ? scope0 : (scopeOpts[0]?.id ?? v.dept.id);
   const to = to0 >= from ? to0 : from;
   const evs = s.data.bcpEvents.filter((e) => O.by[e.scope] && O.anc(e.scope).includes(v.dept.id));
   const evSel = evs.find((e) => e.id === ev)?.id ?? evs[0]?.id ?? "";
@@ -65,7 +67,7 @@ export default function ReportsPage() {
           <div className="field">
             <label htmlFor="rep-s">Scope</label>
             <select id="rep-s" className="input" value={scope} onChange={(e) => setScope(e.target.value)}>
-              {bcpScopeOpts(s, v.dept.id).map((o) => (
+              {scopeOpts.map((o) => (
                 <option key={o.id} value={o.id}>{o.name}</option>
               ))}
             </select>

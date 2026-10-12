@@ -1,0 +1,191 @@
+"use client";
+
+import { useMemo, useState } from "react";
+import { DateRangePicker, useStoredRange } from "@/components/DateRangePicker";
+import { Blueprint, Icon, PageHead } from "@/components/ui";
+import { dayKey } from "@/lib/workload/clock";
+import { PR, ST, trPathOf } from "@/lib/workload/constants";
+import { cxText, due, holdPeriods, personOf, slaOf, taskWorkMs, ticketField, ticketOf } from "@/lib/workload/engine";
+import { downloadSheets } from "@/lib/workload/excel";
+import { rangeLabel, rangeMs, todayRange } from "@/lib/workload/period";
+import { useWorkload } from "@/lib/workload/store";
+import type { Task } from "@/lib/workload/types";
+import { useUnit } from "@/lib/workload/useUnit";
+import { typeNameOf } from "@/lib/workload/view";
+
+type DateBy = "received" | "done";
+type StatusF = "all" | "open" | "done";
+
+/**
+ * Data pull-out: every ticket of the team (or the system / trade chosen at the top) for a
+ * period, one row each with all its details and fields, to download as an Excel datasheet.
+ */
+export default function DataPage() {
+  const { data, now, toast } = useWorkload();
+  const { inUnit, unitLabel } = useUnit();
+  const [rg, setRg] = useStoredRange("data", todayRange(now));
+  const r = rg ?? todayRange(now);
+  const [from, to] = rangeMs(r);
+  const [by, setBy] = useState<DateBy>("received");
+  const [st, setSt] = useState<StatusF>("all");
+  const tf = ticketField(data);
+  const s = data.settings;
+
+  const list = useMemo(
+    () =>
+      data.tasks
+        .filter((t) => inUnit(t) && (st === "all" || (st === "done") === (t.status === "done")))
+        .filter((t) => {
+          const at = by === "done" ? t.doneAt : t.received;
+          return at !== null && at >= from && at < to;
+        })
+        .sort((a, b) => a.received - b.received),
+    [data.tasks, inUnit, st, by, from, to],
+  );
+
+  // Local date and time as text (yyyy-mm-dd hh:mm), so it sorts and reads the same in Excel.
+  const at = (ms: number | null) => {
+    if (!ms) return "";
+    const x = new Date(ms);
+    const p2 = (n: number) => String(n).padStart(2, "0");
+    return `${x.getFullYear()}-${p2(x.getMonth() + 1)}-${p2(x.getDate())} ${p2(x.getHours())}:${p2(x.getMinutes())}`;
+  };
+    const min = (ms: number) => Math.round(ms / 60000);
+  const pendMs = (t: Task) => holdPeriods(t, now).reduce((a, p) => a + ((p.to ?? now) - p.from), 0);
+  const extra = data.fields.filter((f) => f !== tf);
+
+  const download = async () => {
+    const head = [
+      "Task ID",
+      ...(tf ? [tf.label] : []),
+      "Title",
+      "System › Trade",
+      "Task type",
+      "Priority",
+      "Status",
+      "Source",
+      "From (e-mail)",
+      "Assigned to",
+      "Received",
+      "Started",
+      "Finished",
+      "SLA (h)",
+      "Due",
+      "On time",
+      "Worked (min)",
+      "Pending (min)",
+      "Pending reasons",
+      "Complexity",
+      "Overtime",
+      "Overtime (min)",
+      "Delay remarks",
+      ...extra.map((f) => f.label),
+    ];
+    const rows = list.map((t) => {
+      const d = due(t, data);
+      return [
+        t.id,
+        ...(tf ? [ticketOf(data, t)] : []),
+        t.title,
+        trPathOf(data.org, t.trade),
+        typeNameOf(data, t) || "Standard",
+        PR[t.pr][0],
+        ST[t.status][0],
+        t.source === "outlook" ? "Outlook" : "Upload",
+        t.email?.from ?? "",
+        personOf(data, t.assignee)?.name ?? "",
+        at(t.received),
+        at(t.startedAt),
+        at(t.doneAt),
+        slaOf(t, s),
+        at(d),
+        t.status === "done" ? (t.doneAt! <= d ? "Yes" : "No") : now > d ? "Overdue" : "",
+        min(taskWorkMs(data, t, now)),
+        min(pendMs(t)),
+        holdPeriods(t, now).map((p) => p.reason).filter(Boolean).join("; "),
+        cxText(s, t.cx),
+        t.ot ? "Yes" : "",
+        t.otMin ?? "",
+        t.delay ?? "",
+        ...extra.map((f) => (t.fields[f.key] ?? "") as string | number),
+      ];
+    });
+    const name = `Workload-data_${unitLabel}_${rangeLabel(r, now)}`.replace(/[^A-Za-z0-9_]+/g, "-");
+    await downloadSheets(`${name}.xlsx`, [{ name: "Tickets", rows: [head, ...rows] }]).catch(() =>
+      toast("The export couldn’t be created. Try again."),
+    );
+  };
+
+  return (
+    <>
+      <PageHead
+        title={`Data pull-out · ${unitLabel}`}
+        sub="Every ticket for the period, one row each with all its details and task fields: received, started and finished times, SLA and due time, time worked and pending, complexity and overtime. Choose a system or trade at the top to narrow it down."
+      />
+      <div className="row" style={{ justifyContent: "space-between", alignItems: "flex-end", flexWrap: "wrap", gap: 10 }}>
+        <div className="row" style={{ alignItems: "flex-end", flexWrap: "wrap", gap: 10 }}>
+          <DateRangePicker value={r} onChange={setRg} today={dayKey(now)} id="data" />
+          <div className="field">
+            <label htmlFor="data-by">Dates are</label>
+            <select id="data-by" className="input" value={by} onChange={(e) => setBy(e.target.value as DateBy)}>
+              <option value="received">When received</option>
+              <option value="done">When finished</option>
+            </select>
+          </div>
+          <div className="field">
+            <label htmlFor="data-st">Tickets</label>
+            <select id="data-st" className="input" value={st} onChange={(e) => setSt(e.target.value as StatusF)}>
+              <option value="all">All</option>
+              <option value="open">Open</option>
+              <option value="done">Done</option>
+            </select>
+          </div>
+        </div>
+        <button className="btn btn-primary btn-36" onClick={download} disabled={!list.length}>
+          <Icon name="download" size={16} />
+          Download Excel ({list.length})
+        </button>
+      </div>
+      <Blueprint className="scroll-x">
+        <table className="table" style={{ minWidth: 980 }}>
+          <thead>
+            <tr>
+              <th>Task ID</th>
+              {tf && <th>{tf.label}</th>}
+              <th>Title</th>
+              <th>System › Trade</th>
+              <th>Status</th>
+              <th>Assigned to</th>
+              <th>Received</th>
+              <th>Finished</th>
+              <th style={{ textAlign: "right" }}>Worked (min)</th>
+            </tr>
+          </thead>
+          <tbody>
+            {list.slice(0, 50).map((t) => (
+              <tr key={t.id}>
+                <td className="nowrap">{t.id}</td>
+                {tf && <td className="nowrap">{ticketOf(data, t)}</td>}
+                <td>{t.title}</td>
+                <td className="nowrap">{trPathOf(data.org, t.trade)}</td>
+                <td className="nowrap">{ST[t.status][0]}</td>
+                <td className="nowrap">{personOf(data, t.assignee)?.name ?? "—"}</td>
+                <td className="nowrap small">{at(t.received)}</td>
+                <td className="nowrap small">{at(t.doneAt) || "—"}</td>
+                <td style={{ textAlign: "right" }}>{min(taskWorkMs(data, t, now))}</td>
+              </tr>
+            ))}
+            {!list.length && (
+              <tr>
+                <td colSpan={9} className="muted">
+                  No tickets for {rangeLabel(r, now)}.
+                </td>
+              </tr>
+            )}
+          </tbody>
+        </table>
+        {list.length > 50 && <div className="small" style={{ padding: "10px 14px" }}>Showing the first 50 of {list.length}. The download has them all.</div>}
+      </Blueprint>
+    </>
+  );
+}

@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo } from "react";
-import { inViewOf, isNodeAdmin, onlyAbove } from "./org";
+import { inViewOf, isNodeAdmin, onlyAbove, orgAdminNodes } from "./org";
 import { isLeader as isLeaderLevel } from "./constants";
 import { visibleTeams } from "./authz";
 import { coveredLeaders } from "./covers";
@@ -44,7 +44,12 @@ export function useCalView() {
     const bid = branch.id;
     const sys = !!meP.sysAdmin;
     const isAdmin = sys || isNodeAdmin(O, branch.id, me);
-    const anyAdmin = sys || data.nodes.some((n) => (n.admins ?? []).includes(me) && O.anc(n.id).includes(dept.id));
+    // Towers / departments I administer (named or by role): the organization pages, for what's below them.
+    const orgNodes = sys ? [] : orgAdminNodes(O, me);
+    const deptAdmin = sys || orgNodes.some((n) => n.type === "dept");
+    const anyAdmin = sys || orgNodes.length > 0 || data.nodes.some((n) => (n.admins ?? []).includes(me) && O.anc(n.id).includes(dept.id));
+    /** Admin of this node (named or by role, here or above). */
+    const adminHere = (id: string) => sys || isNodeAdmin(O, id, me);
     // Leaders, and stand-ins while covering, get the leader views (dashboards, trackers).
     const isLeader = isLeaderLevel(meP.level) || covering.length > 0;
     // All teams in the tower / all towers in the department, within what this person can see
@@ -114,7 +119,7 @@ export function useCalView() {
     // Admin of every team shown (several teams: each one).
     const adminOfAll = sys || scopeBranches.every((b) => isNodeAdmin(O, b.id, me));
     return {
-      covering, canAll, canApprove, span, multi, scopeBranches, scopeId, cellBid, adminOfAll, towerTeams, deptTeams,
+      covering, canAll, deptAdmin, adminHere, canApprove, span, multi, scopeBranches, scopeId, cellBid, adminOfAll, towerTeams, deptTeams,
       meP, myBranches, viewBranches, mTowers, mTower, branch, dept, tower, bid, isAdmin, anyAdmin, isLeader, systems, system, trades, trade,
       unitId, unitIds, inUnit, inView, isAbove, unitLabel, deptList, towerOpts, deptShort: dept.name.split(" (")[0], pendingCount,
       branchOpts: viewBranches.filter((b) => O.up(b.id, "tower")!.id === tower.id),

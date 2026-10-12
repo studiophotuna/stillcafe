@@ -3,14 +3,17 @@ import "./industry.css";
 import "./workload.css";
 import "./theme.css";
 
+// The demo / preview site (WORKFORCE_DEMO=1) carries no company branding.
+const demo = process.env.WORKFORCE_DEMO === "1";
+
 export const metadata: Metadata = {
   title: "Workforce Management",
-  description: "DSV BSS workforce management: calendar and workload.",
+  description: demo ? "Workforce management: calendar and workload (demo)." : "DSV BSS workforce management: calendar and workload.",
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en">
+    <html lang="en" data-demo={demo ? "" : undefined}>
       <head>
         <link rel="preconnect" href="https://fonts.googleapis.com" />
         <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="" />

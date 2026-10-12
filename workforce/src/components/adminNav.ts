@@ -89,6 +89,7 @@ export function adminSections(f: AdminFlags): NavSection[] {
           { href: "/calendar/admin/accuracy", icon: "check", label: "Accuracy log" },
         ]),
         ...when(f.anyAdmin, [{ href: "/calendar/admin/reports", icon: "reports", label: "Reports" }]),
+        ...when(f.wlAdmin, [{ href: "/workload/admin/data", icon: "download", label: "Data pull-out" }]),
         ...when(f.wlAdmin && !!f.pricing, [{ href: "/workload/admin/business", icon: "reports", label: "Business case" }]),
       ],
     },

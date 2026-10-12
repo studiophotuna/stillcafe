@@ -1222,3 +1222,64 @@ describe("leave cover", async () => {
     expect("error" in authorizeCal({ type: "setCover", leader: lead.id, standIn: ANA, from: TODAY, to: TODAY, actor: ANA }, c, ANA)).toBe(true);
   });
 });
+
+describe("role scopes", async () => {
+  const { authorizeCal, rightsOf, visibleTeams } = await import("./authz");
+  const { allocProblem, mkOrg } = await import("./org");
+  const DIEGO = 26; // director
+  const KIM = 14; // team lead, Rate Management
+  // A second department with one team, run by nobody in particular.
+  const withOps = () => {
+    const d = fresh();
+    d.nodes = d.nodes.concat(
+      { id: "ops2", type: "dept", name: "Operations", parent: null },
+      { id: "t_x", type: "tower", name: "Ocean", parent: "ops2" },
+      { id: "bx", type: "branch", name: "Ocean Desk", parent: "t_x" },
+    );
+    return d;
+  };
+  const allowed = (c: Cal, me: number, a: Parameters<typeof authorizeCal>[0]) => "action" in authorizeCal(a, c, me);
+
+  it("directors see and run everything, in every department", () => {
+    const c = new Cal(withOps(), TODAY);
+    expect(visibleTeams(c, DIEGO).map((b) => b.id)).toEqual(expect.arrayContaining(["rm", "cs", "bx"]));
+    expect(rightsOf(c, DIEGO).teamAdmin("bx")).toBe(true);
+    expect(allowed(c, DIEGO, { type: "renameNode", id: "bx", name: "Ocean" })).toBe(true);
+    expect(allowed(c, DIEGO, { type: "saveShift", orig: null, rec: c.d.shifts[0] })).toBe(true);
+    expect(allowed(c, DIEGO, { type: "saveHoliday", rec: { id: "Hx", date: "2026-12-01", name: "x", type: "special", scope: "all" }, isNew: true })).toBe(true);
+  });
+
+  it("managers run only their tower; team leads don't change the organization", () => {
+    const c = new Cal(withOps(), TODAY);
+    expect(visibleTeams(c, SAM).map((b) => b.id)).not.toContain("bx");
+    expect(allowed(c, SAM, { type: "renameNode", id: "rm", name: "RM" })).toBe(true);
+    expect(allowed(c, SAM, { type: "addNode", ntype: "branch", parent: "t_rm", name: "New", actor: SAM })).toBe(true);
+    expect(allowed(c, SAM, { type: "renameNode", id: "cs", name: "CS" })).toBe(false); // another tower
+    expect(allowed(c, SAM, { type: "deleteNode", id: "t_rm" })).toBe(false); // needs the department
+    expect(allowed(c, SAM, { type: "saveShift", orig: null, rec: c.d.shifts[0] })).toBe(false); // shared by everyone
+    const hol = (scope: string) => ({ type: "saveHoliday" as const, rec: { id: "Hx", date: "2026-12-01", name: "x", type: "special" as const, scope }, isNew: true });
+    expect(allowed(c, SAM, hol("t_rm"))).toBe(true);
+    expect(allowed(c, SAM, hol("all"))).toBe(false);
+    expect(allowed(c, SAM, hol("cs"))).toBe(false);
+    expect(allowed(c, KIM, { type: "renameNode", id: "rm", name: "RM" })).toBe(false);
+    expect(allowed(c, KIM, hol("rm"))).toBe(false);
+  });
+
+  it("supervisors run their tower, or each team they're placed in; Sr. Team Leads their team", () => {
+    expect(allocProblem(mkOrg(NODES()), "supervisor", ["t_ops"])).toBe("");
+    expect(allocProblem(mkOrg(NODES()), "lead", ["t_ops"])).not.toBe("");
+    expect(allocProblem(mkOrg(NODES()), "srlead", ["t_ops"])).not.toBe("");
+    const d = fresh();
+    d.people = d.people.map((p) => (p.id === 8 ? { ...p, level: "supervisor" as const, assign: ["t_ops"] } : p.id === 9 ? { ...p, level: "supervisor" as const, assign: ["rm", "cs"] } : p.id === 10 ? { ...p, level: "srlead" as const, assign: ["fewb"] } : p));
+    const c = new Cal(d, TODAY);
+    expect(rightsOf(c, 8).teamAdmin("cs")).toBe(true); // tower supervisor
+    expect(rightsOf(c, 8).orgAdmin).toBe(true);
+    expect(rightsOf(c, 8).teamAdmin("rm")).toBe(false);
+    expect(visibleTeams(c, 9).map((b) => b.id).sort()).toEqual(["cs", "rm"]); // several teams
+    expect(rightsOf(c, 9).teamAdmin("rm") && rightsOf(c, 9).teamAdmin("cs")).toBe(true);
+    expect(rightsOf(c, 9).orgAdmin).toBe(false);
+    expect(rightsOf(c, 10).teamAdmin("rm")).toBe(true); // Sr. Team Lead: their team
+    expect(rightsOf(c, 10).teamAdmin("cs")).toBe(false);
+  });
+  const NODES = () => fresh().nodes;
+});

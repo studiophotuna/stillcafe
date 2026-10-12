@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { Blueprint, Icon } from "@/components/ui";
 import { TYPE_L } from "@/lib/calendar/constants";
 import { useCalendar } from "@/lib/calendar/store";
-import { isNodeAdmin } from "@/lib/calendar/org";
+import { isNodeAdmin, orgAdminNodes } from "@/lib/calendar/org";
 import { useCalView } from "@/lib/calendar/useCalView";
 import { Seg } from "@/components/calendar/bits";
 import type { NodeType, OrgNode } from "@/lib/calendar/types";
@@ -60,7 +60,12 @@ export default function OrganizationPage() {
     }
     if (n.type === "system") O.kids(n.id, "trade").forEach((x) => push(x, depth + 1));
   };
-  s.data.nodes.filter((n) => n.type === "dept").forEach((d) => push(d, 0));
+  // Only what this person administers: system admins and directors everything, a manager
+  // their tower and below.
+  const mine = v.meP.sysAdmin ? s.data.nodes.filter((n) => n.type === "dept") : orgAdminNodes(O, s.me);
+  const roots = mine.filter((n) => !mine.some((m) => m !== n && O.anc(n.id).includes(m.id)));
+  roots.forEach((d) => push(d, 0));
+  const canDelete = (n: { parent: string | null }) => (n.parent ? v.adminHere(n.parent) : !!v.meP.sysAdmin);
   const addsFor = (t: NodeType): [string, NodeType][] =>
     t === "dept" ? [["Tower", "tower"]] : t === "tower" ? [["Team", "branch"]] : t === "branch" ? [["System", "system"], ["Trade", "trade"]] : t === "system" ? [["Trade", "trade"]] : [];
   return (
@@ -74,14 +79,18 @@ export default function OrganizationPage() {
           </span>
         </div>
         <div className="row">
-          <button className="btn btn-secondary btn-36" onClick={() => s.setDialog({ kind: "orgImport" })}>
-            <Icon name="upload" size={16} />
-            Import from Excel
-          </button>
-          <button className="btn btn-secondary btn-36" onClick={() => s.setDialog({ kind: "node", mode: "add", ntype: "dept", parent: null })}>
-            <Icon name="plus" size={16} />
-            Add department
-          </button>
+          {v.deptAdmin && (
+            <button className="btn btn-secondary btn-36" onClick={() => s.setDialog({ kind: "orgImport" })}>
+              <Icon name="upload" size={16} />
+              Import from Excel
+            </button>
+          )}
+          {v.meP.sysAdmin && (
+            <button className="btn btn-secondary btn-36" onClick={() => s.setDialog({ kind: "node", mode: "add", ntype: "dept", parent: null })}>
+              <Icon name="plus" size={16} />
+              Add department
+            </button>
+          )}
         </div>
       </div>
       <div className="row" style={{ alignItems: "center", gap: 10, marginBottom: 10 }}>
@@ -142,6 +151,7 @@ export default function OrganizationPage() {
                 <button className="btn btn-ghost" onClick={() => s.setDialog({ kind: "node", mode: "rename", id: n.id, ntype: n.type })}>
                   Rename
                 </button>
+                {canDelete(n) && (
                 <button
                   className="btn btn-ghost"
                   style={{ color: "var(--color-neutral-700)" }}
@@ -151,6 +161,7 @@ export default function OrganizationPage() {
                 >
                   Delete
                 </button>
+                )}
               </div>
             </div>
           );

@@ -8,13 +8,15 @@ import { canTrack } from "./trackers";
 import { coveredLeaders } from "./covers";
 import type { CalAction } from "./actions";
 import type { Cal } from "./engine";
-import { isNodeAdmin } from "./org";
+import { isNodeAdmin, orgAdminNodes } from "./org";
 import type { OrgNode } from "./types";
 
 export interface Rights {
   sys: boolean;
   teamAdmin: (bid: string) => boolean;
   anyAdmin: boolean;
+  orgAdmin: boolean;
+  deptAdmin: boolean;
   adminOf: (pid: number) => boolean;
 }
 
@@ -30,7 +32,11 @@ export function rightsOf(c: Cal, me: number): Rights {
     if (!x) return false;
     return c.O.branchesOf(x).some((b) => isNodeAdmin(c.O, b.id, me)) || x.assign.some((a) => isNodeAdmin(c.O, a, me));
   };
-  return { sys, teamAdmin, anyAdmin, adminOf };
+  // Admin of a tower or department (or a system admin): the organization pages.
+  const orgAdmin = sys || orgAdminNodes(c.O, me).length > 0;
+  // Admin of a department: org-wide lists such as shift types.
+  const deptAdmin = sys || orgAdminNodes(c.O, me).some((n) => n.type === "dept");
+  return { sys, teamAdmin, anyAdmin, orgAdmin, deptAdmin, adminOf };
 }
 
 /**
@@ -60,6 +66,10 @@ export function visibleTeams(c: Cal, me: number, cover = true): OrgNode[] {
 }
 
 const NO = { error: "You don’t have permission to do that." };
+
+/** Holidays for everyone: admins of every department; else admins of the holiday's scope. */
+export const holidayAdmin = (c: Cal, r: Rights, scope: string) =>
+  scope === "all" ? r.sys || c.d.nodes.filter((n) => n.type === "dept").every((n) => r.teamAdmin(n.id)) : r.teamAdmin(scope);
 
 export function authorizeCal(a: CalAction, c: Cal, me: number): { action: CalAction } | { error: string } {
   const r = rightsOf(c, me);
@@ -153,18 +163,35 @@ export function authorizeCal(a: CalAction, c: Cal, me: number): { action: CalAct
       if (!p || a.pid === me || (p.sysAdmin && !r.sys) || !r.adminOf(a.pid)) return NO;
       return ok(r.sys || c.O.branchesOf(p).every((b) => r.teamAdmin(b.id)));
     }
+    // Organization: only below what this person administers (directors: everything).
     case "addNode":
-      return ok(r.anyAdmin, { ...a, actor: me });
+      return ok(a.parent ? r.orgAdmin && r.teamAdmin(a.parent) : r.sys, { ...a, actor: me });
     case "importOrg":
+      return ok(r.teamAdmin(a.dept));
     case "renameNode":
-    case "deleteNode":
+      return ok(r.orgAdmin && r.teamAdmin(a.id));
+    case "deleteNode": {
+      const parent = c.O.by[a.id]?.parent;
+      return ok(r.orgAdmin && (parent ? r.teamAdmin(parent) : r.sys));
+    }
+    // Shift types are shared by every team: department admins.
     case "saveShift":
     case "deleteShift":
-    case "saveHoliday":
-    case "deleteHoliday":
+      return ok(r.deptAdmin);
+    case "saveHoliday": {
+      const old = c.d.holidays.find((h) => h.id === a.rec.id);
+      return ok(r.orgAdmin && holidayAdmin(c, r, a.rec.scope) && (!old || holidayAdmin(c, r, old.scope)));
+    }
+    case "deleteHoliday": {
+      const old = c.d.holidays.find((h) => h.id === a.id);
+      return ok(r.orgAdmin && !!old && holidayAdmin(c, r, old.scope));
+    }
     case "startEvent":
-    case "closeEvent":
-      return ok(r.anyAdmin);
+      return ok(r.teamAdmin(a.scope));
+    case "closeEvent": {
+      const ev = c.d.bcpEvents.find((e) => e.id === a.id);
+      return ok(!!ev && r.teamAdmin(ev.scope));
+    }
     case "toggleReady":
       return ok(c.people.has(me), { ...a, pid: me });
     case "checkin":

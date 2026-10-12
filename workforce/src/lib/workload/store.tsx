@@ -313,7 +313,7 @@ export function WorkloadProvider({ children }: { children: React.ReactNode }) {
               shift: "Day 08:00–17:00",
               shiftStart: 8,
             }),
-      isAdmin: mode === "db" ? !!session && data.admins.includes(session.id) : viewAs === "admin" || viewAs === "director",
+      isAdmin: mode === "db" ? !!session && data.admins.includes(session.id) : viewAs !== "employee",
       canUpload: mode === "db" ? !!session && canUpload(data, session.id) : viewAs !== "employee",
       isApprover: mode === "db" ? !!session && data.approvers.includes(session.id) : viewAs !== "employee",
       sys,

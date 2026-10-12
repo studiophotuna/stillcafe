@@ -49,7 +49,8 @@ export function CalShell({ children }: { children: React.ReactNode }) {
     teamAdmin: v.isAdmin,
     anyAdmin: v.anyAdmin,
     leader: v.isLeader,
-    wlAdmin: v.anyAdmin,
+    // Workload admins: team admins (named or by role) and admins above.
+    wlAdmin: v.anyAdmin || v.isAdmin,
     wlApprover: v.isLeader || v.anyAdmin,
     pricing: !!v.meP.sysAdmin || v.meP.level === "manager" || v.meP.level === "director",
     badges: { approvals: v.pendingCount },

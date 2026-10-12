@@ -264,3 +264,6 @@ tr.role-row > td { background: var(--role-bg); }
 .more-menu-list button:hover:not(:disabled) { background: var(--color-accent-100); }
 .more-menu-list button:disabled { opacity: 0.5; cursor: default; }
 .more-menu-list button.danger { color: #b3261e; }
+
+/* Demo site: no company logo. */
+html[data-demo] .side-brand img { display: none; }

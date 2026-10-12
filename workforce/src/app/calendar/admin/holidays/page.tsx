@@ -4,6 +4,8 @@ import { useState } from "react";
 import { Blueprint, Icon } from "@/components/ui";
 import { HTYPE } from "@/lib/calendar/constants";
 import { DOW, dowOf, fmtY, isWk } from "@/lib/calendar/dates";
+import { holidayAdmin, rightsOf } from "@/lib/calendar/authz";
+import { orgAdminNodes } from "@/lib/calendar/org";
 import { useCalendar } from "@/lib/calendar/store";
 
 export default function HolidaysPage() {
@@ -11,7 +13,12 @@ export default function HolidaysPage() {
   const [year, setYear] = useState(s.y);
   const { O } = s.cal;
   const scopeName = (id: string) => (id === "all" ? "Everyone" : O.by[id]?.name ?? "Removed");
-  const rows = s.data.holidays.filter((h) => h.date.startsWith(String(year))).sort((a, b) => a.date.localeCompare(b.date));
+  const r = rightsOf(s.cal, s.me);
+  // Holidays that reach what I administer (everyone's, my department's, my tower's and teams').
+  const mine = orgAdminNodes(O, s.me);
+  const reaches = (scope: string) => r.sys || scope === "all" || mine.some((n) => O.anc(n.id).includes(scope) || O.anc(scope).includes(n.id));
+  const mayEdit = (scope: string) => holidayAdmin(s.cal, r, scope);
+  const rows = s.data.holidays.filter((h) => h.date.startsWith(String(year)) && reaches(h.scope)).sort((a, b) => a.date.localeCompare(b.date));
   return (
     <>
       <div className="page-head-row">
@@ -51,10 +58,12 @@ export default function HolidaysPage() {
                 <td style={{ color: "var(--color-neutral-800)" }}>{HTYPE[h.type]}</td>
                 <td><span className="tag tag-neutral">{scopeName(h.scope)}</span></td>
                 <td>
-                  <div style={{ display: "flex", gap: 2, justifyContent: "flex-end" }}>
-                    <button className="btn btn-ghost" onClick={() => s.setDialog({ kind: "hol", id: h.id })}>Edit</button>
-                    <button className="btn btn-ghost" style={{ color: "var(--color-neutral-700)" }} onClick={() => s.run({ type: "deleteHoliday", id: h.id })}>Delete</button>
-                  </div>
+                  {mayEdit(h.scope) && (
+                    <div style={{ display: "flex", gap: 2, justifyContent: "flex-end" }}>
+                      <button className="btn btn-ghost" onClick={() => s.setDialog({ kind: "hol", id: h.id })}>Edit</button>
+                      <button className="btn btn-ghost" style={{ color: "var(--color-neutral-700)" }} onClick={() => s.run({ type: "deleteHoliday", id: h.id })}>Delete</button>
+                    </div>
+                  )}
                 </td>
               </tr>
             ))}

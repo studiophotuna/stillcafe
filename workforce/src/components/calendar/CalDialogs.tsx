@@ -14,7 +14,7 @@ import { ALLOC_MIN, allocNeeds, allocProblem, primaryTeamOf, roleAdminsOf } from
 import { parseOrgText, planOrgImport } from "@/lib/calendar/orgImport";
 import { checkUpload, type UploadRow } from "@/lib/calendar/uploads";
 import { useCalView } from "@/lib/calendar/useCalView";
-import { rightsOf } from "@/lib/calendar/authz";
+import { holidayAdmin, rightsOf } from "@/lib/calendar/authz";
 import { EMAIL_RE, leaveRule, type SchedDay } from "@/lib/calendar/actions";
 import { prorate } from "@/lib/calendar/engine";
 import type { BcpStatus, Bucket, CalPerson, Code, HolidayType, Level } from "@/lib/calendar/types";
@@ -1200,8 +1200,10 @@ function ShiftDialog({ orig }: { orig: string | null }) {
 }
 
 // ── Holidays ──
-export function holidayScopeOpts(s: ReturnType<typeof useCalendar>) {
+/** Where a holiday can apply: only what this admin runs ("Everyone" needs every department). */
+export function holidayScopeOpts(s: ReturnType<typeof useCalendar>, keep?: string) {
   const { O } = s.cal;
+  const r = rightsOf(s.cal, s.me);
   const o = [{ id: "all", name: "Everyone (all departments)" }];
   s.data.nodes
     .filter((n) => n.type === "dept")
@@ -1212,12 +1214,13 @@ export function holidayScopeOpts(s: ReturnType<typeof useCalendar>) {
         O.kids(t.id, "branch").forEach((b) => o.push({ id: b.id, name: "—— " + b.name }));
       });
     });
-  return o;
+  return o.filter((x) => x.id === keep || holidayAdmin(s.cal, r, x.id));
 }
 function HolDialog({ id }: { id: string | null }) {
   const s = useCalendar();
   const h0 = id ? s.data.holidays.find((x) => x.id === id) : null;
-  const [r, setR] = useState({ date: h0?.date ?? "", name: h0?.name ?? "", type: (h0?.type ?? "regular") as HolidayType, scope: h0?.scope ?? "all" });
+  const scopes = holidayScopeOpts(s, h0?.scope);
+  const [r, setR] = useState({ date: h0?.date ?? "", name: h0?.name ?? "", type: (h0?.type ?? "regular") as HolidayType, scope: h0?.scope ?? scopes[0]?.id ?? "all" });
   const close = () => s.setDialog(null);
   return (
     <Modal onClose={close} pad>
@@ -1243,7 +1246,7 @@ function HolDialog({ id }: { id: string | null }) {
       <div className="field">
         <label htmlFor="hol-s">Applies to</label>
         <select id="hol-s" className="input" value={r.scope} onChange={(e) => setR({ ...r, scope: e.target.value })}>
-          {holidayScopeOpts(s).map((o) => (
+          {scopes.map((o) => (
             <option key={o.id} value={o.id}>
               {o.name}
             </option>
@@ -1441,19 +1444,21 @@ function CheckinDialog({ pid, evId }: { pid: number; evId: string }) {
   );
 }
 
+/** The department, its towers and teams; only those this person administers. */
 export function bcpScopeOpts(s: ReturnType<typeof useCalendar>, deptId: string) {
   const { O } = s.cal;
+  const r = rightsOf(s.cal, s.me);
   const o = [{ id: deptId, name: O.by[deptId].name }];
   O.kids(deptId, "tower").forEach((t) => {
     o.push({ id: t.id, name: "— " + t.name });
     O.kids(t.id, "branch").forEach((b) => o.push({ id: b.id, name: "—— " + b.name }));
   });
-  return o;
+  return o.filter((x) => r.teamAdmin(x.id));
 }
 function EventDialog() {
   const s = useCalendar();
   const v = useCalView();
-  const [r, setR] = useState({ name: "", start: s.today, scope: v.dept.id, note: "" });
+  const [r, setR] = useState({ name: "", start: s.today, scope: bcpScopeOpts(s, v.dept.id)[0]?.id ?? v.dept.id, note: "" });
   const close = () => s.setDialog(null);
   return (
     <Modal onClose={close} width={500}>

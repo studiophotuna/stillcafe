@@ -15,11 +15,16 @@ export interface Org {
   inN: (p: CalPerson, id: string) => boolean;
   /** Teams the person belongs to. */
   branchesOf: (p: CalPerson) => OrgNode[];
-  /** Admins by role, per node: directors of their department, managers of their tower, team leads of their team. */
+  /** Admins by role, per node: directors of every department, managers of their tower, supervisors of
+   *  their tower or teams, team leads and Sr. Team Leads of their team. */
   role?: Record<string, number[]>;
 }
 
-/** The node type a role administers: a director their department, a manager their tower, a team lead their team. */
+/**
+ * The node type a role administers: a manager their tower; a supervisor, Sr. Team Lead or team lead
+ * the team they're allocated to (a supervisor allocated to a tower: the tower). Directors administer
+ * every department (see mkOrg).
+ */
 export const ROLE_SCOPE: Partial<Record<Level, NodeType>> = { director: "dept", manager: "tower", supervisor: "branch", srlead: "branch", lead: "branch" };
 
 export function mkOrg(nodes: OrgNode[], people: CalPerson[] = []): Org {
@@ -64,9 +69,15 @@ export function mkOrg(nodes: OrgNode[], people: CalPerson[] = []): Org {
   // Role admins: the department / tower / team (or the node itself when allocated higher up).
   const role: Record<string, number[]> = {};
   const today = new Date().toISOString().slice(0, 10);
+  const depts = nodes.filter((n) => n.type === "dept");
   for (const p of people) {
     const t = ROLE_SCOPE[p.level];
     if (!t || (p.resign && p.resign < today)) continue;
+    // Directors see and administer everything, like a system admin of the org.
+    if (p.level === "director") {
+      for (const n of depts) if (!(role[n.id] ??= []).includes(p.id)) role[n.id].push(p.id);
+      continue;
+    }
     for (const a of p.assign) {
       const n = up(a, t) ?? by[a];
       if (n && !(role[n.id] ??= []).includes(p.id)) role[n.id].push(p.id);
@@ -92,7 +103,7 @@ export const teamDefaults = (o: Partial<OrgNode> = {}): Partial<OrgNode> => ({
  * Deeper allocations (a manager on a team) are always fine.
  */
 const DEPTH: Record<NodeType, number> = { dept: 0, tower: 1, branch: 2, system: 3, trade: 4 };
-export const ALLOC_MIN: Record<Level, NodeType> = { director: "dept", manager: "tower", supervisor: "branch", srlead: "branch", lead: "branch", senior: "branch", specialist: "branch", member: "branch" };
+export const ALLOC_MIN: Record<Level, NodeType> = { director: "dept", manager: "tower", supervisor: "tower", srlead: "branch", lead: "branch", senior: "branch", specialist: "branch", member: "branch" };
 export const allocNeeds = (level: Level) =>
   ALLOC_MIN[level] === "dept" ? "a department" : ALLOC_MIN[level] === "tower" ? "a department and tower" : "a department, tower and team";
 
@@ -170,4 +181,12 @@ export const onlyAbove = (O: Org, branchIds: string[]) => {
 };
 
 /** Admins by role of a node itself (shown separately from the ones added by hand). */
+/**
+ * Towers and departments this person administers (named, or by role: managers their tower,
+ * supervisors placed on a tower, directors every department). They open the organization pages
+ * (Organization, Shifts, Holidays, Reports, Headcount) for what's below them.
+ */
+export const orgAdminNodes = (O: Pick<Org, "by"> & Partial<Pick<Org, "role">>, pid: number): OrgNode[] =>
+  Object.values(O.by).filter((n) => (n.type === "tower" || n.type === "dept") && ((n.admins ?? []).includes(pid) || (O.role?.[n.id] ?? []).includes(pid)));
+
 export const roleAdminsOf = (O: Partial<Pick<Org, "role">>, id: string) => O.role?.[id] ?? [];
