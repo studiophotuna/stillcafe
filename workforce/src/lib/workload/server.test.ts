@@ -105,7 +105,7 @@ describe("server persistence", () => {
   it("creates the team once, empty, with people from the calendar", async () => {
     const d = await getData0(TOKEN, ADMIN);
     expect(d.tasks).toHaveLength(0);
-    expect(d.org.team).toEqual({ id: "rm", name: "Rate Management" });
+    expect(d.org.team).toEqual({ id: "rm", name: "Rate Desk" });
     expect(d.org.trades.map((t) => t.id)).toEqual(["fewb", "inas", "eu", "us", "asla", "lcl"]);
     expect(d.people.find((p) => p.id === ANA)?.trades).toEqual(["lcl"]);
     expect(d.people.map((p) => p.id)).toEqual(expect.arrayContaining([ANA, LEO]));
@@ -120,13 +120,13 @@ describe("server persistence", () => {
   });
 
   it("opens any team a person is in, with that team's org and people from the calendar", async () => {
-    // Customer Service has no systems or trades: the team itself is where tasks go.
+    // Customer Care has no systems or trades: the team itself is where tasks go.
     const d = await getData0(TOKEN, ANA, "cs");
-    expect(d.org.team.name).toBe("Customer Service");
-    expect(d.org.trades).toEqual([{ id: "cs", name: "Customer Service", sys: "" }]);
+    expect(d.org.team.name).toBe("Customer Care");
+    expect(d.org.trades).toEqual([{ id: "cs", name: "Customer Care", sys: "" }]);
     expect(d.people.find((p) => p.id === ANA)?.trades).toEqual(["cs"]);
     expect(d.org.teams.map((t) => t.id).sort()).toEqual(["cs", "rm"]);
-    // Leo is only in Rate Management.
+    // Leo is only in Rate Desk.
     await expect(getData0(TOKEN, LEO, "cs")).rejects.toThrow(/can’t open that team/);
     expect((await getData0(TOKEN, LEO)).org.team.id).toBe("rm");
   });
@@ -167,7 +167,7 @@ describe("server persistence", () => {
 
   it("retries when someone else takes the same task first", async () => {
     const d = await getData();
-    // The task Ana would get next is taken by Leo (also LCL) just before her save lands.
+    // The task Ana would get next is taken by Leo (also Consolidation) just before her save lands.
     const { applyAction } = await import("./actions");
     const target = applyAction(d, { type: "startWork", pid: ANA }, Date.now()).data.tasks.find(
       (t) => t.assignee === ANA && t.status === "in_progress",
@@ -189,8 +189,8 @@ describe("server persistence", () => {
     const r = await runAction({
       type: "importRows",
       rows: [
-        { Title: "Good", System: "RCM", Trade: "LCL", "Ticket no.": "1", Carrier: "MSCU", "No. of contracts": "2" },
-        { Title: "Bad", System: "RCM", Trade: "Nope" },
+        { Title: "Good", System: "TariffPro", Trade: "Consolidation", "Ticket no.": "1", Carrier: "MSCU", "No. of contracts": "2" },
+        { Title: "Bad", System: "TariffPro", Trade: "Nope" },
       ],
     });
     expect(r.message).toBe("1 task added from upload.");

@@ -1090,11 +1090,11 @@ function NodeDialog({ mode, id, ntype, parent }: { mode: "add" | "rename"; id?: 
   const close = () => s.setDialog(null);
   const par = parent ? O.by[parent] : null;
   const ph = {
-    dept: "e.g. BSS (Business Support Services)",
-    tower: "e.g. A&S Support - Rate Management",
-    branch: "e.g. Rate Management",
-    system: "e.g. GPM",
-    trade: "e.g. FEWB",
+    dept: "e.g. Shared Services",
+    tower: "e.g. Pricing & Rates",
+    branch: "e.g. Rate Desk",
+    system: "e.g. RateHub",
+    trade: "e.g. Europe",
   }[ntype];
   return (
     <Modal onClose={close} pad>
@@ -1572,7 +1572,7 @@ function OrgImportDialog() {
             className="input"
             rows={8}
             style={{ fontFamily: "ui-monospace, monospace", fontSize: 13, resize: "vertical" }}
-            placeholder={"Tower\tTeam\nCustoms MNL\tAustralia\nCustoms MNL\tCanada"}
+            placeholder={"Tower\tTeam\nTrade Compliance\tImports\nTrade Compliance\tExports"}
             value={text}
             onChange={(e) => setText(e.target.value)}
           />

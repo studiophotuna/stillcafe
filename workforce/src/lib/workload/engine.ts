@@ -4,7 +4,7 @@
  * the same rules. See ../../../README.md › Workload rules.
  */
 import { H, M, TZ_OFFSET_H, addHours, dayKey, fmtT, localHour, spanMs, weekend } from "./clock";
-import { CARRIERS, PR, fieldOptions, lc, sysName, trPathOf } from "./constants";
+import { CARRIERS, DEMO_CARRIERS, PR, fieldOptions, lc, sysName, trPathOf } from "./constants";
 import { SAMPLE_MAIL } from "./seed";
 import type { Activity, ActivityKind, BillRow, CxLevel, OtPart, Person, Priority, Settings, Task, TaskField, TaskType, WlOrg } from "./types";
 
@@ -574,7 +574,7 @@ export function checkMail(d: WorkloadData, now: number): Outcome {
       ttype: detectType(d.settings, subject, tr),
       pr: /urgent/i.test(subject) ? ("high" as const) : ("normal" as const),
       source: "outlook" as const,
-      fields: { carrier: CARRIERS.find((c) => subject.includes(c)) ?? "" },
+      fields: { carrier: [...CARRIERS, ...DEMO_CARRIERS].find((c) => subject.includes(c)) ?? "" },
       email: { from, cc: "rm.team@demobss.com", subject, body, attachments },
       history: [{ at: rec, text: "Received from Outlook" + (tr ? "" : " · waiting for an admin to set the trade") }],
     };

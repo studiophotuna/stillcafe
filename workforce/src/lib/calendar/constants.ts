@@ -146,6 +146,11 @@ export const NAMES = [
   "Kim Bautista", "Leo Aquino", "Mia Castillo", "Xandro Manalo", "Yna Galang", "Nico Salazar", "Zach Dela Rosa",
   "Arvin Tolentino", "Bettina Sison", "Sam Delgado", "Carlo Ignacio", "Olive Tan", "Diego Samonte", "Erika Valdez",
   "Felix Aguilar", "Paolo Lim", "Rhea Soriano", "Gwen Salcedo", "Hector Dimaculangan", "Iris Montemayor",
+  // Other towers (34+).
+  "Liza Mercado", "Marco Villareal", "Nina Pangilinan", "Oscar Bernardo", "Pia Alcantara", "Quentin Esguerra", "Rosa Dimalanta",
+  "Simon Cajucom", "Trina Velasco", "Ulysses Gatchalian", "Vera Lualhati", "Warren Magbanua", "Xyza Fernandez", "Yago Panganiban",
+  "Zara Quiambao", "Andre Macaraeg", "Bianca Roque", "Cesar Lagman", "Dina Saldana", "Emil Navarrete", "Faye Ilagan",
+  "Gabriel Sevilla", "Honey Tuazon", "Ian Valenzuela",
 ];
 export const ADMIN_ID = 23;
 export const EMPLOYEE_ID = 0;

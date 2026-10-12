@@ -1,5 +1,5 @@
 import { H, M, dayKey } from "./clock";
-import { ADMIN_ID, CARRIERS, DEMO_ORG, FIELDS0, PEOPLE, person, tradeOf } from "./constants";
+import { ADMIN_ID, DEMO_CARRIERS, DEMO_ORG, FIELDS0, PEOPLE, person, tradeOf } from "./constants";
 import type { WorkloadData } from "./engine";
 import type { Priority, Task, TaskStatus } from "./types";
 
@@ -41,7 +41,7 @@ export function seedTasks(now: number): Task[] {
 
   const mk = (o: Opts): Task => {
     const tr = o.trade !== undefined ? o.trade : pick(DEMO_ORG.trades).id;
-    const car = pick(CARRIERS);
+    const car = pick(DEMO_CARRIERS);
     const kind = pick(KINDS);
     const pr: Priority = o.pr || (r() < 0.2 ? "high" : r() < 0.8 ? "normal" : "low");
     const rec = o.rec || now - Math.floor(r() * 30 * H);
@@ -149,9 +149,9 @@ export function seedTasks(now: number): Task[] {
 
 /** Sample emails used by "Check mailbox now" until Microsoft Graph intake is connected. */
 export const SAMPLE_MAIL: [string, string, string, string[]][] = [
-  ["sales.lcl@demobss.com", "LCL rate request – CMDU Manila to Singapore", "Hi team,\n\nCustomer needs LCL rates for next week. Details attached.", ["CMDU_LCL_request.xlsx"]],
-  ["pricing.eu@demobss.com", "URGENT: EU surcharge update – HLCU", "Please update the ENS surcharge for HLCU effective 1 October.", ["HLCU_surcharge.pdf"]],
-  ["kam.inas@demobss.com", "Contract amendment – ONEY INAS", "Amendment 3 for the ONEY contract is attached.", ["ONEY_amd3.pdf"]],
+  ["sales.consol@demobss.com", "Consolidation rate request – CRLN Port A to Port B", "Hi team,\n\nCustomer needs consolidation rates for next week. Details attached.", ["CRLN_consol_request.xlsx"]],
+  ["pricing.europe@demobss.com", "URGENT: Europe surcharge update – BLHR", "Please update the fuel surcharge for BLHR effective 1 October.", ["BLHR_surcharge.pdf"]],
+  ["kam.indianocean@demobss.com", "Contract amendment – EVRS Indian Ocean", "Amendment 3 for the EVRS contract is attached.", ["EVRS_amd3.pdf"]],
   ["ops@demobss.com", "Question about last week’s filing", "Could someone confirm the filing reference?", []],
 ];
 
@@ -182,7 +182,8 @@ export function initialData(now: number, empty = false): WorkloadData {
     holidays: [],
     activities: [],
     approvers: empty ? [] : [23],
-    fields: FIELDS0.map((f) => ({ ...f })),
+    // Sample data lists the fictional carriers.
+    fields: FIELDS0.map((f) => (!empty && f.key === "carrier" ? { ...f, options: DEMO_CARRIERS.join(", ") } : { ...f })),
     settings: {
       mode: "fifo",
       order: "priority",

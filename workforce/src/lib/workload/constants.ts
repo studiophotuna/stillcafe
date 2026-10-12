@@ -1,24 +1,27 @@
 import type { AllocationMode, Availability, Person, Priority, TaskField, TaskStatus, Trade, ViewAs, WlOrg } from "./types";
 
-/** Sample-data org (demo mode): Rate Management › GPM / RCM › trades. With a database the org comes from the Calendar. */
-const TEAM = { id: "rm", name: "Rate Management" };
+/**
+ * Sample-data org (demo mode; fictional, as the Calendar sample): Rate Desk › RateHub /
+ * TariffPro › trades. With a database the org comes from the Calendar.
+ */
+const TEAM = { id: "rm", name: "Rate Desk" };
 
-const SYS: Record<string, string> = { gpm: "GPM", rcm: "RCM" };
+const SYS: Record<string, string> = { gpm: "RateHub", rcm: "TariffPro" };
 
 const TRADES: Trade[] = [
-  { id: "fewb", name: "FEWB", sys: "gpm" },
-  { id: "inas", name: "INAS", sys: "gpm" },
-  { id: "eu", name: "EU", sys: "gpm" },
-  { id: "us", name: "US", sys: "rcm" },
-  { id: "asla", name: "ASLA", sys: "rcm" },
-  { id: "lcl", name: "LCL", sys: "rcm" },
+  { id: "fewb", name: "Far East", sys: "gpm" },
+  { id: "inas", name: "Indian Ocean", sys: "gpm" },
+  { id: "eu", name: "Europe", sys: "gpm" },
+  { id: "us", name: "Americas", sys: "rcm" },
+  { id: "asla", name: "Latin America", sys: "rcm" },
+  { id: "lcl", name: "Consolidation", sys: "rcm" },
 ];
 
 export const DEMO_ORG: WlOrg = {
   team: TEAM,
   systems: Object.entries(SYS).map(([id, name]) => ({ id, name })),
   trades: TRADES,
-  teams: [{ ...TEAM, tower: "A&S Support - Rate Management" }],
+  teams: [{ ...TEAM, tower: "Pricing & Rates" }],
 };
 
 export const tradeOf = (o: WlOrg, id: string) => o.trades.find((t) => t.id === id);
@@ -107,6 +110,8 @@ export const MODES: [AllocationMode, string, string][] = [
 export const modeLabel = (m: AllocationMode) => MODES.find((x) => x[0] === m)![1];
 
 export const CARRIERS = ["MSCU", "HLCU", "CMDU", "ONEY", "ZIMU", "MAEU", "COSU"];
+/** Fictional carriers for the sample data. */
+export const DEMO_CARRIERS = ["ATLS", "BLHR", "CRLN", "DLTM", "EVRS", "FJRD", "GLWY"];
 
 export const FIELDS0: TaskField[] = [
   { key: "ticket", label: "Ticket no.", type: "text", required: true },

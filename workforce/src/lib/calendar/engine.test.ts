@@ -14,13 +14,15 @@ const fresh = (): CalendarData => {
   return { ...d, kpi: {}, issues: [], covers: [], nodes: d.nodes.map(({ leaveMax: _m, ...n }) => n) };
 };
 const run = (d: CalendarData, a: Parameters<typeof applyCalAction>[1]) => applyCalAction(d, a, TODAY, NOW);
-const ANA = 0; // LCL (Rate Management) + Customer Service; pattern B; employee view
-const SAM = 23; // Rate Management admin
+const ANA = 0; // Consolidation (Rate Desk) + Customer Care; pattern B; employee view
+const SAM = 23; // Rate Desk admin
 
 describe("seed", () => {
   it("builds the sample department", () => {
     const d = fresh();
-    expect(d.people).toHaveLength(34);
+    expect(d.people).toHaveLength(58);
+    // Teams in every tower.
+    expect(new Set(d.nodes.filter((n) => n.type === "branch").map((n) => n.parent)).size).toBe(5);
     expect(d.nodes.filter((n) => n.type === "tower")).toHaveLength(5);
     expect(d.requests.slice(0, 8).map((q) => q.id)).toEqual(["LR000001", "LR000002", "LR000003", "LR000004", "LR000005", "LR000006", "LR000007", "LR000008"]);
     expect(d.bcpEvents.find((e) => evState(e, TODAY) === "active")?.id).toBe("E2");
@@ -51,7 +53,7 @@ describe("cell resolution", () => {
     const sam = c.person(SAM);
     expect(c.raw(ana, "2026-11-30", "rm")).toMatchObject({ code: "HOL", note: "Bonifacio Day" });
     expect(c.raw(sam, "2026-11-30", "rm").code).toBe("HDY");
-    // Team-scoped company day only for Rate Management
+    // Team-scoped company day only for Rate Desk
     const csOnly = c.person(31);
     expect(c.raw(csOnly, "2026-10-16", "cs").code).toBe("RTO");
     expect(c.raw(ana, "2026-10-16", "rm").code).toBe("HOL");
@@ -71,14 +73,14 @@ describe("requests and approvals", () => {
     const d = fresh();
     const o = run(d, { type: "submitRequest", pid: ANA, form: { type: "VL", start: "2026-10-12", end: "2026-10-13", half: "AM", reason: "" }, adminBid: null, actor: ANA });
     const q = o.data.requests[0];
-    expect(q.approvals).toEqual({ rm: "pending" }); // Ana: Rate Management first, then Customer Service
-    expect(o.message).toBe("Request sent. The Rate Management admin will get an email to approve it.");
+    expect(q.approvals).toEqual({ rm: "pending" }); // Ana: Rate Desk first, then Customer Care
+    expect(o.message).toBe("Request sent. The Rate Desk admin will get an email to approve it.");
     const newLogs = o.data.logs.slice(0, o.data.logs.length - d.logs.length);
     expect(newLogs.map((l) => l.subject)).toEqual(expect.arrayContaining([expect.stringMatching(/^Approval needed: Ana Reyes/)]));
     // Her other team shows the request on its calendar with the overall (pending) status.
     const c = new Cal(o.data, TODAY);
     expect(c.raw(c.person(ANA), "2026-10-12", "cs")).toMatchObject({ code: "VL", pending: true });
-    // Approving at Rate Management decides it everywhere.
+    // Approving at Rate Desk decides it everywhere.
     const ok = run(o.data, { type: "decide", rid: q.id, bid: "rm", st: "approved", actor: SAM });
     expect(new Cal(ok.data, TODAY).raw(c.person(ANA), "2026-10-12", "cs")).toMatchObject({ code: "VL", pending: false });
   });
@@ -86,7 +88,7 @@ describe("requests and approvals", () => {
   it("routes to the main team (primary allocation) and shows the decision in every team", async () => {
     const { waitsOn, decidingTeam } = await import("./approvals");
     const d = fresh();
-    d.people = d.people.map((p) => (p.id === ANA ? { ...p, primaryTeam: "cs" } : p)); // Customer Service is her main team
+    d.people = d.people.map((p) => (p.id === ANA ? { ...p, primaryTeam: "cs" } : p)); // Customer Care is her main team
     d.nodes = d.nodes.map((n) => (n.id === "cs" ? { ...n, mode: "approval" as const } : n));
     const o = run(d, { type: "submitRequest", pid: ANA, form: { type: "VL", start: "2026-10-12", end: "2026-10-12", half: "AM", reason: "" }, adminBid: null, actor: ANA });
     const q = o.data.requests[0];
@@ -126,7 +128,7 @@ describe("requests and approvals", () => {
     const d = fresh();
     const o = run(d, { type: "decide", rid: "LR000002", bid: "rm", st: "approved", actor: SAM });
     expect(o.data.requests.find((q) => q.id === "LR000002")!.approvals.rm).toBe("approved");
-    expect(o.message).toMatch(/^Approved\. Kim has been emailed and an Outlook reminder was sent to \d+ Rate Management members\.$/);
+    expect(o.message).toMatch(/^Approved\. Kim has been emailed and an Outlook reminder was sent to \d+ Rate Desk members\.$/);
     expect(o.data.logs[0].kind === "invite" || o.data.logs[1].kind === "invite").toBe(true);
     // Deciding again does nothing
     expect(run(o.data, { type: "decide", rid: "LR000002", bid: "rm", st: "declined", actor: SAM }).data).toBe(o.data);
@@ -215,13 +217,13 @@ describe("admin by role", async () => {
     const d = fresh();
     d.nodes = d.nodes.map((n) => ({ ...n, admins: [] })); // no admins added by hand
     const c = new Cal(d, TODAY);
-    // Lead 24 (GPM, Rate Management): their team only.
+    // Lead 24 (RateHub, Rate Desk): their team only.
     expect(rightsOf(c, 24).teamAdmin("rm")).toBe(true);
     expect(rightsOf(c, 24).teamAdmin("cs")).toBe(false);
-    // Manager 23 (allocated to Rate Management): its tower, not another tower's team.
+    // Manager 23 (allocated to Rate Desk): its tower, not another tower's team.
     expect(rightsOf(c, 23).teamAdmin("rm")).toBe(true);
     expect(rightsOf(c, 23).teamAdmin("cs")).toBe(false);
-    // Manager 27 (Customer Service, another tower).
+    // Manager 27 (Customer Care, another tower).
     expect(rightsOf(c, 27).teamAdmin("cs")).toBe(true);
     expect(rightsOf(c, 27).teamAdmin("rm")).toBe(false);
     // Director 26: every team in the department.
@@ -243,19 +245,19 @@ describe("role functions across Calendar and Workload", async () => {
     d.people.push({ ...d.people[0], id: 90, name: "Dee Director", email: "dee@example.com", level: "director", assign: ["bss"], approver: undefined, sysAdmin: false });
     const c = new Cal(d, TODAY);
     const teams = (id: number) => visibleTeams(c, id).map((b) => b.id).sort();
-    expect(teams(90)).toEqual(["cs", "rm"]); // director: every team in the department
-    expect(teams(23)).toEqual(["rm"]); // manager of Rate Management's tower
-    expect(teams(27)).toEqual(["cs"]); // manager of Customer Service's tower
+    expect(teams(90)).toEqual(["bk", "cs", "doc", "exp", "imp", "rm", "sales"]); // director: every team in the department
+    expect(teams(23)).toEqual(["rm"]); // manager of Rate Desk's tower
+    expect(teams(27)).toEqual(["bk", "cs"]); // manager of Customer Operations: both its teams
     expect(teams(24)).toEqual(["rm"]); // team lead
     expect(teams(ANA)).toEqual(["cs", "rm"]); // associate in two teams: just their own
     expect(["rm", "cs"].map((b) => rightsOf(c, 90).teamAdmin(b))).toEqual([true, true]);
     expect(rightsOf(c, ANA).anyAdmin).toBe(false);
-    // Workload admins / approvers of Rate Management.
+    // Workload admins / approvers of Rate Desk.
     const wa = workloadAdmins(c, "rm");
     expect([90, 23, 24].every((x) => wa.includes(x))).toBe(true);
     expect(wa.includes(27) || wa.includes(ANA)).toBe(false);
     expect(workloadApprovers(c, "rm")).toEqual(expect.arrayContaining([90, 23, 24]));
-    // Deciding a Rate Management request: its lead, manager and director; not another tower's manager.
+    // Deciding a Rate Desk request: its lead, manager and director; not another tower's manager.
     const q = { pid: 5 };
     expect([90, 23, 24].map((x) => canDecide(c, x, q, "rm"))).toEqual([true, true, true]);
     expect(canDecide(c, 27, q, "rm")).toBe(false);
@@ -305,7 +307,7 @@ describe("people and org", () => {
   it("deletes a member and everything tied to them, and never reuses their id", async () => {
     const { authorizeCal } = await import("./authz");
     const d0 = fresh();
-    // Someone in Rate Management only, with requests, an approver role and a billed override.
+    // Someone in Rate Desk only, with requests, an approver role and a billed override.
     const pid = 15;
     const d: CalendarData = {
       ...d0,
@@ -369,15 +371,15 @@ describe("uploads", () => {
   it("members: new people and extra allocations", () => {
     const d = fresh();
     const rows = [
-      { Name: "Juan Dela Cruz", Email: "juan.delacruz@demobss.com", Role: "Member", Department: "BSS", Tower: "A&S Support - Rate Management", Team: "Rate Management", System: "RCM", Trade: "LCL" },
-      { Name: "Ana Reyes", Email: "ana.reyes@demobss.com", Role: "Member", Department: "BSS", Tower: "A&S Support - Rate Management", Team: "Rate Management", System: "GPM", Trade: "EU" },
-      { Name: "X", Email: "bad", Department: "BSS" },
+      { Name: "Juan Dela Cruz", Email: "juan.delacruz@demobss.com", Role: "Member", Department: "GSS", Tower: "Pricing & Rates", Team: "Rate Desk", System: "TariffPro", Trade: "Consolidation" },
+      { Name: "Ana Reyes", Email: "ana.reyes@demobss.com", Role: "Member", Department: "GSS", Tower: "Pricing & Rates", Team: "Rate Desk", System: "RateHub", Trade: "Europe" },
+      { Name: "X", Email: "bad", Department: "GSS" },
     ];
     const chk = checkUpload(new Cal(d, TODAY), "members", rows, "rm");
     expect(chk.map((x) => x.stText)).toEqual(["New", "Update", "Error"]);
     const o = run(d, { type: "importUpload", mode: "members", rows, bid: "rm" });
-    expect(o.data.people).toHaveLength(35);
-    expect(o.data.people[34]).toMatchObject({ name: "Juan Dela Cruz", assign: ["lcl"] });
+    expect(o.data.people).toHaveLength(59);
+    expect(o.data.people[58]).toMatchObject({ name: "Juan Dela Cruz", assign: ["lcl"] });
     expect(o.data.people[ANA].assign).toEqual(["lcl", "cs", "eu"]);
   });
 });
@@ -390,7 +392,7 @@ describe("reports", () => {
     expect(att.rows.length).toBeGreaterThan(20);
     expect(buildReport(c, "manning", "rm", "2026-09-01", "2026-09-30").rows).toHaveLength(31);
     expect(buildReport(c, "bcp", "bss", "2026-09-01", "2026-09-30", "E2", "bss").rows[1][0]).toMatch(/Typhoon/);
-    expect(buildReport(c, "headcount", "bss", "2026-09-01", "2026-09-30").rows.map((r) => r[1])).toEqual(["Team", "Customer Service", "Rate Management"]);
+    expect(buildReport(c, "headcount", "bss", "2026-09-01", "2026-09-30").rows.map((r) => r[1])).toEqual(expect.arrayContaining(["Team", "Customer Care", "Rate Desk", "Import Desk"]));
     expect(toCsv([["a,b", 'q"'], [1, 2]])).toBe('﻿"a,b","q"""\r\n1,2');
   });
 });
@@ -456,6 +458,7 @@ describe("adding members and rights", async () => {
 describe("org import", async () => {
   const { parseOrgText, planOrgImport } = await import("./orgImport");
   const { emptyCalendar } = await import("./seed");
+  // A real calendar starts from the real org (emptyCalendar), so these use its names.
   const text = "Tower\tTeam\nNorth Tower\tAlpha\nNorth Tower\tBeta \n  north tower \talpha\nA&S Support - Rate Management\tGPM\nA&S Support - Rate Management\tNew RM Team\n\nSouth\tGamma\tSys1\tTradeX";
 
   it("parses pasted Excel rows and drops the header", () => {
@@ -547,7 +550,7 @@ describe("department and tower admins", async () => {
     const r = rightsOf(c, ANA);
     expect(r.teamAdmin("rm")).toBe(true);
     expect(r.teamAdmin("cs")).toBe(false); // other tower
-    expect(r.adminOf(15)).toBe(true); // Leo, in Rate Management
+    expect(r.adminOf(15)).toBe(true); // Leo, in Rate Desk
     expect(visibleTeams(c, ANA).map((b) => b.id).sort()).toEqual(["cs", "rm"]);
     const other = d.requests.find((q) => q.pid !== ANA && q.approvals.rm === "pending")!;
     expect("action" in authorizeCal({ type: "decide", rid: other.id, bid: "rm", st: "approved", actor: ANA }, c, ANA)).toBe(true);
@@ -593,7 +596,7 @@ describe("headcount report", async () => {
     const sam = row(SAM); // manager, team lead of RM
     expect(sam.lead).toBe(true);
     expect(sam.months[0]).toMatchObject({ actual: 1, billed: 0 });
-    // Ana is in Rate Management (first allocation) and Customer Service: counted once, in RM.
+    // Ana is in Rate Desk (first allocation) and Customer Care: counted once, in RM.
     expect(row(ANA).fte).toBe(1);
     expect(teamHeadcount(c, c.O.by.cs, 2026).rows.some((r) => r.pid === ANA)).toBe(false);
     expect(rm.rows[0].lead).toBe(true); // leads first
@@ -631,7 +634,7 @@ describe("primary team for headcount", async () => {
     const c = new Cal(r.data, TODAY);
     expect(c.person(ANA).primaryTeam).toBe("cs");
     expect(teamHeadcount(c, c.O.by.cs, 2026).rows.map((x) => x.pid)).toContain(ANA);
-    // From this month on she counts in Customer Service only; earlier months stay in Rate Management.
+    // From this month on she counts in Customer Care only; earlier months stay in Rate Desk.
     const m = Number(TODAY.slice(5, 7)) - 1;
     const rmRow = teamHeadcount(c, c.O.by.rm, 2026).rows.find((x) => x.pid === ANA)!;
     const csRow = teamHeadcount(c, c.O.by.cs, 2026).rows.find((x) => x.pid === ANA)!;
@@ -783,7 +786,7 @@ describe("BCP events are active on their date only", () => {
 describe("headcount keeps each month with the team the person was in", async () => {
   const { teamHeadcount } = await import("./headcount");
   const { hcTeamOf } = await import("./org");
-  // Someone only in Rate Management, hired before this year, who moves to Customer Service.
+  // Someone only in Rate Desk, hired before this year, who moves to Customer Care.
   const pick = (d: CalendarData) => {
     const c = new Cal(d, TODAY);
     return d.people.find((p) => c.O.branchesOf(p).length === 1 && c.O.branchesOf(p)[0].id === "rm" && p.hire < "2026-01-01" && !p.resign && p.level === "member")!;
@@ -860,12 +863,12 @@ describe("roles", async () => {
       expect(visibleTeams(c, lead.id).map((b) => b.id)).toContain("rm");
     }
     // Uploads read the new role names.
-    const row = (Role: string) => ({ Name: "New Person", Email: `np.${Role.length}@example.com`, Role, Department: "BSS", Tower: "A&S Support - Rate Management", Team: "Rate Management" });
+    const row = (Role: string) => ({ Name: "New Person", Email: `np.${Role.length}@example.com`, Role, Department: "GSS", Tower: "Pricing & Rates", Team: "Rate Desk" });
     expect(checkUpload(new Cal(d, TODAY), "members", [row("Sr. Team Lead"), row("Supervisor"), row("Senior Team Leader")], "rm").map((x) => x.stText)).toEqual(["New", "New", "New"]);
   });
   it("reads roles from uploads, including the old names", () => {
     const d = fresh();
-    const row = (Role: string) => ({ Name: "New Person", Email: `np.${Role.length}@example.com`, Role, Department: "BSS", Tower: "A&S Support - Rate Management", Team: "Rate Management" });
+    const row = (Role: string) => ({ Name: "New Person", Email: `np.${Role.length}@example.com`, Role, Department: "GSS", Tower: "Pricing & Rates", Team: "Rate Desk" });
     const chk = checkUpload(new Cal(d, TODAY), "members", [row("Sr. Specialist"), row("Specialist"), row("Member"), row("Associate"), row("Boss")], "rm");
     expect(chk.map((x) => x.stText)).toEqual(["New", "New", "New", "New", "Error"]);
   });
@@ -924,23 +927,23 @@ describe("attendance summary, reports, payroll and approvers", async () => {
   it("summarises a day per team and system", () => {
     const c = new Cal(fresh(), TODAY);
     const b = attendanceSummary(c, "rm", TODAY);
-    expect(b[0]).toMatchObject({ name: "Rate Management", level: "team", detail: false });
+    expect(b[0]).toMatchObject({ name: "Rate Desk", level: "team", detail: false });
     expect(b.slice(1).every((x) => x.level === "system")).toBe(true);
     const sys = b.slice(1);
     expect(sys.reduce((a, x) => a + x.headcount, 0)).toBeGreaterThan(0);
     const t = summaryText(b);
-    expect(t.split("\n")[0]).toMatch(/^Rate Management \d+\/\d+$/);
+    expect(t.split("\n")[0]).toMatch(/^Rate Desk \d+\/\d+$/);
     expect(t).toMatch(/\nRTO - \d+/);
   });
   it("counts people allocated to several teams or systems once", () => {
     const d = fresh();
     const p1 = d.people.find((p) => p.id === 1)!;
-    p1.assign = ["inas", "lcl"]; // GPM and RCM
+    p1.assign = ["inas", "lcl"]; // RateHub and TariffPro
     const c = new Cal(d, TODAY);
     const all = attendanceSummary(c, "bss", TODAY);
     const teams = all.filter((b) => b.level === "team");
     const alive = d.people.filter((p) => c.alive(p, TODAY) && (!p.hire || p.hire <= TODAY) && c.O.branchesOf(p).length);
-    // Ana is in Rate Management and Customer Service: counted once overall.
+    // Ana is in Rate Desk and Customer Care: counted once overall.
     expect(teams.reduce((a, b) => a + b.headcount, 0)).toBe(alive.length);
     const rm = attendanceSummary(c, "rm", TODAY);
     expect(rm.slice(1).reduce((a, b) => a + b.headcount, 0)).toBe(rm[0].headcount);
@@ -950,7 +953,7 @@ describe("attendance summary, reports, payroll and approvers", async () => {
     const c = new Cal(d, TODAY);
     const b = leadSummary(c, "rm", TODAY);
     const names = b.map((x) => x.name);
-    expect(names).toEqual(expect.arrayContaining(["GPM", "EU", "RCM"]));
+    expect(names).toEqual(expect.arrayContaining(["RateHub", "Europe", "TariffPro"]));
     // Each member counts once, plus each block's own lead; managers and directors aside.
     const team = attendanceSummary(c, "rm", TODAY)[0];
     const above = d.people.filter((p) => ["manager", "director"].includes(p.level) && c.O.inN(p, "rm") && c.alive(p, TODAY));
@@ -979,8 +982,8 @@ describe("attendance summary, reports, payroll and approvers", async () => {
     expect(tie.find((x) => x.name === "No lead")!.headcount).toBeGreaterThan(0);
     l2.assign = savedL2;
     d.people.find((p) => p.id === 24)!.assign = ["gpm"];
-    const eu = b2.find((x) => x.name === "EU")!;
-    expect(eu.headcount).toBe(b.find((x) => x.name === "EU")!.headcount + 1);
+    const eu = b2.find((x) => x.name === "Europe")!;
+    expect(eu.headcount).toBe(b.find((x) => x.name === "Europe")!.headcount + 1);
     expect(eu.lines.find((l) => l.code === "VL")).toMatchObject({ tl: 1 });
     expect(summaryText([eu], " - ")).toMatch(/\nVL - \d+ incl TL/);
     expect(eu.present).toBeLessThan(eu.headcount);
@@ -992,7 +995,7 @@ describe("attendance summary, reports, payroll and approvers", async () => {
     expect(sch.rows[0].slice(-7)).toHaveLength(7);
     expect(sch.rows.slice(1).some((r) => String(r[6]).startsWith("RTO · ") || String(r[6]).startsWith("WFH · "))).toBe(true);
     const sum = buildReport(c, "summary", "rm", TODAY, TODAY);
-    expect(sum.rows[1][2]).toBe("Rate Management");
+    expect(sum.rows[1][2]).toBe("Rate Desk");
   });
   it("finds the next payroll cut-off from the dates set", () => {
     const dates = ["2026-10-27", "2026-09-15", "2026-09-30", "2026-10-13"];
@@ -1141,9 +1144,9 @@ describe("OT and KPI trackers", async () => {
     expect(o.data.issues).toHaveLength(1);
     expect(o.data.issues![0]).toMatchObject({ team: "rm", ticket: "RM-1", desc: "Wrong rate", by: SAM });
     const id = o.data.issues![0].id;
-    const ed = run(o.data, { type: "saveIssue", issue: { id, team: "rm", date: TODAY, desc: "Wrong rate (EU)", root: "r", preventive: "p", corrective: "c" }, actor: SAM }).data;
+    const ed = run(o.data, { type: "saveIssue", issue: { id, team: "rm", date: TODAY, desc: "Wrong rate (Europe)", root: "r", preventive: "p", corrective: "c" }, actor: SAM }).data;
     expect(ed.issues).toHaveLength(1);
-    expect(ed.issues![0]).toMatchObject({ desc: "Wrong rate (EU)", by: SAM });
+    expect(ed.issues![0]).toMatchObject({ desc: "Wrong rate (Europe)", by: SAM });
     expect(run(ed, { type: "deleteIssue", id }).data.issues).toEqual([]);
     // Members can't; the team's lead can.
     const c = new Cal(o.data, TODAY);
@@ -1164,7 +1167,7 @@ describe("leave cover", async () => {
   const { workloadApprovers } = await import("../workload/people");
   const { coveredLeaders } = await import("./covers");
   const leadOf = (d: CalendarData) => new Cal(d, TODAY).d.people.find((p) => p.level === "lead" && new Cal(d, TODAY).O.inN(p, "rm"))!;
-  // A Customer Service member (not in Rate Management) covers for a Rate Management lead.
+  // A Customer Care member (not in Rate Desk) covers for a Rate Desk lead.
   const csOnly = (d: CalendarData) => d.people.find((p) => p.level === "member" && p.assign.length && p.assign.every((a) => new Cal(d, TODAY).O.anc(a).includes("cs")))!;
 
   it("gives the stand-in the leader's approvals and views on the cover dates only", () => {
@@ -1230,7 +1233,7 @@ describe("role scopes", async () => {
   const { authorizeCal, rightsOf, visibleTeams } = await import("./authz");
   const { allocProblem, mkOrg } = await import("./org");
   const DIEGO = 26; // director
-  const KIM = 14; // team lead, Rate Management
+  const KIM = 14; // team lead, Rate Desk
   // A second department with one team, run by nobody in particular.
   const withOps = () => {
     const d = fresh();
@@ -1339,10 +1342,10 @@ describe("leave without pay and the leave limit per day", async () => {
     // Per system: only people in that system count and are limited.
     let e = fresh();
     e.nodes = e.nodes.map((n) => (n.id === "rm" ? { ...n, leaveMaxSys: { rcm: 1 } } : n));
-    e = run(e, { type: "submitRequest", pid: 16, form: vl(day), adminBid: "rm", actor: SAM }).data; // LCL (RCM)
+    e = run(e, { type: "submitRequest", pid: 16, form: vl(day), adminBid: "rm", actor: SAM }).data; // Consolidation (TariffPro)
     const ce = new Cal(e, TODAY);
     expect(capHits(ce, ANA, day, day).map((h) => h.unit)).toEqual(["rcm"]);
-    expect(capHits(ce, 5, day, day)).toHaveLength(0); // FEWB (GPM)
+    expect(capHits(ce, 5, day, day)).toHaveLength(0); // Far East (RateHub)
 
     // Approving several at once counts the earlier ones in the batch.
     let f = fresh();

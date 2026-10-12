@@ -23,8 +23,8 @@ import type { Settings, Task } from "./types";
 import { person } from "./constants";
 
 const NOW = Date.parse("2026-09-24T10:30:00+08:00");
-const ANA = 0; // LCL, available
-const ELI = 4; // EU, on leave
+const ANA = 0; // Consolidation, available
+const ELI = 4; // Europe, on leave
 
 const settings = (p: Partial<Settings> = {}): Settings => ({
   mode: "fifo",
@@ -206,8 +206,8 @@ describe("start work (FIFO)", () => {
 
   it("takes trade first, then the same system, then other systems", async () => {
     const { canTake, canClaim, personOf } = await import("./engine");
-    const us = task({ trade: "us" }); // RCM, Ana's system (she works LCL)
-    const eu = task({ trade: "eu" }); // GPM, another system
+    const us = task({ trade: "us" }); // TariffPro, Ana's system (she works Consolidation)
+    const eu = task({ trade: "eu" }); // RateHub, another system
     const lcl = task({ trade: "lcl" });
     const ana = (d: ReturnType<typeof data>) => personOf(d, ANA)!;
     let d = data([us, eu, lcl], { mode: "self" });
@@ -216,7 +216,7 @@ describe("start work (FIFO)", () => {
     expect([us, eu].map((t) => canTake(d, ana(d), t))).toEqual([true, false]); // own clear: same system first
     d = data([eu], { mode: "self" });
     expect(canTake(d, ana(d), eu)).toBe(true); // whole system clear: other systems
-    // Asking to take: a teammate in the same system can ask for an LCL task, another system can't.
+    // Asking to take: a teammate in the same system can ask for an Consolidation task, another system can't.
     const held = task({ trade: "us", status: "assigned", assignee: 25 });
     const heldGpm = task({ trade: "eu", status: "assigned", assignee: 3 });
     d = data([held, heldGpm], { mode: "self" });
@@ -315,7 +315,7 @@ describe("hold, resume, done", () => {
 
 describe("round-robin", () => {
   it("assigns new tasks to the least-loaded available member of the trade", () => {
-    // LCL: Ana (0), Kim (14), Leo (15), Mia (16), Nico (19, on leave).
+    // Consolidation: Ana (0), Kim (14), Leo (15), Mia (16), Nico (19, on leave).
     const busy = [0, 14, 15].map((a) => task({ status: "assigned", assignee: a }));
     const t = task();
     const o = addTasks(data(busy, { mode: "rr" }), [t], "", NOW);
@@ -348,12 +348,12 @@ describe("admin assign", () => {
 
 describe("upload validation", () => {
   it("checks system/trade, priority, number and list fields; required ones may be blank", () => {
-    const base = { Title: "A", System: "RCM", Trade: "LCL", "Ticket no.": "1", Carrier: "MSCU", "No. of contracts": "3" };
+    const base = { Title: "A", System: "TariffPro", Trade: "Consolidation", "Ticket no.": "1", Carrier: "MSCU", "No. of contracts": "3" };
     const res = checkRows(
       [
         base,
         { ...base, Title: "" },
-        { ...base, System: "GPM" },
+        { ...base, System: "RateHub" },
         { ...base, Priority: "urgent" },
         { ...base, "Ticket no.": "" },
         { ...base, "No. of contracts": "x" },
@@ -366,7 +366,7 @@ describe("upload validation", () => {
     expect(res.map((r) => r.msg)).toEqual([
       "Ready",
       "Title is missing",
-      "LCL isn’t under GPM",
+      "Consolidation isn’t under RateHub",
       "Priority must be High, Normal or Low",
       "Ready", // required fields are asked for when the task is marked done
       "No. of contracts must be a number",
@@ -410,7 +410,7 @@ describe("seed", () => {
 describe("upload rows follow the team's org", () => {
   const f: typeof FIELDS0 = [];
   it("needs no System or Trade when the team is its one unit", () => {
-    const org = { team: { id: "cs", name: "Customer Service" }, systems: [], trades: [{ id: "cs", name: "Customer Service", sys: "" }], teams: [] };
+    const org = { team: { id: "cs", name: "Customer Care" }, systems: [], trades: [{ id: "cs", name: "Customer Care", sys: "" }], teams: [] };
     const [r] = checkRows([{ Title: "Call back" }], f, org);
     expect(r).toMatchObject({ ok: true, task: { trade: "cs" } });
   });
@@ -418,18 +418,18 @@ describe("upload rows follow the team's org", () => {
     const org = {
       team: { id: "t", name: "T" },
       systems: [{ id: "a", name: "A" }, { id: "b", name: "B" }],
-      trades: [{ id: "a1", name: "EU", sys: "a" }, { id: "b1", name: "EU", sys: "b" }, { id: "b2", name: "US", sys: "b" }],
+      trades: [{ id: "a1", name: "Europe", sys: "a" }, { id: "b1", name: "Europe", sys: "b" }, { id: "b2", name: "Americas", sys: "b" }],
       teams: [],
     };
-    const res = checkRows([{ Title: "x", Trade: "EU" }, { Title: "x", System: "B", Trade: "EU" }, { Title: "x", Trade: "US" }, { Title: "x", System: "A", Trade: "US" }], f, org);
-    expect(res.map((r) => r.ok ? r.task!.trade : r.msg)).toEqual(["Add the System — that trade is in more than one", "b1", "b2", "US isn’t under A"]);
+    const res = checkRows([{ Title: "x", Trade: "Europe" }, { Title: "x", System: "B", Trade: "Europe" }, { Title: "x", Trade: "Americas" }, { Title: "x", System: "A", Trade: "Americas" }], f, org);
+    expect(res.map((r) => r.ok ? r.task!.trade : r.msg)).toEqual(["Add the System — that trade is in more than one", "b1", "b2", "Americas isn’t under A"]);
   });
 });
 
 describe("overtime, helping out, productivity basis and uploads", async () => {
   const { helpQueue, personMetrics, canTake } = await import("./engine");
   const { authorizeWl } = await import("./authz");
-  const ana = PEOPLE.find((p) => p.id === ANA)!; // LCL (RCM), day shift 08:00, 9 h
+  const ana = PEOPLE.find((p) => p.id === ANA)!; // Consolidation (TariffPro), day shift 08:00, 9 h
   const EVE = Date.parse("2026-09-24T18:30:00+08:00"); // 1 h 30 past her 17:00 end
 
   it("only the assignee can mark a task done", () => {
@@ -439,16 +439,16 @@ describe("overtime, helping out, productivity basis and uploads", async () => {
   });
 
   it("asks before giving work from other trades: same system first, then the team", () => {
-    const us = task({ trade: "us", received: NOW - H }); // RCM, same system as LCL
-    const eu = task({ trade: "eu", received: NOW - 5 * H }); // GPM, older
+    const us = task({ trade: "us", received: NOW - H }); // TariffPro, same system as Consolidation
+    const eu = task({ trade: "eu", received: NOW - 5 * H }); // RateHub, older
     const d = data([eu, us]);
     const r = startWork(d, ANA, NOW);
-    expect(r.ask).toEqual({ system: 1, systemNames: ["RCM"], team: 1 });
+    expect(r.ask).toEqual({ system: 1, systemNames: ["TariffPro"], team: 1 });
     expect(r.data).toBe(d);
     expect(helpQueue(d, ana).map((x) => x.t.id)).toEqual([us.id, eu.id]);
     const yes = startWork(d, ANA, NOW, true);
     expect(get(yes.data, us.id)).toMatchObject({ status: "in_progress", assignee: ANA });
-    expect(yes.message).toMatch(/helping US/);
+    expect(yes.message).toMatch(/helping Americas/);
     // Own trade has work: no offer, and other trades can't be taken.
     const own = task({ trade: "lcl" });
     expect(startWork(data([own, us]), ANA, NOW).ask).toBeUndefined();
@@ -467,7 +467,7 @@ describe("overtime, helping out, productivity basis and uploads", async () => {
 
   it("lets admins and approved members upload, with required fields left blank", () => {
     const d = { ...data([]), fields: FIELDS0 };
-    const rows = [{ Title: "Blank ticket", System: "RCM", Trade: "LCL" }];
+    const rows = [{ Title: "Blank ticket", System: "TariffPro", Trade: "Consolidation" }];
     expect("error" in authorizeWl({ type: "importRows", rows }, d, ANA)).toBe(true);
     expect("action" in authorizeWl({ type: "importRows", rows }, { ...d, settings: { ...d.settings, uploaders: [ANA] } }, ANA)).toBe(true);
     expect("action" in authorizeWl({ type: "importRows", rows }, d, 23)).toBe(true);
@@ -604,10 +604,10 @@ describe("uploads keep the actual received time", async () => {
     expect(parseReceived("")).toBeNull();
     expect(parseReceived("yesterday")).toBe("bad");
     const rows = [
-      { Title: "Old request", System: "RCM", Trade: "LCL", Received: "2026-09-23 08:30" },
-      { Title: "No date", System: "RCM", Trade: "LCL" },
-      { Title: "Future", System: "RCM", Trade: "LCL", Received: "2026-09-30 08:00" },
-      { Title: "Bad", System: "RCM", Trade: "LCL", Received: "soon" },
+      { Title: "Old request", System: "TariffPro", Trade: "Consolidation", Received: "2026-09-23 08:30" },
+      { Title: "No date", System: "TariffPro", Trade: "Consolidation" },
+      { Title: "Future", System: "TariffPro", Trade: "Consolidation", Received: "2026-09-30 08:00" },
+      { Title: "Bad", System: "TariffPro", Trade: "Consolidation", Received: "soon" },
     ];
     const chk = checkRows(rows, [], DEMO_ORG, NOW);
     expect(chk.map((r) => r.msg)).toEqual(["Ready", "Ready", "Received is in the future", "Received must be a date and time like 2026-09-24 08:30"]);
@@ -650,17 +650,17 @@ describe("task types with their own SLA, and holidays", async () => {
     const s = settings({ taskTypes: TYPES });
     expect(E.detectType(s, "Please DOC REVIEW for shipment", "lcl")).toBe("doc");
     expect(E.detectType(s, "New booking request", "eu")).toBe("bk");
-    expect(E.detectType(s, "New booking request", "lcl")).toBe(""); // Booking only covers EU
+    expect(E.detectType(s, "New booking request", "lcl")).toBe(""); // Booking only covers Europe
     expect(E.detectType(s, "Rate question", "eu")).toBe("");
   });
 
   it("uploads take the Task type column, or keywords, and fix the SLA", () => {
     const d = data([], { taskTypes: TYPES });
     const rows = [
-      { Title: "Check invoice", Trade: "EU", "Task type": "Booking" },
-      { Title: "documents for vessel", Trade: "LCL" },
-      { Title: "Plain", Trade: "LCL" },
-      { Title: "Bad", Trade: "LCL", "Task type": "Nope" },
+      { Title: "Check invoice", Trade: "Europe", "Task type": "Booking" },
+      { Title: "documents for vessel", Trade: "Consolidation" },
+      { Title: "Plain", Trade: "Consolidation" },
+      { Title: "Bad", Trade: "Consolidation", "Task type": "Nope" },
     ];
     const chk = checkRows(rows, d.fields, d.org, NOW, TYPES);
     expect(chk.map((c) => c.ok)).toEqual([true, true, true, false]);
@@ -727,7 +727,7 @@ describe("task type targets weight productivity", async () => {
     const d = data([mk("doc", 0), mk("doc", 1), mk("doc", 2), mk("bk", 3)], { taskTypes: TYPES });
     const m = E.personMetrics(d, { ...ana, shiftStart: 8 }, at);
     expect(m.prod).toBe(125);
-    // Without task types, the same tasks count 1 each against the member's target (8 for LCL).
+    // Without task types, the same tasks count 1 each against the member's target (8 for Consolidation).
     const plain = E.personMetrics(data(d.tasks), { ...ana, shiftStart: 8 }, at);
     expect(plain.prod).toBe(50);
   });
@@ -739,7 +739,7 @@ describe("upload keeps the Received date and time from the file", async () => {
   const at = (s: string) => Date.parse(s + "+08:00");
   it("an Excel date-and-time cell survives the trip to the server", () => {
     // ExcelJS reads a cell showing 25/09/2026 12:26 as a Date with those numbers in UTC.
-    const rows = rowsToObjects([["Title *", "Trade *", "Received"], ["Rate check", "LCL", new Date(Date.UTC(2026, 8, 25, 12, 26))]]);
+    const rows = rowsToObjects([["Title *", "Trade *", "Received"], ["Rate check", "Consolidation", new Date(Date.UTC(2026, 8, 25, 12, 26))]]);
     const sent = JSON.parse(JSON.stringify(rows));
     expect(sent[0].Received).toBe("2026-09-25 12:26:00");
     const d = data([]);
@@ -826,7 +826,7 @@ describe("dashboard metrics for any period", async () => {
 describe("overtime broken down by process", async () => {
   const E = await import("./engine");
   const at = (hm: string) => Date.parse(`2026-09-24T${hm}:00+08:00`);
-  // A member on two processes (GPM › FEWB and RCM › LCL), day shift 08:00–17:00.
+  // A member on two processes (RateHub › Far East and TariffPro › Consolidation), day shift 08:00–17:00.
   const two = { ...PEOPLE.find((p) => p.id === ANA)!, trades: ["fewb", "lcl"], shiftStart: 8 };
   const withTwo = (tasks: Task[] = [], p: Partial<Settings> = {}) => ({ ...data(tasks, p), people: data([]).people.map((x) => (x.id === ANA ? two : x)) });
 
@@ -862,7 +862,7 @@ describe("overtime broken down by process", async () => {
 describe("overtime: processes worked, task types per process, and the target", async () => {
   const E = await import("./engine");
   const at = (hm: string) => Date.parse(`2026-09-24T${hm}:00+08:00`);
-  // One process (RCM › LCL), day shift 08:00–17:00, target 4 a day in 6.8 productive hours.
+  // One process (TariffPro › Consolidation), day shift 08:00–17:00, target 4 a day in 6.8 productive hours.
   const one = { ...PEOPLE.find((p) => p.id === ANA)!, trades: ["lcl"], shiftStart: 8 };
   const mk = (tasks: Task[] = [], p: Partial<Settings> = {}) => ({
     ...data(tasks, { memberTargets: { [ANA]: "4" }, ...p }),
@@ -1065,7 +1065,7 @@ describe("average handling time", async () => {
   ];
   it("computes FTE needed from tickets received and AHT", async () => {
     const { fteStats } = await import("./aht");
-    // 2 h per ticket on LCL; 6 more LCL tickets received today → 6 × 2 h = 12 h of work.
+    // 2 h per ticket on Consolidation; 6 more Consolidation tickets received today → 6 × 2 h = 12 h of work.
     const a = task({ status: "done", assignee: ANA, trade: "lcl", startedAt: at("08:00"), doneAt: at("10:00"), received: at("07:00") });
     const more = Array.from({ length: 5 }, () => task({ trade: "lcl", received: at("09:00") }));
     const d = data([a, ...more]);
@@ -1140,11 +1140,11 @@ describe("delay remarks and the due / overdue board", async () => {
     expect("error" in authorizeWl({ type: "setDelay", id: t.id, delay: "x" }, d, other.id)).toBe(true);
   });
   it("counts open tickets by due day and system", () => {
-    const over = task({ trade: "lcl", received: NOW - 100 * H }); // RCM, overdue
-    const soon = task({ trade: "fewb", received: NOW - H }); // GPM, still due
+    const over = task({ trade: "lcl", received: NOW - 100 * H }); // TariffPro, overdue
+    const soon = task({ trade: "fewb", received: NOW - H }); // RateHub, still due
     const b = dueBoard(data([over, soon]), [over, soon], NOW);
-    const rcm = b.groups.find((g) => g.name === "RCM")!;
-    const gpm = b.groups.find((g) => g.name === "GPM")!;
+    const rcm = b.groups.find((g) => g.name === "TariffPro")!;
+    const gpm = b.groups.find((g) => g.name === "RateHub")!;
     expect(rcm.overNow).toEqual([over.id]);
     expect(rcm.due.flat()).toEqual([]);
     expect(gpm.due.flat()).toEqual([soon.id]);
@@ -1153,12 +1153,12 @@ describe("delay remarks and the due / overdue board", async () => {
     // Future days project overdue: still open and due by the end of that day.
     const later = task({ trade: "fewb", received: NOW + 30 * H }); // due a few days out
     const b2 = dueBoard(data([over, later]), [over, later], NOW);
-    const g2 = b2.groups.find((g) => g.name === "GPM")!;
+    const g2 = b2.groups.find((g) => g.name === "RateHub")!;
     const dueCol = g2.due.findIndex((x) => x.includes(later.id));
     expect(b2.cols[dueCol].future).toBe(true);
     expect(g2.over[dueCol]).toEqual([later.id]); // overdue by the end of its due day if not resolved
     expect(g2.over[dueCol - 1]).toEqual([]);
-    const r2 = b2.groups.find((g) => g.name === "RCM")!;
+    const r2 = b2.groups.find((g) => g.name === "TariffPro")!;
     expect(r2.over.slice(b2.cols.findIndex((c) => c.future)).every((x) => x.includes(over.id))).toBe(true); // stays overdue on every future day
   });
 });
@@ -1247,7 +1247,7 @@ describe("business case: fixed against unit pricing", async () => {
 describe("overtime pre-approval", async () => {
   const E = await import("./engine");
   const at = (hm: string) => Date.parse(`2026-09-24T${hm}:00+08:00`);
-  // Ana: LCL, shift 08:00–17:00. Ask 2 h before the end when ≥ 3 wait or ≥ 1 is due / overdue.
+  // Ana: Consolidation, shift 08:00–17:00. Ask 2 h before the end when ≥ 3 wait or ≥ 1 is due / overdue.
   const on = { otPrompt: { on: true, before: 2, queue: 3, due: 1 } };
   const waiting = (n: number, received: number) => Array.from({ length: n }, () => task({ status: "new", trade: "lcl", received, pr: "low" }));
   const ana = (d: WorkloadData) => d.people.find((p) => p.id === ANA)!;
@@ -1271,8 +1271,8 @@ describe("overtime pre-approval", async () => {
   it("Yes (with remarks) lets them report overtime at End work; No ends the day without it", () => {
     const d = data(waiting(3, at("14:00")), on);
     expect(E.planOt(d, ANA, true, " ", at("15:30")).message).toMatch(/Add remarks/);
-    const yes = E.planOt(d, ANA, true, "Month-end EU rates", at("15:30")).data;
-    expect(E.otPlanToday(yes, ANA, at("16:00"))).toMatchObject({ kind: "otplan", plan: "yes", note: "Month-end EU rates" });
+    const yes = E.planOt(d, ANA, true, "Month-end Europe rates", at("15:30")).data;
+    expect(E.otPlanToday(yes, ANA, at("16:00"))).toMatchObject({ kind: "otplan", plan: "yes", note: "Month-end Europe rates" });
     expect(E.otAllowed(yes, ana(yes), at("18:00"))).toBe(true);
     expect(E.endWork(yes, ANA, 60, at("18:00")).data.activities.at(-1)).toMatchObject({ kind: "end", otMin: 60, otStatus: "pending" });
     const no = E.planOt(d, ANA, false, "", at("15:30")).data;

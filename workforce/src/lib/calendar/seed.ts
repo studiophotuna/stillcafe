@@ -4,17 +4,19 @@ import { Cal, logsDecision, logsSubmit } from "./engine";
 import { teamDefaults } from "./org";
 import type { CalPerson, CalendarData, Checkin, Code, Level, LeaveRequest, NotifLog, OrgNode, Readiness } from "./types";
 
-/** Org seed: BSS › 5 towers › Rate Management (GPM/RCM trades) and Customer Service. */
-export const NODES0: OrgNode[] = [
-  // Sample: Diego (director) is admin of the department.
-  { id: "bss", type: "dept", name: "BSS (Business Support Services)", parent: null, admins: [26] },
+/**
+ * The organization a real (empty) calendar starts from: the department, its towers and the
+ * Rate Management team with its systems and trades. A real calendar then gets its people and
+ * the rest of its teams from the members upload.
+ */
+const ORG_START: OrgNode[] = [
+  { id: "bss", type: "dept", name: "BSS (Business Support Services)", parent: null },
   { id: "t_ops", type: "tower", name: "A&S Support - Operational", parent: "bss" },
   { id: "t_ie", type: "tower", name: "A&S Support - Import & Export", parent: "bss" },
-  // Sample: Sam (manager) is admin of the tower, so of every team in it.
-  { id: "t_rm", type: "tower", name: "A&S Support - Rate Management", parent: "bss", admins: [23] },
+  { id: "t_rm", type: "tower", name: "A&S Support - Rate Management", parent: "bss" },
   { id: "t_com", type: "tower", name: "A&S Support - Commercial", parent: "bss" },
   { id: "t_cus", type: "tower", name: "Customs", parent: "bss" },
-  { id: "rm", type: "branch", name: "Rate Management", parent: "t_rm", ...teamDefaults({ admins: [23] }), leaveMax: 3 },
+  { id: "rm", type: "branch", name: "Rate Management", parent: "t_rm", ...teamDefaults({ admins: [] }) },
   { id: "gpm", type: "system", name: "GPM", parent: "rm" },
   { id: "rcm", type: "system", name: "RCM", parent: "rm" },
   { id: "fewb", type: "trade", name: "FEWB", parent: "gpm" },
@@ -23,7 +25,40 @@ export const NODES0: OrgNode[] = [
   { id: "us", type: "trade", name: "US", parent: "rcm" },
   { id: "asla", type: "trade", name: "ASLA", parent: "rcm" },
   { id: "lcl", type: "trade", name: "LCL", parent: "rcm" },
-  { id: "cs", type: "branch", name: "Customer Service", parent: "t_ops", ...teamDefaults({ mode: "auto", admins: [27] }) },
+];
+
+/**
+ * Sample org (demo and sample data only; fictional): Global Shared Services › 5 towers, with
+ * teams in each. Ids match the real org's where they line up, so the Workload sample team
+ * ("rm") and its systems and trades are the same nodes.
+ */
+export const NODES0: OrgNode[] = [
+  // Sample: Diego (director) is admin of the department.
+  { id: "bss", type: "dept", name: "GSS (Global Shared Services)", parent: null, admins: [26] },
+  { id: "t_ops", type: "tower", name: "Customer Operations", parent: "bss" },
+  { id: "t_ie", type: "tower", name: "Import & Export", parent: "bss" },
+  // Sample: Sam (manager) is admin of the tower, so of every team in it.
+  { id: "t_rm", type: "tower", name: "Pricing & Rates", parent: "bss", admins: [23] },
+  { id: "t_com", type: "tower", name: "Commercial Support", parent: "bss" },
+  { id: "t_cus", type: "tower", name: "Trade Compliance", parent: "bss" },
+  { id: "rm", type: "branch", name: "Rate Desk", parent: "t_rm", ...teamDefaults({ admins: [23] }), leaveMax: 3 },
+  { id: "gpm", type: "system", name: "RateHub", parent: "rm" },
+  { id: "rcm", type: "system", name: "TariffPro", parent: "rm" },
+  { id: "fewb", type: "trade", name: "Far East", parent: "gpm" },
+  { id: "inas", type: "trade", name: "Indian Ocean", parent: "gpm" },
+  { id: "eu", type: "trade", name: "Europe", parent: "gpm" },
+  { id: "us", type: "trade", name: "Americas", parent: "rcm" },
+  { id: "asla", type: "trade", name: "Latin America", parent: "rcm" },
+  { id: "lcl", type: "trade", name: "Consolidation", parent: "rcm" },
+  { id: "cs", type: "branch", name: "Customer Care", parent: "t_ops", ...teamDefaults({ mode: "auto", admins: [27] }) },
+  { id: "bk", type: "branch", name: "Booking Desk", parent: "t_ops", ...teamDefaults({ admins: [54] }) },
+  { id: "imp", type: "branch", name: "Import Desk", parent: "t_ie", ...teamDefaults({ admins: [34] }) },
+  { id: "exp", type: "branch", name: "Export Desk", parent: "t_ie", ...teamDefaults({ admins: [39] }), leaveMax: 2 },
+  { id: "sales", type: "branch", name: "Sales Support", parent: "t_com", ...teamDefaults({ admins: [44] }) },
+  { id: "crm", type: "system", name: "ClientHub", parent: "sales" },
+  { id: "key", type: "trade", name: "Key Accounts", parent: "crm" },
+  { id: "sme", type: "trade", name: "SME Accounts", parent: "crm" },
+  { id: "doc", type: "branch", name: "Customs Documentation", parent: "t_cus", ...teamDefaults({ admins: [49] }) },
 ];
 
 const ASSIGN: Record<number, string[]> = {
@@ -31,12 +66,20 @@ const ASSIGN: Record<number, string[]> = {
   5: ["fewb"], 9: ["fewb"], 10: ["fewb"], 11: ["fewb"], 12: ["fewb"], 13: ["fewb"], 32: ["fewb"], 33: ["fewb", "eu"],
   8: ["rm"], 18: ["rm"], 28: ["rm"], 23: ["rm"], 24: ["gpm"], 14: ["rcm"], 15: ["lcl"], 16: ["lcl"], 19: ["lcl"],
   20: ["lcl"], 22: ["lcl"], 25: ["us"], 26: ["rm", "cs"], 27: ["cs"], 29: ["asla"], 30: ["asla"], 31: ["cs"],
+  // Other towers: Import & Export (manager on the tower), Commercial Support, Trade Compliance
+  // (supervisor on the tower) and the Booking Desk in Customer Operations.
+  34: ["imp"], 35: ["imp"], 36: ["imp"], 37: ["imp"], 38: ["imp"], 39: ["exp"], 40: ["exp"], 41: ["exp"], 42: ["exp"], 43: ["t_ie"],
+  44: ["key"], 45: ["key"], 46: ["sme"], 47: ["sme"], 48: ["t_com"], 49: ["doc"], 50: ["doc"], 51: ["doc"], 52: ["doc"], 53: ["t_cus"],
+  54: ["bk"], 55: ["bk"], 56: ["bk"], 57: ["bk", "cs"],
 };
-const LEVEL0: Record<number, Level> = { 23: "manager", 26: "director", 27: "manager", 24: "srlead", 21: "supervisor", 14: "lead", 1: "senior", 5: "senior", 2: "specialist", 7: "specialist", 10: "specialist" };
+const LEVEL0: Record<number, Level> = {
+  23: "manager", 26: "director", 27: "manager", 24: "srlead", 21: "supervisor", 14: "lead", 1: "senior", 5: "senior", 2: "specialist", 7: "specialist", 10: "specialist",
+  34: "lead", 35: "senior", 39: "srlead", 41: "specialist", 43: "manager", 44: "lead", 46: "senior", 48: "manager", 49: "lead", 51: "specialist", 53: "supervisor", 54: "lead", 56: "specialist",
+};
 const HOL0: [string, string, "regular" | "special" | "company", string?][] = [
   ["2026-08-21", "Ninoy Aquino Day", "special"],
   ["2026-08-31", "National Heroes Day", "regular"],
-  ["2026-10-16", "Rate Management team day", "company", "rm"],
+  ["2026-10-16", "Rate Desk team day", "company", "rm"],
   ["2026-11-02", "All Souls’ Day", "special"],
   ["2026-11-30", "Bonifacio Day", "regular"],
   ["2026-12-08", "Immaculate Conception", "special"],
@@ -46,7 +89,7 @@ const HOL0: [string, string, "regular" | "special" | "company", string?][] = [
   ["2026-12-31", "New Year’s Eve", "special"],
 ];
 
-/** Sample calendar for BSS, as in the design prototype (sample dates are in Aug–Dec 2026). */
+/** Sample calendar (fictional organization and people; sample dates are in Aug–Dec 2026). */
 export function initialCalendar(today: string): CalendarData {
   const people: CalPerson[] = NAMES.map((n, i) => ({
     id: i,
@@ -76,7 +119,7 @@ export function initialCalendar(today: string): CalendarData {
     mk({ pid: 0, type: "VL", start: "2026-09-28", end: "2026-09-30", reason: "Family trip", created: "2026-09-21", approvals: { rm: "pending", cs: "approved" } }),
     mk({ pid: 14, type: "VL", start: "2026-10-05", end: "2026-10-06", reason: "Sister’s wedding", created: "2026-09-22", approvals: { rm: "pending" } }),
     mk({ pid: 8, type: "HD", half: "PM", start: "2026-09-25", end: "2026-09-25", reason: "Medical appointment", created: "2026-09-23", approvals: { rm: "pending" } }),
-    mk({ pid: 5, type: "BT", start: "2026-10-01", end: "2026-10-02", reason: "Client visit, Cebu", created: "2026-09-23", approvals: { rm: "pending" } }),
+    mk({ pid: 5, type: "BT", start: "2026-10-01", end: "2026-10-02", reason: "Client visit", created: "2026-09-23", approvals: { rm: "pending" } }),
     mk({ pid: 0, type: "VL", start: "2026-09-11", end: "2026-09-11", reason: "Personal errand", created: "2026-09-02", approvals: { rm: "declined", cs: "approved" } }),
     mk({ pid: 28, type: "VL", start: "2026-09-14", end: "2026-09-15", created: "2026-09-01", approvals: { rm: "approved" } }),
     mk({ pid: 26, type: "VL", start: "2026-09-16", end: "2026-09-18", created: "2026-09-01", approvals: { rm: "approved", cs: "approved" } }),
@@ -146,8 +189,8 @@ export function initialCalendar(today: string): CalendarData {
     };
   }
   const bcpEvents = [
-    { id: "E2", name: "Typhoon Helen – Signal No. 3 (NCR)", start: today, end: "", scope: "bss", status: "active" as const, note: "Office closes at 12:00. Work from home if it is safe to do so, and check in below." },
-    { id: "E1", name: "Power interruption – Ortigas", start: "2026-08-12", end: "2026-08-12", scope: "bss", status: "closed" as const, note: "" },
+    { id: "E2", name: "Typhoon Helen – Signal No. 3", start: today, end: "", scope: "bss", status: "active" as const, note: "Office closes at 12:00. Work from home if it is safe to do so, and check in below." },
+    { id: "E1", name: "Power interruption – main office", start: "2026-08-12", end: "2026-08-12", scope: "bss", status: "closed" as const, note: "" },
   ];
   const stK = ["wfh", "wfh", "wfh", "wfh", "office", "aff_ok", "aff_no", "wfh", "leave"] as const;
   const checkins: Record<string, Record<number, Checkin>> = { E2: {}, E1: {} };
@@ -167,15 +210,43 @@ export function initialCalendar(today: string): CalendarData {
     "3|2026-09-22": "RTO", "7|2026-09-24": "WFH", "12|2026-09-26": "RTO",
     "23|2026-11-30": "HDY", "14|2026-11-30": "HDY", "25|2026-11-30": "HDY", "5|2026-10-16": "HDY", "9|2026-10-16": "HDY",
   };
-  // Trackers: Customer Service doesn't use Workload, so its lead enters KPIs and overtime;
-  // Rate Management's come from Workload, with remarks and a few accuracy issues.
+  // Trackers: Customer Care doesn't use Workload, so its lead enters KPIs and overtime;
+  // The Rate Desk's come from Workload, with remarks and a few accuracy issues.
   const kpi: CalendarData["kpi"] = {
     "cs|2026-W38": { util: 86.4, prod: 97.2, time: 95.1, acc: 99.2, reg: 12, rd: 4, hol: 0, remark: "Peak in booking amendments.", otRemark: "Approved for backlog clean-up.", by: 27, at: "2026-09-21" },
     "cs|2026-W39": { util: 88.9, prod: 101.5, time: 96.8, acc: 98.7, reg: 9.5, rd: 0, hol: 0, remark: "", by: 27, at: "2026-09-24" },
     "cs|2026-09": { util: 87.1, prod: 99.0, time: 95.6, acc: 98.9, reg: 31, rd: 8, hol: 0, by: 27, at: "2026-09-24" },
     "cs|2026-08": { util: 84.0, prod: 95.3, time: 93.8, acc: 99.4, reg: 26, rd: 6, hol: 8, remark: "Holiday duty on 31 Aug.", by: 27, at: "2026-09-01" },
-    "rm|2026-W38": { remark: "Two new members still ramping up on LCL.", otRemark: "GRI season: overtime on US and ASLA.", by: 14, at: "2026-09-21" },
+    "rm|2026-W38": { remark: "Two new members still ramping up on Consolidation.", otRemark: "Rate season: overtime on Americas and Latin America.", by: 14, at: "2026-09-21" },
     "rm|2026-09": { remark: "Accuracy below target: see the Accuracy log.", by: 23, at: "2026-09-24" },
+    // The other towers' teams enter theirs too.
+    ...Object.fromEntries(
+      (
+        [
+          ["bk", 54, 0],
+          ["imp", 34, 1],
+          ["exp", 39, 2],
+          ["sales", 44, 3],
+          ["doc", 49, 4],
+        ] as const
+      ).flatMap(([team, by, k]) =>
+        (["2026-W38", "2026-W39", "2026-09"] as const).map((per, j) => [
+          `${team}|${per}`,
+          {
+            util: 82 + ((k * 3 + j * 2) % 12),
+            prod: 92 + ((k * 5 + j * 3) % 14),
+            time: 90 + ((k * 4 + j) % 9),
+            acc: 97 + ((k + j) % 3),
+            reg: per === "2026-09" ? 10 + k * 4 : 2 + ((k + j) % 4) * 2,
+            rd: k === 2 ? 4 : 0,
+            hol: 0,
+            ...(k === 2 && j === 0 ? { remark: "Peak export season.", otRemark: "Weekend cut-offs covered." } : {}),
+            by,
+            at: "2026-09-24",
+          },
+        ]),
+      ),
+    ),
   };
   const issues: CalendarData["issues"] = [
     { id: "I3", team: "rm", date: "2026-09-23", ticket: "RM-10482", desc: "Surcharge filed under the wrong validity window.", root: "Effective date read from the old tariff.", preventive: "Checklist step: confirm the validity against the carrier notice.", corrective: "Refiled with the correct dates; customer informed.", by: 14, at: "2026-09-23" },
@@ -195,7 +266,7 @@ export function initialCalendar(today: string): CalendarData {
 export function emptyCalendar(): CalendarData {
   return {
     people: [],
-    nodes: JSON.parse(JSON.stringify(NODES0.filter((n) => n.id !== "cs").map(({ leaveMax: _m, ...n }) => (n.id === "rm" || n.admins ? { ...n, admins: [] } : n)))),
+    nodes: JSON.parse(JSON.stringify(ORG_START)),
     requests: [],
     overrides: {},
     roster: {},
