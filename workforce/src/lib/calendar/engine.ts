@@ -3,7 +3,7 @@
  * CalendarData. Shared by the browser (optimistic updates, rendering) and the
  * server (authoritative writes).
  */
-import { CARRY_MAX, CODES, LEDGER_START, OOO, POOL, WORKING, first } from "./constants";
+import { CARRY_MAX, CODES, LAW, LEDGER_START, OOO, POOL, WORKING, first } from "./constants";
 import { dowOf, isWk, rng2, fmt, workdays } from "./dates";
 import { mkOrg, type Org } from "./org";
 import type { BcpEvent, CalPerson, CalendarData, Code, Holiday, LeaveRequest, NotifLog } from "./types";
@@ -127,7 +127,30 @@ export class Cal {
   private daysIn(p: CalPerson, codes: Code[], y: number) {
     return this.reqsOf(p.id)
       .filter((q) => allApproved(q) && codes.includes(q.type) && Number(q.start.slice(0, 4)) === y)
-      .reduce((a, q) => a + this.reqDays(q), 0);
+      .reduce((a, q) => a + this.paidDays(q), 0);
+  }
+  /** Days of a request that use the balance (leave without pay doesn't). */
+  paidDays(q: LeaveRequest) {
+    return Math.max(0, this.reqDays(q) - (q.lwop ?? 0));
+  }
+  /**
+   * Balance left for a leave type, after approved leave and other requests still waiting
+   * (declined ones aside), in the year the leave starts; null when the type uses no balance.
+   */
+  balanceLeft(p: CalPerson, type: Code, start: string, exceptId?: string): number | null {
+    const y = Number(start.slice(0, 4));
+    const codes: Code[] | null = POOL.includes(type) ? POOL : type === "EL" ? ["EL"] : type === "SPL" ? ["SPL"] : null;
+    if (!codes) return null;
+    const total = codes === POOL ? this.poolOf(p, y) - this.usedOf(p, y) : type === "EL" ? (p.elEnt ?? 5) - this.elUsedOf(p, y) : LAW.spl - this.splUsedOf(p, y);
+    const waiting = this.reqsOf(p.id)
+      .filter((q) => q.id !== exceptId && codes.includes(q.type) && Number(q.start.slice(0, 4)) === y && !allApproved(q) && !Object.values(q.approvals).includes("declined"))
+      .reduce((a, q) => a + this.paidDays(q), 0);
+    return total - waiting;
+  }
+  /** Days of a new request beyond the balance: they're filed as leave without pay. */
+  lwopFor(p: CalPerson, type: Code, start: string, days: number): number {
+    const left = this.balanceLeft(p, type, start);
+    return left === null ? 0 : Math.max(0, days - Math.max(0, left));
   }
   /** VL + SL for the year: the full entitlement, pro-rated in the hire year (unless an admin set it). */
   entOf(p: CalPerson, y = this.year) {
@@ -229,7 +252,8 @@ export function logsDecision(c: Cal, q: LeaveRequest, bid: string, st: "approved
 }
 
 /** Emails when a request is submitted: approval requests to admins, or decision mails for auto-approved teams. */
-export function logsSubmit(c: Cal, q: LeaveRequest, at: string, adminBid: string | null): LogDraft[] {
+/** Emails when a request is filed; `extra` lines go to the approvers (e.g. the leave limit is reached). */
+export function logsSubmit(c: Cal, q: LeaveRequest, at: string, adminBid: string | null, extra: string[] = []): LogDraft[] {
   const p = c.person(q.pid);
   const ids = Object.keys(q.approvals);
   return ids.flatMap((bid) => {
@@ -261,6 +285,8 @@ export function logsSubmit(c: Cal, q: LeaveRequest, at: string, adminBid: string
             `Reason: ${q.reason || "Not given"}`,
             `This request is for the ${b.name} team.` +
               (ids.length > 1 ? ` Other teams ${first(p.name)} belongs to approve it separately.` : ""),
+            ...(q.lwop ? [`Leave without pay: ${q.lwop} day${q.lwop === 1 ? "" : "s"} (no balance left).`] : []),
+            ...extra,
           ],
         },
       ];

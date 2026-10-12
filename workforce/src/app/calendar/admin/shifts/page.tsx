@@ -8,8 +8,8 @@ import { useCalView } from "@/lib/calendar/useCalView";
 
 export default function ShiftsPage() {
   const s = useCalendar();
-  // Shift types are shared by every team: department admins (directors) change them.
-  const edit = useCalView().deptAdmin;
+  // Shift types are shared by every team: managers and above change them.
+  const edit = useCalView().orgAdmin;
   return (
     <>
       <div className="page-head-row">
@@ -17,7 +17,7 @@ export default function ShiftsPage() {
           <h1>Shifts</h1>
           <span style={{ maxWidth: "80ch" }}>
             Each person has a default shift. Upload the monthly roster from Calendar › Upload schedule (Shift tab) to change shifts per day. The group decides whether a shift counts as Morning, Midshift or GY in manning counts.
-            {!edit && " Shift types are shared by every team, so department admins change them."}
+            {!edit && " Shift types are shared by every team, so managers and above change them."}
           </span>
         </div>
         {edit && (

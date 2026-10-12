@@ -5,7 +5,7 @@ import { DateRangePicker, useStoredRange } from "@/components/DateRangePicker";
 import { Blueprint, Icon, PageHead } from "@/components/ui";
 import { dayKey } from "@/lib/workload/clock";
 import { PR, ST, trPathOf } from "@/lib/workload/constants";
-import { cxText, due, holdPeriods, personOf, slaOf, taskWorkMs, ticketField, ticketOf } from "@/lib/workload/engine";
+import { cxCheck, cxLevels, cxOver, cxText, cxTotal, due, holdPeriods, personOf, slaOf, taskWorkMs, ticketField, ticketOf } from "@/lib/workload/engine";
 import { downloadSheets } from "@/lib/workload/excel";
 import { rangeLabel, rangeMs, todayRange } from "@/lib/workload/period";
 import { useWorkload } from "@/lib/workload/store";
@@ -54,7 +54,15 @@ export default function DataPage() {
   const pendMs = (t: Task) => holdPeriods(t, now).reduce((a, p) => a + ((p.to ?? now) - p.from), 0);
   const extra = data.fields.filter((f) => f !== tf);
 
-  const download = async () => {
+  const levels = cxLevels(s);
+  const name0 = (id: number | null | undefined) => (id === null || id === undefined ? "" : (personOf(data, id)?.name ?? `#${id}`));
+
+  const download = () =>
+    build().catch((e) => {
+      console.error(e);
+      toast("The export couldn’t be created. Try again.");
+    });
+  const build = async () => {
     const head = [
       "Task ID",
       ...(tf ? [tf.label] : []),
@@ -64,7 +72,6 @@ export default function DataPage() {
       "Priority",
       "Status",
       "Source",
-      "From (e-mail)",
       "Assigned to",
       "Received",
       "Started",
@@ -72,17 +79,41 @@ export default function DataPage() {
       "SLA (h)",
       "Due",
       "On time",
+      "Waiting before start (min)",
+      "Turnaround (min)",
       "Worked (min)",
       "Pending (min)",
-      "Pending reasons",
-      "Complexity",
+      "Times pending",
+      "Pending now",
+      "Delay remarks",
       "Overtime",
       "Overtime (min)",
-      "Delay remarks",
+      // Complexity: contracts per level, the total and what the checks found.
+      ...levels.map((l) => `Complexity: ${l.name}`),
+      "Total contracts",
+      "Complexity",
+      "Expected time (min)",
+      "Handling time check",
+      "% of a day's target",
+      "Over-productive",
+      "Complexity review",
+      "Reviewed by",
+      "Reviewed on",
+      "Review note",
+      "Tagged before review",
+      "Requested to take by",
+      "E-mail from",
+      "E-mail CC",
+      "E-mail subject",
+      "Attachments",
+      "E-mail body",
       ...extra.map((f) => f.label),
     ];
     const rows = list.map((t) => {
       const d = due(t, data);
+      const chk = cxCheck(data, t);
+      const over = cxOver(data, t);
+      const holds = holdPeriods(t, now);
       return [
         t.id,
         ...(tf ? [ticketOf(data, t)] : []),
@@ -92,35 +123,62 @@ export default function DataPage() {
         PR[t.pr][0],
         ST[t.status][0],
         t.source === "outlook" ? "Outlook" : "Upload",
-        t.email?.from ?? "",
-        personOf(data, t.assignee)?.name ?? "",
+        name0(t.assignee),
         at(t.received),
         at(t.startedAt),
         at(t.doneAt),
         slaOf(t, s),
         at(d),
         t.status === "done" ? (t.doneAt! <= d ? "Yes" : "No") : now > d ? "Overdue" : "",
+        t.startedAt ? min(t.startedAt - t.received) : "",
+        t.doneAt ? min(t.doneAt - t.received) : "",
         min(taskWorkMs(data, t, now)),
         min(pendMs(t)),
-        holdPeriods(t, now).map((p) => p.reason).filter(Boolean).join("; "),
-        cxText(s, t.cx),
+        holds.length,
+        t.status === "on_hold" ? t.hold || "Yes" : "",
+        t.delay ?? "",
         t.ot ? "Yes" : "",
         t.otMin ?? "",
-        t.delay ?? "",
+        ...levels.map((l) => t.cx?.[l.id] ?? ""),
+        t.cx ? cxTotal(t.cx) : "",
+        t.cx ? cxText(s, t.cx) : "",
+        chk ? min(chk.expMs) : "",
+        chk ? (chk.flag === "slow" ? "Took longer than expected" : "OK") : "",
+        over ? over.pct : "",
+        over?.flag ? "Yes" : "",
+        t.cxReview ? (t.cxReview.verdict === "ok" ? "Confirmed" : "Corrected") : "",
+        name0(t.cxReview?.by),
+        at(t.cxReview?.at ?? null),
+        t.cxReview?.note ?? "",
+        t.cxReview?.was ? cxText(s, t.cxReview.was) : "",
+        name0(t.claim?.by),
+        t.email?.from ?? "",
+        t.email?.cc ?? "",
+        t.email?.subject ?? "",
+        (t.email?.attachments ?? []).join("; "),
+        (t.email?.body ?? "").slice(0, 32000),
         ...extra.map((f) => (t.fields[f.key] ?? "") as string | number),
       ];
     });
-    const name = `Workload-data_${unitLabel}_${rangeLabel(r, now)}`.replace(/[^A-Za-z0-9_]+/g, "-");
-    await downloadSheets(`${name}.xlsx`, [{ name: "Tickets", rows: [head, ...rows] }]).catch(() =>
-      toast("The export couldn’t be created. Try again."),
+    // One row per pending period and per history entry, keyed by task ID.
+    const pending = list.flatMap((t) =>
+      holdPeriods(t, now).map((p) => [t.id, ...(tf ? [ticketOf(data, t)] : []), at(p.from), p.to ? at(p.to) : "Still pending", min((p.to ?? now) - p.from), p.reason]),
     );
+    const history = list.flatMap((t) => t.history.map((h) => [t.id, ...(tf ? [ticketOf(data, t)] : []), at(h.at), h.text]));
+    const key = ["Task ID", ...(tf ? [tf.label] : [])];
+    const name = `Workload-data_${unitLabel}_${rangeLabel(r, now)}`.replace(/[^A-Za-z0-9_]+/g, "-");
+    await downloadSheets(`${name}.xlsx`, [
+      { name: "Tickets", rows: [head, ...rows] },
+      { name: "Pending periods", rows: [[...key, "From", "To", "Minutes", "Reason"], ...pending] },
+      { name: "Ticket history", rows: [[...key, "When", "What happened"], ...history] },
+    ]);
   };
 
   return (
     <>
       <PageHead
         title={`Data pull-out · ${unitLabel}`}
-        sub="Every ticket for the period, one row each with all its details and task fields: received, started and finished times, SLA and due time, time worked and pending, complexity and overtime. Choose a system or trade at the top to narrow it down."
+        sub="Every ticket for the period, one row each with all its details: times, SLA, time waiting, worked and pending, overtime, the complexity breakdown per level with its checks and review, the e-mail and every task field. Two more sheets list each pending period and each ticket’s history. Choose a system or trade at the top to narrow it down."
       />
       <div className="row" style={{ justifyContent: "space-between", alignItems: "flex-end", flexWrap: "wrap", gap: 10 }}>
         <div className="row" style={{ alignItems: "flex-end", flexWrap: "wrap", gap: 10 }}>
@@ -159,6 +217,7 @@ export default function DataPage() {
               <th>Received</th>
               <th>Finished</th>
               <th style={{ textAlign: "right" }}>Worked (min)</th>
+              {levels.length > 0 && <th>Complexity</th>}
             </tr>
           </thead>
           <tbody>
@@ -173,11 +232,12 @@ export default function DataPage() {
                 <td className="nowrap small">{at(t.received)}</td>
                 <td className="nowrap small">{at(t.doneAt) || "—"}</td>
                 <td style={{ textAlign: "right" }}>{min(taskWorkMs(data, t, now))}</td>
+                {levels.length > 0 && <td className="nowrap">{t.cx ? cxText(s, t.cx) : "—"}</td>}
               </tr>
             ))}
             {!list.length && (
               <tr>
-                <td colSpan={9} className="muted">
+                <td colSpan={10} className="muted">
                   No tickets for {rangeLabel(r, now)}.
                 </td>
               </tr>

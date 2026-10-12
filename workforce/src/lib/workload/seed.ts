@@ -139,7 +139,9 @@ export function seedTasks(now: number): Task[] {
   doneBy.forEach(([p, tr], i) => {
     const st = now - 4 * H + i * 14 * M - Math.floor(r() * 20) * M;
     const d = 25 + Math.floor(r() * 65);
-    mk({ trade: tr, status: "done", assignee: p, startedAt: st, doneAt: st + d * M, ot: i === 2 || i === 7, rec: st - 2 * H });
+    const t = mk({ trade: tr, status: "done", assignee: p, startedAt: st, doneAt: st + d * M, ot: i === 2 || i === 7, rec: st - 2 * H });
+    // Sample complexity tagging (one over-productive ticket: 16 Complex at 3 a day).
+    t.cx = i === 5 ? { complex: 16 } : i % 3 === 0 ? { simple: 2, medium: 1 } : i % 3 === 1 ? { medium: 1 } : { simple: 1, complex: 1 };
   });
   const ot1 = mk({ trade: "fewb", status: "done", assignee: 9, startedAt: now - 4.2 * H, doneAt: now - 3.4 * H, ot: true, rec: now - 6 * H });
   return tasks;
@@ -193,6 +195,20 @@ export function initialData(now: number, empty = false): WorkloadData {
       targets: empty ? {} : { fewb: 8, inas: 6, eu: 7, us: 6, asla: 6, lcl: 8 },
       memberTargets: {},
       ...(empty ? {} : { billing: { mode: "fixed" as const, currency: "USD", roleRates: { member: 2400 }, unitRates: { "": 9 }, unit: "tasks", when: "resolved" as const } }),
+      ...(empty
+        ? {}
+        : {
+            complexity: {
+              on: true,
+              levels: [
+                { id: "simple", name: "Simple", target: 12, aht: 20 },
+                { id: "medium", name: "Medium", target: 6, aht: 45 },
+                { id: "complex", name: "Complex", target: 3, aht: 90 },
+              ],
+              tol: 50,
+              fast: 100,
+            },
+          }),
     },
     ...(empty ? {} : { hc: sampleHc(now), pricers: [ADMIN_ID, 26] }),
     seq: 2000,

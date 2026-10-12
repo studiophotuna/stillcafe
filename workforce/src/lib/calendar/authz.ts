@@ -174,10 +174,10 @@ export function authorizeCal(a: CalAction, c: Cal, me: number): { action: CalAct
       const parent = c.O.by[a.id]?.parent;
       return ok(r.orgAdmin && (parent ? r.teamAdmin(parent) : r.sys));
     }
-    // Shift types are shared by every team: department admins.
+    // Shift types are shared by every team: managers (tower admins) and above.
     case "saveShift":
     case "deleteShift":
-      return ok(r.deptAdmin);
+      return ok(r.orgAdmin);
     case "saveHoliday": {
       const old = c.d.holidays.find((h) => h.id === a.rec.id);
       return ok(r.orgAdmin && holidayAdmin(c, r, a.rec.scope) && (!old || holidayAdmin(c, r, old.scope)));

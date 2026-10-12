@@ -4,8 +4,9 @@
  */
 import { fmtT } from "../workload/clock";
 import { CARRY_MAX, CODES, LAW, LEVELS, TYPE_L, first, isLeader } from "./constants";
-import { addDays, dowOf, fmtY, isWk, MONL, rng2 } from "./dates";
+import { addDays, dowOf, fmt, fmtY, isWk, MONL, rng2 } from "./dates";
 import { Cal, evState, logsDecision, logsSubmit } from "./engine";
+import { capHits, hitText, suggestDates } from "./leaveCap";
 import { allocProblem, hcTeamOf, mkOrg, primaryTeamOf, teamDefaults, withHcChange, type Org } from "./org";
 import { planOrgImport, type OrgRow } from "./orgImport";
 import { applyUpload, checkUpload, type UploadMode, type UploadRow } from "./uploads";
@@ -36,7 +37,7 @@ export type CalAction =
   | { type: "setShiftDay"; pid: number; date: string; shift: string }
   | { type: "holidayWork"; pid: number; date: string; code: "RTO" | "WFH" | "HOL" | null; actor: number }
   | { type: "restDayWork"; pid: number; date: string; actor: number }
-  | { type: "teamSettings"; id: string; patch: Partial<Pick<OrgNode, "mode" | "notifyAdmin" | "notifyUser" | "invite" | "defaultScope" | "costCentre" | "schedPeriod">> }
+  | { type: "teamSettings"; id: string; patch: Partial<Pick<OrgNode, "mode" | "notifyAdmin" | "notifyUser" | "invite" | "defaultScope" | "costCentre" | "schedPeriod" | "leaveMax" | "leaveMaxSys">> }
   | { type: "setSchedule"; bid: string; pids: number[]; from: string; to: string; shift: string | null; days: Partial<Record<number, SchedDay>> }
   | { type: "setBilled"; pid: number; bid: string; months: string[]; value: number | null }
   | { type: "setLinks"; links: AppLinks }
@@ -200,8 +201,7 @@ export function leaveRule(c: Cal, p: CalPerson, type: Code, n: number): string {
   }
   if (type === "SPL") {
     if (!p.soloParent) return "Solo parent leave is for solo parents. Ask an admin to mark you as a solo parent.";
-    const left = LAW.spl - c.splUsedOf(p);
-    if (n > left) return `Solo parent leave is ${LAW.spl} working days a year; you have ${Math.max(0, left)} left.`;
+    // Beyond the 7 days a year: filed as leave without pay (see lwopFor).
   }
   return "";
 }
@@ -214,7 +214,7 @@ function decideOne(q: LeaveRequest, bid: string, st: "approved" | "declined", ac
 }
 
 /** Create a request with per-team approvals; returns the new data, the request and its notifications. */
-export function createRequest(c: Cal, pid: number, f: RequestForm, adminBid: string | null, now: number) {
+export function createRequest(c: Cal, pid: number, f: RequestForm, adminBid: string | null, now: number, lwop = 0, extra: string[] = []) {
   const d = c.d;
   const approvals: LeaveRequest["approvals"] = {};
   const p = c.person(pid);
@@ -235,9 +235,10 @@ export function createRequest(c: Cal, pid: number, f: RequestForm, adminBid: str
     reason: f.reason || "",
     created: c.today,
     approvals,
+    ...(lwop > 0 ? { lwop } : {}),
   };
   const next: CalendarData = { ...d, requests: [q].concat(d.requests), seq: d.seq + 1 };
-  return { data: pushLogs(next, logsSubmit(new Cal(next, c.today), q, fmtT(now), adminBid)), q };
+  return { data: pushLogs(next, logsSubmit(new Cal(next, c.today), q, fmtT(now), adminBid, extra)), q };
 }
 
 /**
@@ -288,15 +289,46 @@ function applyInner(d: CalendarData, a: CalAction, today: string, now: number): 
       const who = c.person(a.pid);
       const rule = leaveRule(c, who, f.type, n);
       if (rule && !a.adminBid) return { data: d, error: rule };
-      const { data, q } = createRequest(c, a.pid, f, a.adminBid, now);
+      // Beyond the balance: still filed, the extra days as leave without pay.
+      const lwop = c.lwopFor(who, f.type, f.start, n);
+      // Days where the team's leave limit is already reached: still filed, with a heads-up.
+      const hits = capHits(c, a.pid, f.start, f.type === "HD" ? f.start : f.end, f.type);
+      const full = [...new Set(hits.map((h) => h.date))];
+      const warn = full.length ? [`Leave limit already reached: ${[...new Set(hits.map(hitText))].join("; ")}. Approving goes past it.`] : [];
+      const { data: data0, q } = createRequest(c, a.pid, f, a.adminBid, now, lwop, warn);
+      // Tell the requester too (Notifications), with other dates to try.
+      const tries = full.length ? suggestDates(c, a.pid, f.start, f.type === "HD" ? f.start : f.end, f.type) : [];
+      const data = full.length
+        ? pushLogs(data0, [
+            {
+              kind: "email",
+              at: fmtT(now),
+              did: Object.keys(q.approvals)[0] ?? "",
+              toIds: [a.pid],
+              toLine: `${who.name} <${who.email}>`,
+              toShort: who.name,
+              subject: `Leave limit reached: ${CODES[f.type].label}, ${rng2(q.start, q.end)}`,
+              lines: [
+                `Hi ${first(who.name)},`,
+                `The most people allowed on leave is already reached on ${full.map(fmt).join(", ")} (${[...new Set(hits.map(hitText))].join("; ")}).`,
+                tries.length ? `Dates with room: ${tries.map((t) => (t.start === t.end ? fmt(t.start) : rng2(t.start, t.end))).join(", ")}. You can cancel this request and file for one of them.` : "There are no free dates nearby.",
+                "Your request was still sent; your approver can decide on it.",
+              ],
+            },
+          ])
+        : data0;
       const p = c.person(a.pid);
-      if (a.adminBid && q.approvals[a.adminBid] === "approved") return { data, message: `${CODES[f.type].label} recorded for ${first(p.name)}. Notifications sent.` };
+      const unpaid =
+        (lwop > 0 ? ` ${lwop === n ? "It’s" : `${lwop} of the ${n} days are`} leave without pay (no balance left).` : "") +
+        (full.length ? ` Heads-up: the most people allowed on leave is already reached on ${full.map(fmt).join(", ")}; your approver will see this.` : "");
+      if (a.adminBid && q.approvals[a.adminBid] === "approved") return { data, message: `${CODES[f.type].label} recorded for ${first(p.name)}. Notifications sent.${unpaid}` };
       const pend = Object.keys(q.approvals).filter((k) => q.approvals[k] === "pending").map((k) => c.O.by[k].name);
       return {
         data,
-        message: pend.length
-          ? `Request sent. The ${pend.join(" and ")} admin${pend.length > 1 ? "s" : ""} will get an email to approve it.`
-          : "Approved automatically. It’s on the calendar now.",
+        message:
+          (pend.length
+            ? `Request sent. The ${pend.join(" and ")} admin${pend.length > 1 ? "s" : ""} will get an email to approve it.`
+            : "Approved automatically. It’s on the calendar now.") + unpaid,
       };
     }
     case "decide": {
@@ -438,6 +470,13 @@ function applyInner(d: CalendarData, a: CalAction, today: string, now: number): 
       for (const k of ["notifyAdmin", "notifyUser", "invite"] as const) if (typeof p[k] === "boolean") patch[k] = p[k];
       if (typeof p.costCentre === "string") patch.costCentre = p.costCentre.trim().slice(0, 40);
       if (p.schedPeriod === "week" || p.schedPeriod === "month") patch.schedPeriod = p.schedPeriod;
+      // Leave limit per day: whole people, 0 = none; per system only for the team's own systems.
+      const cap = (x: unknown) => Math.max(0, Math.min(999, Math.round(Number(x) || 0)));
+      if (p.leaveMax !== undefined) patch.leaveMax = cap(p.leaveMax);
+      if (p.leaveMaxSys && typeof p.leaveMaxSys === "object") {
+        const mine = new Set(c.O.kids(a.id, "system").map((x) => x.id));
+        patch.leaveMaxSys = Object.fromEntries(Object.entries(p.leaveMaxSys).filter(([k]) => mine.has(k)).map(([k, v]) => [k, cap(v)]).filter(([, v]) => (v as number) > 0));
+      }
       if (!c.O.by[a.id] || !Object.keys(patch).length) return { data: d };
       return { data: setNode(d, a.id, patch), message: "Saved." };
     }

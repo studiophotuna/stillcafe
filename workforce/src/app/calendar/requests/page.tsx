@@ -82,7 +82,10 @@ export default function MyRequestsPage() {
                   </div>
                 </td>
                 <td className="nowrap">{rng2(q.start, q.end)}</td>
-                <td>{c.reqDays(q)}</td>
+                <td className="nowrap">
+                  {c.reqDays(q)}
+                  {!!q.lwop && <span className="tag tag-amber" title="Filed with no balance left: these days are leave without pay" style={{ marginLeft: 6 }}>LWOP {q.lwop}</span>}
+                </td>
                 <td style={{ color: "var(--color-neutral-800)" }}>{q.reason || "—"}</td>
                 <td>
                   <div className="tags">

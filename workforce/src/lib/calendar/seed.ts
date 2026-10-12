@@ -14,7 +14,7 @@ export const NODES0: OrgNode[] = [
   { id: "t_rm", type: "tower", name: "A&S Support - Rate Management", parent: "bss", admins: [23] },
   { id: "t_com", type: "tower", name: "A&S Support - Commercial", parent: "bss" },
   { id: "t_cus", type: "tower", name: "Customs", parent: "bss" },
-  { id: "rm", type: "branch", name: "Rate Management", parent: "t_rm", ...teamDefaults({ admins: [23] }) },
+  { id: "rm", type: "branch", name: "Rate Management", parent: "t_rm", ...teamDefaults({ admins: [23] }), leaveMax: 3 },
   { id: "gpm", type: "system", name: "GPM", parent: "rm" },
   { id: "rcm", type: "system", name: "RCM", parent: "rm" },
   { id: "fewb", type: "trade", name: "FEWB", parent: "gpm" },
@@ -195,7 +195,7 @@ export function initialCalendar(today: string): CalendarData {
 export function emptyCalendar(): CalendarData {
   return {
     people: [],
-    nodes: JSON.parse(JSON.stringify(NODES0.filter((n) => n.id !== "cs").map((n) => (n.id === "rm" || n.admins ? { ...n, admins: [] } : n)))),
+    nodes: JSON.parse(JSON.stringify(NODES0.filter((n) => n.id !== "cs").map(({ leaveMax: _m, ...n }) => (n.id === "rm" || n.admins ? { ...n, admins: [] } : n)))),
     requests: [],
     overrides: {},
     roster: {},

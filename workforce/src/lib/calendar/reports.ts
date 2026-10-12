@@ -110,7 +110,7 @@ export function buildReport(c: Cal, type: ReportType, scope: string, from: strin
   }
   if (type === "leave") {
     desc = "Approved leave taken in the range by type, plus each person’s balances as of today. VL and SL share one pool (25 a year, pro-rated in the hire year, + up to 5 carried over); EL has its own 5 days. Maternity, paternity and solo parent leave are counted separately.";
-    rows.push(["Name", "Email", "Tower", "Team", "VL", "SL", "EL", "Half-days", "Maternity", "Paternity", "Solo parent", "Leave days in range", "VL+SL entitlement", `Carried over from ${+year - 1}`, `VL+SL used ${year}`, "VL+SL remaining", "EL entitlement", `EL used ${year}`, "EL remaining", "Pending days", `Carries into ${+year + 1}`]);
+    rows.push(["Name", "Email", "Tower", "Team", "VL", "SL", "EL", "Half-days", "Maternity", "Paternity", "Solo parent", "Leave days in range", "VL+SL entitlement", `Carried over from ${+year - 1}`, `VL+SL used ${year}`, "VL+SL remaining", "EL entitlement", `EL used ${year}`, "EL remaining", "Pending days", `Carries into ${+year + 1}`, "Leave without pay (days)"]);
     for (const p of ppl) {
       const rq = c.reqsOf(p.id);
       const cnt: Record<string, number> = { VL: 0, SL: 0, EL: 0, HD: 0, ML: 0, PL: 0, SPL: 0 };
@@ -125,9 +125,11 @@ export function buildReport(c: Cal, type: ReportType, scope: string, from: strin
       const pend = rq.filter(anyPending).reduce((a, q) => a + c.reqDays(q), 0);
       const pth = path(p);
       const lv = cnt.VL + cnt.SL + cnt.EL + cnt.HD * 0.5 + cnt.ML + cnt.PL + cnt.SPL;
-      rows.push([p.name, p.email, pth[0], pth[1], cnt.VL, cnt.SL, cnt.EL, cnt.HD, cnt.ML, cnt.PL, cnt.SPL, lv, c.entOf(p), c.carryOf(p), used, pool - used, p.elEnt ?? 5, elU, (p.elEnt ?? 5) - elU, pend, c.carryNext(p)]);
+      // Leave without pay: approved requests in the range filed with no balance left.
+      const lwop = rq.filter((q) => allApproved(q) && q.lwop && q.start <= to && q.end >= from).reduce((a, q) => a + (q.lwop ?? 0), 0);
+      rows.push([p.name, p.email, pth[0], pth[1], cnt.VL, cnt.SL, cnt.EL, cnt.HD, cnt.ML, cnt.PL, cnt.SPL, lv, c.entOf(p), c.carryOf(p), used, pool - used, p.elEnt ?? 5, elU, (p.elEnt ?? 5) - elU, pend, c.carryNext(p), lwop]);
     }
-    tiles.push({ k: "People", v: rows.length - 1 }, { k: "VL days", v: sum(4) }, { k: "SL days", v: sum(5) }, { k: "EL days", v: sum(6) }, { k: "Half-days", v: sum(7) }, { k: "Pending days", v: sum(19) });
+    tiles.push({ k: "People", v: rows.length - 1 }, { k: "VL days", v: sum(4) }, { k: "SL days", v: sum(5) }, { k: "EL days", v: sum(6) }, { k: "Half-days", v: sum(7) }, { k: "Pending days", v: sum(19) }, { k: "Without pay", v: sum(21), m: "leave without pay days" });
   }
   if (type === "holiday") {
     // Department / Tower / Team / Name, then one column per holiday in the date range with each person's status.

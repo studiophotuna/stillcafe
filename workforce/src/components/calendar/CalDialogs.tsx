@@ -5,7 +5,7 @@ import { useMemo, useState } from "react";
 import { Modal } from "@/components/Dialogs";
 import { Blueprint, Icon } from "@/components/ui";
 import {
-  ANNUAL, CARRY_MAX, LAW, LEDGER_START, reqTypesFor, APPR_WORD, BCP_ST, BUCKETS, CI_DESC, CODES, HTYPE, LEVELS, LEVEL_RANK, OOO, POOL, TYPE_L, first, isLeader,
+  ANNUAL, CARRY_MAX, LAW, LEDGER_START, reqTypesFor, APPR_WORD, BCP_ST, BUCKETS, CI_DESC, CODES, HTYPE, LEVELS, LEVEL_RANK, OOO, TYPE_L, first, isLeader,
 } from "@/lib/calendar/constants";
 import { DOW, addDays, daysInMonth, dowOf, fmt, isWk, fmtY, MONL, rng2 } from "@/lib/calendar/dates";
 import { downloadMembersTemplate, downloadScheduleTemplate, readCalendarUpload } from "@/lib/calendar/excel";
@@ -15,6 +15,7 @@ import { parseOrgText, planOrgImport } from "@/lib/calendar/orgImport";
 import { checkUpload, type UploadRow } from "@/lib/calendar/uploads";
 import { useCalView } from "@/lib/calendar/useCalView";
 import { holidayAdmin, rightsOf } from "@/lib/calendar/authz";
+import { capHits, hitText, suggestDates } from "@/lib/calendar/leaveCap";
 import { EMAIL_RE, leaveRule, type SchedDay } from "@/lib/calendar/actions";
 import { prorate } from "@/lib/calendar/engine";
 import type { BcpStatus, Bucket, CalPerson, Code, HolidayType, Level } from "@/lib/calendar/types";
@@ -50,10 +51,10 @@ function RequestDialog({ date }: { date?: string }) {
   const isHalf = f.type === "HD";
   const nReq = isHalf ? (c.workdays(f.start, f.start) ? 0.5 : 0) : f.end < f.start ? 0 : c.reqDays(f);
   const meP = v.meP;
-  const remaining = c.poolOf(meP) - c.usedOf(meP);
-  const elLeft = (meP.elEnt ?? 5) - c.elUsedOf(meP);
-  const splLeft = LAW.spl - c.splUsedOf(meP);
-  const left = POOL.includes(f.type) ? remaining - nReq : f.type === "EL" ? elLeft - nReq : f.type === "SPL" ? splLeft - nReq : null;
+  // Balance left after approved leave and requests still waiting; beyond it is leave without pay.
+  const bal0 = c.balanceLeft(meP, f.type, f.start);
+  const left = bal0 === null ? null : bal0 - nReq;
+  const lwop = nReq ? c.lwopFor(meP, f.type, f.start, nReq) : 0;
   const bal = f.type === "EL" ? "emergency leave" : f.type === "SPL" ? "solo parent leave" : "VL + SL";
   const unit = f.type === "ML" ? "calendar day" : "working day";
   const rule = nReq ? leaveRule(c, meP, f.type, nReq) : "";
@@ -68,9 +69,12 @@ function RequestDialog({ date }: { date?: string }) {
               ? ` · up to ${LAW.pl} per delivery, for the first 4 deliveries`
               : left === null
                 ? " · doesn’t use your leave balance"
-                : left < 0
-                  ? ` · this is more than your ${bal} balance`
+                : lwop > 0
+                  ? ` · you have ${Math.max(0, bal0 ?? 0)} ${bal} days left, so ${lwop === nReq ? "this is" : `${lwop} day${lwop === 1 ? "" : "s"} will be`} leave without pay (LWOP). You can still file it.`
                   : ` · ${left} ${bal} days left after this`);
+  // Leave limit per day: days already full (approved leave only), and other dates to try.
+  const hits = nReq ? capHits(c, s.me, f.start, isHalf ? f.start : f.end, f.type) : [];
+  const tries = hits.length ? suggestDates(c, s.me, f.start, isHalf ? f.start : f.end, f.type) : [];
   // One approval: the main team (primary allocation).
   const mainTeam = v.myBranches.find((b) => b.id === primaryTeamOf(c.O, meP)) ?? v.myBranches[0];
   const routing = (mainTeam ? [mainTeam] : []).map((b) => {
@@ -122,6 +126,28 @@ function RequestDialog({ date }: { date?: string }) {
           )}
         </div>
         <Note>{daysLine}</Note>
+        {hits.length > 0 && (
+          <div className="banner" role="alert" style={{ background: "#fff4dc", borderColor: "#e8b44a", display: "flex", flexDirection: "column", gap: 6 }}>
+            <strong>The most people allowed on leave is already reached on {hits.length === 1 ? "this date" : "some of these dates"}.</strong>
+            <span>
+              {[...new Set(hits.map(hitText))].slice(0, 4).join(" · ")}
+              {hits.length > 4 ? ` · and ${hits.length - 4} more` : ""}
+            </span>
+            {tries.length > 0 ? (
+              <span className="row" style={{ gap: 6, flexWrap: "wrap", alignItems: "center" }}>
+                Try instead:
+                {tries.map((t) => (
+                  <button key={t.start} className="btn btn-secondary btn-36" onClick={() => setF((x) => ({ ...x, start: t.start, end: t.end }))}>
+                    {isHalf ? fmt(t.start) : rng2(t.start, t.end)}
+                  </button>
+                ))}
+              </span>
+            ) : (
+              <span>No free dates nearby.</span>
+            )}
+            <span className="small">You can still submit for these dates; your approver will see that the limit is reached.</span>
+          </div>
+        )}
         <div className="field">
           <label htmlFor="rq-reason">Reason (optional)</label>
           <textarea id="rq-reason" className="input" value={f.reason} onChange={(e) => set("reason", e.target.value)} placeholder="Visible to your team admins" style={{ minHeight: 70 }} />

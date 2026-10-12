@@ -8,8 +8,11 @@ import type { CalendarData, LeaveRequest } from "./types";
 
 const TODAY = "2026-09-24";
 const NOW = Date.parse("2026-09-24T10:30:00+08:00");
-// The sample calendar without its demo tracker entries and leave cover, so tests start from none.
-const fresh = () => ({ ...initialCalendar(TODAY), kpi: {}, issues: [], covers: [] });
+// The sample calendar without its demo tracker entries, leave cover and leave limit, so tests start from none.
+const fresh = (): CalendarData => {
+  const d = initialCalendar(TODAY);
+  return { ...d, kpi: {}, issues: [], covers: [], nodes: d.nodes.map(({ leaveMax: _m, ...n }) => n) };
+};
 const run = (d: CalendarData, a: Parameters<typeof applyCalAction>[1]) => applyCalAction(d, a, TODAY, NOW);
 const ANA = 0; // LCL (Rate Management) + Customer Service; pattern B; employee view
 const SAM = 23; // Rate Management admin
@@ -1256,7 +1259,8 @@ describe("role scopes", async () => {
     expect(allowed(c, SAM, { type: "addNode", ntype: "branch", parent: "t_rm", name: "New", actor: SAM })).toBe(true);
     expect(allowed(c, SAM, { type: "renameNode", id: "cs", name: "CS" })).toBe(false); // another tower
     expect(allowed(c, SAM, { type: "deleteNode", id: "t_rm" })).toBe(false); // needs the department
-    expect(allowed(c, SAM, { type: "saveShift", orig: null, rec: c.d.shifts[0] })).toBe(false); // shared by everyone
+    expect(allowed(c, SAM, { type: "saveShift", orig: null, rec: c.d.shifts[0] })).toBe(true); // managers edit shift types
+    expect(allowed(c, KIM, { type: "saveShift", orig: null, rec: c.d.shifts[0] })).toBe(false);
     const hol = (scope: string) => ({ type: "saveHoliday" as const, rec: { id: "Hx", date: "2026-12-01", name: "x", type: "special" as const, scope }, isNew: true });
     expect(allowed(c, SAM, hol("t_rm"))).toBe(true);
     expect(allowed(c, SAM, hol("all"))).toBe(false);
@@ -1282,4 +1286,78 @@ describe("role scopes", async () => {
     expect(rightsOf(c, 10).teamAdmin("cs")).toBe(false);
   });
   const NODES = () => fresh().nodes;
+});
+
+describe("leave without pay and the leave limit per day", async () => {
+  const { approveHits, capHits, suggestDates } = await import("./leaveCap");
+  const vl = (start: string, end = start) => ({ type: "VL" as const, start, end, half: "AM" as const, reason: "" });
+
+  it("files leave past the balance as leave without pay, counting requests still waiting", () => {
+    const d = fresh();
+    const c0 = new Cal(d, TODAY);
+    const ana = c0.person(ANA);
+    const left = c0.balanceLeft(ana, "VL", "2026-10-12")!; // after approved leave and requests still waiting
+    // Leave exactly 1 day: count the rest as used before the app.
+    d.people = d.people.map((p) => (p.id === ANA ? { ...p, ytd: (p.ytd || 0) + left - 1, ytdYear: 2026 } : p));
+    expect(new Cal(d, TODAY).balanceLeft(new Cal(d, TODAY).person(ANA), "VL", "2026-10-12")).toBe(1);
+    const r1 = run(d, { type: "submitRequest", pid: ANA, form: vl("2026-10-12", "2026-10-14"), adminBid: null, actor: ANA });
+    expect(r1.error).toBeUndefined();
+    expect(r1.data.requests[0].lwop).toBe(2);
+    expect(r1.message).toMatch(/2 of the 3 days are leave without pay/);
+    // The next one finds no balance left (the first is still waiting).
+    const r2 = run(r1.data, { type: "submitRequest", pid: ANA, form: vl("2026-10-19"), adminBid: null, actor: ANA });
+    expect(r2.data.requests[0].lwop).toBe(1);
+    // Unpaid days don't use the balance once approved.
+    const approve = (q: LeaveRequest) => ({ ...q, approvals: Object.fromEntries(Object.entries(q.approvals).map(([k, v]) => [k, v === "pending" ? ("approved" as const) : v])) });
+    const c = new Cal({ ...r2.data, requests: r2.data.requests.map(approve) }, TODAY);
+    expect(c.poolOf(c.person(ANA)) - c.usedOf(c.person(ANA))).toBe(0);
+    // Leave types without a balance never are.
+    expect(new Cal(r2.data, TODAY).lwopFor(c.person(ANA), "BT", "2026-10-20", 3)).toBe(0);
+  });
+
+  it("warns past the team's or a system's limit (approved leave only), suggests dates and checks approvals", () => {
+    const day = "2026-11-10";
+    let d = fresh();
+    d.nodes = d.nodes.map((n) => (n.id === "rm" ? { ...n, leaveMax: 1 } : n));
+    // Someone else's pending request doesn't count; an approved one does.
+    d = run(d, { type: "submitRequest", pid: 15, form: vl(day), adminBid: null, actor: 15 }).data;
+    expect(capHits(new Cal(d, TODAY), ANA, day, day)).toHaveLength(0);
+    d = run(d, { type: "submitRequest", pid: 8, form: vl(day), adminBid: "rm", actor: SAM }).data;
+    const c = new Cal(d, TODAY);
+    const hits = capHits(c, ANA, day, day);
+    expect(hits).toEqual([expect.objectContaining({ date: day, unit: "rm", n: 1, max: 1 })]);
+    const tries = suggestDates(c, ANA, day, day, "VL");
+    expect(tries.length).toBeGreaterThan(0);
+    expect(tries.every((t) => t.start !== day && !capHits(c, ANA, t.start, t.end).length)).toBe(true);
+    // Filing anyway works, with a heads-up to the requester and a line for the approvers.
+    const r = run(d, { type: "submitRequest", pid: ANA, form: vl(day), adminBid: null, actor: ANA });
+    expect(r.data.requests[0].pid).toBe(ANA);
+    expect(r.message).toMatch(/Heads-up: the most people allowed on leave is already reached/);
+    expect(r.data.logs.some((l) => l.toIds.includes(ANA) && /Leave limit reached/.test(l.subject))).toBe(true);
+    expect(r.data.logs.some((l) => l.cta && l.lines.some((x) => /Leave limit already reached/.test(x)))).toBe(true);
+
+    // Per system: only people in that system count and are limited.
+    let e = fresh();
+    e.nodes = e.nodes.map((n) => (n.id === "rm" ? { ...n, leaveMaxSys: { rcm: 1 } } : n));
+    e = run(e, { type: "submitRequest", pid: 16, form: vl(day), adminBid: "rm", actor: SAM }).data; // LCL (RCM)
+    const ce = new Cal(e, TODAY);
+    expect(capHits(ce, ANA, day, day).map((h) => h.unit)).toEqual(["rcm"]);
+    expect(capHits(ce, 5, day, day)).toHaveLength(0); // FEWB (GPM)
+
+    // Approving several at once counts the earlier ones in the batch.
+    let f = fresh();
+    f.nodes = f.nodes.map((n) => (n.id === "rm" ? { ...n, leaveMax: 1, mode: "approval" as const } : n));
+    f = run(f, { type: "submitRequest", pid: 15, form: vl(day), adminBid: null, actor: 15 }).data;
+    f = run(f, { type: "submitRequest", pid: 16, form: vl(day), adminBid: null, actor: 16 }).data;
+    const qs = f.requests.filter((q) => q.start === day);
+    const list = approveHits(new Cal(f, TODAY), qs.slice().reverse());
+    expect(list.map((x) => x.q.pid)).toEqual([16]);
+  });
+
+  it("saves the limits from team settings (whole people; systems of the team only)", () => {
+    const r = run(fresh(), { type: "teamSettings", id: "rm", patch: { leaveMax: 3.4, leaveMaxSys: { rcm: 2, gpm: 0, cs: 5 } } });
+    const rm = r.data.nodes.find((n) => n.id === "rm")!;
+    expect(rm.leaveMax).toBe(3);
+    expect(rm.leaveMaxSys).toEqual({ rcm: 2 });
+  });
 });

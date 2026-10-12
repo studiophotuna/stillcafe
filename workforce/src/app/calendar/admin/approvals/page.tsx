@@ -10,6 +10,8 @@ import { approversOf } from "@/lib/calendar/org";
 import { fmt, rng2 } from "@/lib/calendar/dates";
 import { useCalendar } from "@/lib/calendar/store";
 import { useCalView } from "@/lib/calendar/useCalView";
+import { approveHits, capHits, hitText, type CapHit } from "@/lib/calendar/leaveCap";
+import { Modal } from "@/components/Dialogs";
 
 export default function ApprovalsPage() {
   const s = useCalendar();
@@ -64,11 +66,22 @@ export default function ApprovalsPage() {
       else n.add(id);
       return n;
     });
+  // Leave limit per day: approving past it asks first.
+  const [warn, setWarn] = useState<{ list: { q: LeaveRequest; hits: CapHit[] }[]; go: () => void } | null>(null);
+  const approveWith = (qs: LeaveRequest[], go: () => void) => {
+    const list = approveHits(c, qs);
+    if (list.length) setWarn({ list, go });
+    else go();
+  };
   const decideSel = (st: "approved" | "declined") => {
     if (!picked.length) return;
     // One call per deciding team.
-    for (const b of [...new Set(picked.map(tb))]) s.run({ type: "decideMany", rids: picked.filter((q) => tb(q) === b).map((q) => q.id), bid: b, st, actor: s.me });
-    setSel(new Set());
+    const go = () => {
+      for (const b of [...new Set(picked.map(tb))]) s.run({ type: "decideMany", rids: picked.filter((q) => tb(q) === b).map((q) => q.id), bid: b, st, actor: s.me });
+      setSel(new Set());
+    };
+    if (st === "approved") approveWith(picked, go);
+    else go();
   };
   return (
     <>
@@ -153,7 +166,10 @@ export default function ApprovalsPage() {
                       </div>
                     </td>
                     <td className="nowrap">{rng2(q.start, q.end)}</td>
-                    <td>{c.reqDays(q)}</td>
+                    <td className="nowrap">
+                  {c.reqDays(q)}
+                  {!!q.lwop && <span className="tag tag-amber" title="Filed with no balance left: these days are leave without pay" style={{ marginLeft: 6 }}>LWOP {q.lwop}</span>}
+                </td>
                     <td>
                       <span className={"tag " + APPR_TAG[st]}>{APPR_WORD[st]}</span>
                     </td>
@@ -219,8 +235,23 @@ export default function ApprovalsPage() {
                       {CODES[q.type].label + (q.half ? (q.half === "PM" ? " · PM" : " · AM") : "")}
                     </div>
                   </td>
-                  <td className="nowrap">{rng2(q.start, q.end)}</td>
-                  <td>{c.reqDays(q)}</td>
+                  <td className="nowrap">
+                    {rng2(q.start, q.end)}
+                    {(() => {
+                      const h = capHits(c, q.pid, q.start, q.end, q.type);
+                      return h.length ? (
+                        <div>
+                          <span className="tag tag-amber" title={[...new Set(h.map(hitText))].join("\n")}>
+                            Leave limit reached · {new Set(h.map((x) => x.date)).size} day{new Set(h.map((x) => x.date)).size === 1 ? "" : "s"}
+                          </span>
+                        </div>
+                      ) : null;
+                    })()}
+                  </td>
+                  <td className="nowrap">
+                  {c.reqDays(q)}
+                  {!!q.lwop && <span className="tag tag-amber" title="Filed with no balance left: these days are leave without pay" style={{ marginLeft: 6 }}>LWOP {q.lwop}</span>}
+                </td>
                   <td style={{ color: "var(--color-neutral-800)" }}>{q.reason || "—"}</td>
                   <td className="small" style={{ fontSize: 13 }}>
                     {assigned(q.pid) !== undefined ? (
@@ -250,7 +281,7 @@ export default function ApprovalsPage() {
                         <Icon name="x" size={16} />
                         Decline
                       </button>
-                      <Blueprint as="button" className="btn btn-primary btn-36" onClick={() => s.run({ type: "decide", rid: q.id, bid, st: "approved", actor: s.me })}>
+                      <Blueprint as="button" className="btn btn-primary btn-36" onClick={() => approveWith([q], () => s.run({ type: "decide", rid: q.id, bid, st: "approved", actor: s.me }))}>
                         <Icon name="check" size={16} />
                         Approve
                       </Blueprint>
@@ -263,6 +294,36 @@ export default function ApprovalsPage() {
             })}
           </tbody>
         </table>
+        {warn && (
+          <Modal onClose={() => setWarn(null)} width={560} pad>
+            <div className="dialog-title" style={{ fontSize: 22 }}>
+              Leave limit reached
+            </div>
+            <span>Approving {warn.list.length === 1 ? "this request" : "these requests"} puts more people on leave than the team allows on:</span>
+            <ul style={{ margin: 0, paddingLeft: 18, display: "flex", flexDirection: "column", gap: 4 }}>
+              {warn.list.map(({ q, hits }) => (
+                <li key={q.id}>
+                  <strong>{nameOf(q.pid)}</strong> ({rng2(q.start, q.end)}): {[...new Set(hits.map(hitText))].slice(0, 3).join(" · ")}
+                  {hits.length > 3 ? ` · and ${hits.length - 3} more` : ""}
+                </li>
+              ))}
+            </ul>
+            <div className="dialog-actions" style={{ gap: 10 }}>
+              <button className="btn btn-secondary btn-40" onClick={() => setWarn(null)}>
+                Cancel
+              </button>
+              <button
+                className="btn btn-primary btn-40"
+                onClick={() => {
+                  warn.go();
+                  setWarn(null);
+                }}
+              >
+                Approve anyway
+              </button>
+            </div>
+          </Modal>
+        )}
         {!pending.length && <div style={{ padding: "28px 14px", color: "var(--color-neutral-700)" }}>Nothing waiting for approval in {v.multi ? v.unitLabel : v.branch.name}{who === "all" ? "" : " for this approver"}{ql ? " matching your search" : ""}.</div>}
       </Blueprint>
       )}

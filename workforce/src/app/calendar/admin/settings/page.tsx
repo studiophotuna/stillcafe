@@ -19,6 +19,29 @@ export default function SettingsPage() {
   // Admins by role: the team's leads, its tower's managers and its department's directors.
   const byRole = [...new Set(s.cal.O.anc(b.id).flatMap((n) => roleAdminsOf(s.cal.O, n)))].map((i) => s.cal.people.get(i)).filter((p) => !!p);
   const set = (patch: TeamPatch) => s.run({ type: "teamSettings", id: b.id, patch });
+  const systems = s.cal.O.kids(b.id, "system");
+  const capInput = (id: string, label: string, val: number | undefined, save: (n: number) => void) => (
+    <div key={id + (val ?? "")} className="row" style={{ gap: 10, alignItems: "center" }}>
+      <label htmlFor={id} style={{ minWidth: 120 }}>
+        {label}
+      </label>
+      <input
+        id={id}
+        className="input"
+        type="number"
+        min={0}
+        step={1}
+        placeholder="No limit"
+        defaultValue={val || ""}
+        style={{ width: 110 }}
+        onBlur={(e) => {
+          const n = Math.max(0, Math.round(Number(e.target.value) || 0));
+          if (n !== (val ?? 0)) save(n);
+        }}
+      />
+      <span className="small">people a day</span>
+    </div>
+  );
   const cands = s.data.people
     .filter((p) => isLeader(p.level) && s.cal.O.inN(p, b.id) && !admins.includes(p.id) && !(p.resign && p.resign < s.today))
     .sort((x, y) => x.name.localeCompare(y.name));
@@ -126,6 +149,22 @@ export default function SettingsPage() {
             <Seg name="schedper" value={b.schedPeriod ?? "week"} options={[["week", "Week"], ["month", "Month"]]} onChange={(val) => set({ schedPeriod: val })} />
             <span className="small">Update schedules (Calendar) opens on a week or a month. Admins can still switch for a single update.</span>
           </div>
+        </Blueprint>
+        <Blueprint as="section" className="panel" style={{ gap: 10 }}>
+          <h2 className="h2">Leave limit per day</h2>
+          <span className="small" style={{ fontSize: 13 }}>
+            Most people on approved leave on the same day. Someone filing for a day that’s already full is told and shown other dates, but can still file; approvers are
+            warned before approving past it. Leave the box empty for no limit.
+          </span>
+          {capInput("lm-team", "Whole team", b.leaveMax, (n) => set({ leaveMax: n }))}
+          {systems.length > 0 && (
+            <>
+              <span className="small" style={{ fontSize: 12 }}>Per system (optional)</span>
+              {systems.map((sy) =>
+                capInput("lm-" + sy.id, sy.name, b.leaveMaxSys?.[sy.id], (n) => set({ leaveMaxSys: { ...(b.leaveMaxSys ?? {}), [sy.id]: n } })),
+              )}
+            </>
+          )}
         </Blueprint>
         <Blueprint as="section" className="panel" style={{ gap: 10 }}>
           <h2 className="h2">Leave policy</h2>

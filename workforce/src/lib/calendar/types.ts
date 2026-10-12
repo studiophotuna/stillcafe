@@ -25,6 +25,10 @@ export interface OrgNode {
   costCentre?: string;
   /** How admins plan this team's schedules: a week or a month at a time (default week). */
   schedPeriod?: "week" | "month";
+  /** Most people on approved leave on the same day (team-wide); 0 / missing = no limit. */
+  leaveMax?: number;
+  /** The same per system of the team (system id → most on leave per day). */
+  leaveMaxSys?: Record<string, number>;
 }
 
 export interface QuickLink {
@@ -114,6 +118,8 @@ export interface LeaveRequest {
   approvals: Record<string, ApprovalState>;
   /** Per team id: who approved or declined it, and when (missing when approved automatically). */
   decided?: Record<string, { by: number; at: string }>;
+  /** Days of it that are leave without pay: filed when the balance had run out (they don't use the balance). */
+  lwop?: number;
 }
 
 export interface Shift {
