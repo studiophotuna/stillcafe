@@ -761,6 +761,31 @@ export function importRows(d: WorkloadData, checked: CheckedRow[], now: number):
   return addTasks({ ...d, seq }, nt, " from upload", now);
 }
 
+/**
+ * One task typed in by hand (Add task). Checked like an upload row, but every required
+ * field must be filled in now: the form is meant to carry the task's full details.
+ */
+export function addOneTask(d: WorkloadData, row: UploadRow, by: number, now: number): Outcome {
+  const [c] = checkRows([row], d.fields, d.org, now, d.settings.taskTypes);
+  if (!c?.ok || !c.task) return { data: d, message: c?.msg ?? "Nothing to add." };
+  const miss = missingRequired(d.fields, c.task.fields);
+  if (miss.length) return { data: d, message: `Fill in ${miss.join(", ")}.` };
+  const { received, ...task } = c.task;
+  const name = d.people.find((p) => p.id === by)?.name ?? "an admin";
+  const t = withSla(
+    {
+      ...blankTask("T-" + d.seq, now),
+      ...task,
+      received: received ?? now,
+      source: "upload" as const,
+      email: null,
+      history: [{ at: now, text: `Added by hand by ${name}` + (received ? ` (received ${fmtT(received)})` : "") }],
+    },
+    d.settings,
+  );
+  return { ...addTasks({ ...d, seq: d.seq + 1 }, [t], "", now), message: `${t.id} added to the queue.` };
+}
+
 // ── metrics ──
 
 /** Fraction of the person's shift that has passed (0–1). Metrics are pro-rated by this. */

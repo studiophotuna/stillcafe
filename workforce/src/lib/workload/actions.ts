@@ -20,6 +20,7 @@ import {
   holdTask,
   setDelay,
   importRows,
+  addOneTask,
   resumeTask,
   setPriority,
   setTaskType,
@@ -68,6 +69,7 @@ export type Action =
   | { type: "assign"; id: string; pid: number | null }
   | { type: "checkMail" }
   | { type: "importRows"; rows: UploadRow[] }
+  | { type: "addTask"; row: UploadRow; by: number }
   | { type: "setSettings"; patch: Partial<Settings> }
   | { type: "setFields"; fields: TaskField[] };
 
@@ -105,6 +107,7 @@ export function applyAction(d: WorkloadData, a: Action, now: number): Outcome {
     case "checkMail": return checkMail(d, now);
     // Rows are re-validated against the stored task fields, not trusted from the client.
     case "importRows": return importRows(d, checkRows(a.rows, d.fields, d.org, now, d.settings.taskTypes), now);
+    case "addTask": return addOneTask(d, a.row, a.by, now);
     case "setSettings": {
       const patch = Object.fromEntries(Object.entries(a.patch).filter(([k]) => SETTING_KEYS.includes(k as keyof Settings)));
       if (patch.billing) patch.billing = cleanBilling(patch.billing as Billing);

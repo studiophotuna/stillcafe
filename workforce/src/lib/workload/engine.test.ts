@@ -473,6 +473,25 @@ describe("overtime, helping out, productivity basis and uploads", async () => {
     expect("action" in authorizeWl({ type: "importRows", rows }, d, 23)).toBe(true);
     expect(checkRows(rows, FIELDS0, DEMO_ORG)[0]).toMatchObject({ ok: true });
   });
+
+  it("adds one task by hand with every required detail, for the same people as uploads", async () => {
+    const { addOneTask } = await import("./engine");
+    const d = { ...data([]), fields: FIELDS0 };
+    const row = { Title: "Rate check", System: "TariffPro", Trade: "Consolidation", Priority: "high", Received: "" };
+    expect(addOneTask(d, row, ANA, NOW).message).toBe("Fill in Ticket no., Carrier, No. of contracts.");
+    const full = { ...row, "Ticket no.": "RQ-1", Carrier: FIELDS0[1].options!.split(",")[0].trim(), "No. of contracts": "2" };
+    const r = addOneTask(d, full, ANA, NOW);
+    const t = r.data.tasks.at(-1)!;
+    expect(r.message).toBe(`${t.id} added to the queue.`);
+    expect(t).toMatchObject({ title: "Rate check", pr: "high", status: "new", source: "upload", received: NOW });
+    expect(t.fields).toMatchObject({ ticket: "RQ-1", contracts: "2" });
+    expect(t.history[0].text).toContain("Added by hand by");
+    expect(r.data.seq).toBe(d.seq + 1);
+    expect(addOneTask(d, { ...full, Trade: "Nowhere" }, ANA, NOW).data.tasks).toHaveLength(0);
+    expect("error" in authorizeWl({ type: "addTask", row: full, by: ANA }, d, ANA)).toBe(true);
+    const ok = authorizeWl({ type: "addTask", row: full, by: 23 }, { ...d, settings: { ...d.settings, uploaders: [ANA] } }, ANA);
+    expect("action" in ok && ok.action).toMatchObject({ by: ANA });
+  });
 });
 
 describe("status: time away, end of work and overtime approval", async () => {

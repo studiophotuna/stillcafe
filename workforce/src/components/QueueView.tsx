@@ -27,7 +27,7 @@ const STATUS_OPTS = [
  * share out the queue and open each task's details to assign, change trade, priority and type.
  */
 export function QueueView({ manage = false }: { manage?: boolean }) {
-  const { data, now, run, me, isAdmin: admin } = useWorkload();
+  const { data, now, run, me, isAdmin: admin, canUpload, setDialog } = useWorkload();
   const isAdmin = manage && admin;
   const { inUnit, unitLabel } = useUnit();
   const [tab, setTab] = useState<"active" | "done">("active");
@@ -87,6 +87,12 @@ export function QueueView({ manage = false }: { manage?: boolean }) {
             onChange={(e) => setQ(e.target.value)}
             style={{ width: 260 }}
           />
+          {canUpload && tab === "active" && (
+            <button className="btn btn-primary btn-36" onClick={() => setDialog({ kind: "addTask" })}>
+              <Icon name="plus" size={16} />
+              Add task
+            </button>
+          )}
           {canDistribute && tab === "active" && (
             <button className="btn btn-secondary btn-36" onClick={() => run({ type: "distribute" })}>
               Share out queue now

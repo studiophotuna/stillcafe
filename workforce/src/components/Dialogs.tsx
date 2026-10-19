@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { fieldOptions, trPathOf } from "@/lib/workload/constants";
 import { H, TZ_OFFSET_H, fmtT, nowMs } from "@/lib/workload/clock";
-import { due, fmtMin, missingRequired, otAvailMin, OT_KIND, type AssistOffer, slaText, otProcesses, suggestOtSplit, asksOtSplit, typesFor, cxLevels, cxTotal, cxField, cxOn, cxOver, personOf, otAllowed } from "@/lib/workload/engine";
+import { checkRows, due, fmtMin, missingRequired, ticketField, otAvailMin, OT_KIND, type AssistOffer, slaText, otProcesses, suggestOtSplit, asksOtSplit, typesFor, cxLevels, cxTotal, cxField, cxOn, cxOver, personOf, otAllowed } from "@/lib/workload/engine";
 import { useWorkload } from "@/lib/workload/store";
 import type { Priority, Task, OtPart } from "@/lib/workload/types";
 import { assignOptions, taskDetail } from "@/lib/workload/view";
@@ -625,6 +625,7 @@ export function Dialogs() {
   const { dialog } = useWorkload();
   if (!dialog) return null;
   if (dialog.kind === "endWork") return <EndWorkDialog />;
+  if (dialog.kind === "addTask") return <AddTaskDialog />;
   if (dialog.kind === "assist") return <AssistDialog offer={dialog.offer} />;
   if (dialog.kind === "task") return <TaskDialog key={dialog.id} id={dialog.id} />;
   if (dialog.kind === "editTicket") return <EditTicketDialog key={dialog.id} id={dialog.id} />;
@@ -840,6 +841,144 @@ function EditTicketDialog({ id }: { id: string }) {
           </button>
           <Blueprint as="button" className="btn btn-primary btn-40" style={{ padding: "0 18px" }} disabled={!f.title.trim() || !f.received || !f.doneAt} onClick={save}>
             Save changes
+          </Blueprint>
+        </div>
+      </div>
+    </Modal>
+  );
+}
+
+/** Add task: one task typed in by hand, with every detail the queue shows. Same access as Upload tasks. */
+function AddTaskDialog() {
+  const { data, run, me, setDialog, now } = useWorkload();
+  const { org } = data;
+  const close = () => setDialog(null);
+  const [title, setTitle] = useState("");
+  const [trade, setTrade] = useState(org.trades.length === 1 ? org.trades[0].id : "");
+  const [pr, setPr] = useState<Priority>("normal");
+  const [ttype, setTtype] = useState("");
+  const [received, setReceived] = useState("");
+  const [vals, setVals] = useState<Task["fields"]>({});
+  const tr = org.trades.find((t) => t.id === trade);
+  const types = trade ? typesFor(data.settings, trade) : [];
+  // The same row an upload would carry, so the server checks it the same way.
+  const row = {
+    Title: title,
+    System: tr?.sys ? (org.systems.find((x) => x.id === tr.sys)?.name ?? "") : "",
+    Trade: tr?.name ?? "",
+    Priority: pr,
+    "Task type": types.find((x) => x.id === ttype)?.name ?? "",
+    Received: received.replace("T", " "),
+    ...Object.fromEntries(data.fields.map((f) => [f.label, vals[f.key] ?? ""])),
+  };
+  const [chk] = checkRows([row], data.fields, org, now, data.settings.taskTypes);
+  const miss = (title.trim() ? [] : ["Title"]).concat(trade ? [] : ["Trade"]).concat(missingRequired(data.fields, vals));
+  const err = miss.length ? "" : chk && !chk.ok ? chk.msg : "";
+  // Same ticket already in the list: warn, as it may be a duplicate.
+  const tf = ticketField(data);
+  const ref = tf ? String(vals[tf.key] ?? "").trim().toLowerCase() : "";
+  const dupe = ref ? data.tasks.find((t) => String(t.fields[tf!.key] ?? "").trim().toLowerCase() === ref) : undefined;
+  return (
+    <Modal onClose={close} width={560}>
+      <div className="dialog-scroll" style={{ gap: 12, padding: 20 }}>
+        <div className="dialog-title" style={{ fontSize: 26 }}>
+          Add task
+        </div>
+        <span className="muted">Type in a task that isn’t in the queue. It goes into the list like any uploaded task, with the same SLA.</span>
+        <div className="field">
+          <label htmlFor="add-title">Title *</label>
+          <input id="add-title" className="input" autoFocus value={title} maxLength={300} onChange={(e) => setTitle(e.target.value)} placeholder="What needs doing" />
+        </div>
+        <div className="field">
+          <label htmlFor="add-trade">{org.systems.length ? "System › Trade *" : "Trade *"}</label>
+          <select
+            id="add-trade"
+            className="input"
+            value={trade}
+            onChange={(e) => {
+              setTrade(e.target.value);
+              setTtype("");
+            }}
+          >
+            <option value="">Choose</option>
+            {org.trades.map((t) => (
+              <option key={t.id} value={t.id}>
+                {trPathOf(org, t.id)}
+              </option>
+            ))}
+          </select>
+        </div>
+        <div style={{ display: "grid", gridTemplateColumns: types.length ? "1fr 1fr" : "1fr", gap: 10 }}>
+          <div className="field">
+            <label htmlFor="add-pr">Priority *</label>
+            <select id="add-pr" className="input" value={pr} onChange={(e) => setPr(e.target.value as Priority)}>
+              <option value="high">High</option>
+              <option value="normal">Normal</option>
+              <option value="low">Low</option>
+            </select>
+          </div>
+          {types.length > 0 && (
+            <div className="field">
+              <label htmlFor="add-tt">Task type</label>
+              <select id="add-tt" className="input" value={ttype} onChange={(e) => setTtype(e.target.value)}>
+                <option value="">From the title (or standard)</option>
+                {types.map((x) => (
+                  <option key={x.id} value={x.id}>
+                    {x.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
+        </div>
+        <div className="field">
+          <label htmlFor="add-rec">Received (team time)</label>
+          <input id="add-rec" className="input" type="datetime-local" value={received} onChange={(e) => setReceived(e.target.value)} />
+          <span className="small">When the request actually came in; the due time counts from it. Leave blank for now.</span>
+        </div>
+        {data.fields.map((f) => {
+          const fid = "add-" + f.key;
+          const val = String(vals[f.key] ?? "");
+          const set = (v: string) => setVals((x) => ({ ...x, [f.key]: v }));
+          return (
+            <div className="field" key={f.key}>
+              <label htmlFor={fid}>{f.label + (f.required ? " *" : "")}</label>
+              {f.type === "select" ? (
+                <select id={fid} className="input" value={val} onChange={(e) => set(e.target.value)}>
+                  <option value="">Choose</option>
+                  {fieldOptions(f).map((o) => (
+                    <option key={o} value={o}>
+                      {o}
+                    </option>
+                  ))}
+                </select>
+              ) : (
+                <input id={fid} className="input" type={f.type === "number" ? "number" : f.type === "date" ? "date" : "text"} value={val} onChange={(e) => set(e.target.value)} />
+              )}
+            </div>
+          );
+        })}
+        {dupe && (
+          <span className="small" style={{ color: "var(--color-accent-800)" }}>
+            {tf!.label} {String(dupe.fields[tf!.key])} is already on {dupe.id}. Add it only if it’s a separate task.
+          </span>
+        )}
+        {(miss.length > 0 || err) && <span className="small">{err || `Still needed: ${miss.join(", ")}`}</span>}
+        <div className="dialog-actions" style={{ gap: 10 }}>
+          <button className="btn btn-secondary btn-40" onClick={close}>
+            Cancel
+          </button>
+          <Blueprint
+            as="button"
+            className="btn btn-primary btn-40"
+            style={{ padding: "0 18px" }}
+            disabled={miss.length > 0 || !!err}
+            onClick={() => {
+              run({ type: "addTask", row, by: me.id });
+              close();
+            }}
+          >
+            Add to queue
           </Blueprint>
         </div>
       </div>

@@ -30,6 +30,7 @@ export type Dialog =
   | { kind: "done"; id: string }
   | { kind: "assist"; offer: AssistOffer }
   | { kind: "endWork" }
+  | { kind: "addTask" }
   | null;
 
 interface Store {
