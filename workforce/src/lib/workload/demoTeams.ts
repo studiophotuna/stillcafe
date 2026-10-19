@@ -109,7 +109,12 @@ export function demoTeamData(team: string, now: number): WorkloadData {
     hc: billedFor(c, team),
     pricers: workloadPricers(c, team),
     tasks: teamTasks(team, now, units, people, 7 + team.length * 13),
-    settings: { ...base.settings, mailbox: `${team}.requests@demobss.com`, targets: Object.fromEntries(units.map((u) => [u, 8])) },
+    settings: {
+      ...base.settings,
+      mailbox: `${team}.requests@demobss.com`,
+      targets: Object.fromEntries(units.map((u) => [u, 8])),
+      uploaders: people.filter((p) => !workloadAdmins(c, team).includes(p.id)).slice(0, 1).map((p) => p.id),
+    },
     seq: 3000,
   };
 }

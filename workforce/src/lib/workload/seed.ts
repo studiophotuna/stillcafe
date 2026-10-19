@@ -195,6 +195,8 @@ export function initialData(now: number, empty = false): WorkloadData {
       work: { shift: 9, b1: 60, b2: 30, prod: 6.8 },
       targets: empty ? {} : { fewb: 8, inas: 6, eu: 7, us: 6, asla: 6, lcl: 8 },
       memberTargets: {},
+      // Sample: the member persona may upload tasks (Intake › Who can upload tasks).
+      ...(empty ? {} : { uploaders: [0] }),
       ...(empty ? {} : { billing: { mode: "fixed" as const, currency: "USD", roleRates: { member: 2400 }, unitRates: { "": 9 }, unit: "tasks", when: "resolved" as const } }),
       ...(empty
         ? {}

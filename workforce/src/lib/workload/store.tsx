@@ -325,7 +325,7 @@ export function WorkloadProvider({ children }: { children: React.ReactNode }) {
               shiftStart: 8,
             }),
       isAdmin: mode === "db" ? !!session && data.admins.includes(session.id) : viewAs !== "employee",
-      canUpload: mode === "db" ? !!session && canUpload(data, session.id) : viewAs !== "employee",
+      canUpload: mode === "db" ? !!session && canUpload(data, session.id) : viewAs !== "employee" || canUpload(data, personaId(viewAs)),
       isApprover: mode === "db" ? !!session && data.approvers.includes(session.id) : viewAs !== "employee",
       sys,
       tr,
