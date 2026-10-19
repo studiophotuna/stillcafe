@@ -92,8 +92,8 @@ adding rows. New teams start with admin approval and no team admin.
 
 ## Data and saving
 
-Both modules save to Supabase: schema `workforce` in the stillcafe project
-(`qepcyhgtyhjnxxlrjebk`), kept apart from the site's tables. Migrations in `supabase/migrations/`.
+Both modules save to Supabase: schema `workforce` in its own project
+(`ljzgqjxxwucscjitjlag`), kept apart from the site's tables. Migrations in `supabase/migrations/`.
 
 - **Rules run on the server.** The browser applies an action on screen straight away and posts it
   (`/api/wl/action`, `/api/cal/action`). The server re-runs the same rule on the stored data and

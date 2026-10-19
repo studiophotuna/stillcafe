@@ -14,8 +14,8 @@ import { createClient, type SupabaseClient } from "@supabase/supabase-js";
  */
 
 /** Public values (safe to commit): the stillcafe project URL and its publishable key. */
-const DEFAULT_URL = "https://qepcyhgtyhjnxxlrjebk.supabase.co";
-const DEFAULT_PUBLISHABLE_KEY = "sb_publishable__c_JHm0ZJqEm1dPwUdgEsA_y52JhRCV";
+const DEFAULT_URL = "https://ljzgqjxxwucscjitjlag.supabase.co";
+const DEFAULT_PUBLISHABLE_KEY = "sb_publishable_6hEJmzjZZ_Mt3N-bEceedg_7yEYb1Vm";
 
 let client: SupabaseClient | null = null;
 
