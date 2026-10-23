@@ -224,7 +224,7 @@ export function CalendarGrid({ mgmt, edit }: { mgmt?: boolean; edit?: boolean })
           {!mgmt && (
             <Seg name="scope" value={scope} options={[["all", `Everyone (${active.length})`], ["me", "Just me"]]} onChange={setScope} />
           )}
-          <Seg name="cellmode" value={cellMode} options={[["status", "Status"], ["shift", "Shift"]]} onChange={setCellMode} />
+          <Seg name="cellmode" value={cellMode} options={[["status", "Leave & office"], ["shift", "Shift times"]]} onChange={setCellMode} />
           {admin && (
             <button className="btn btn-secondary btn-36" onClick={() => s.setDialog({ kind: "schedule" })}>
               <Icon name="members" size={16} />
@@ -245,7 +245,6 @@ export function CalendarGrid({ mgmt, edit }: { mgmt?: boolean; edit?: boolean })
           </div>
         </div>
       </div>
-      <RoleLegend />
       <div className="cal-body">
       <Blueprint style={{ minWidth: 0, flex: 1 }}>
         <div className="grid-wrap">
@@ -387,16 +386,18 @@ export function CalendarGrid({ mgmt, edit }: { mgmt?: boolean; edit?: boolean })
                 {l.label}
               </div>
             ))}
+            <strong className="legend-head">Roles</strong>
+            <RoleLegend />
           </div>
         )}
       </aside>
       </div>
       <p style={{ margin: 0, fontSize: 13, color: "var(--color-neutral-700)" }}>
-        {mgmt
-          ? "Click a day in your own row to request leave. Admins change schedules from the Calendar."
-          : admin
-            ? "Click any day to change someone’s schedule or record leave. Use “Request” for your own time off."
-            : "Click a day in your own row to request leave or a schedule change for that date. On a holiday (HOL), click it to say you’re working."}
+        {admin
+          ? "Tip: click any day to change someone’s schedule."
+          : mgmt
+            ? "Tip: click a day in your row to ask for time off."
+            : "Tip: click a day in your row to ask for time off or a change."}
       </p>
     </>
   );

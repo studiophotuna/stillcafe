@@ -66,7 +66,7 @@ export default function BcpPage() {
       <div className="page-head-row">
         <div className="page-head">
           <h1>BCP monitoring · {v.deptShort}</h1>
-          <span style={{ maxWidth: "80ch" }}>During an event, everyone in scope checks in with their status. Readiness records show who is set up to work from home before anything happens.</span>
+          <span style={{ maxWidth: "80ch" }}>When something happens (a typhoon, a power cut), check in here. Below, tick what you have ready to work from home.</span>
         </div>
         <div className="row">
           {v.anyAdmin && ev && evSt !== "closed" && (
@@ -85,17 +85,23 @@ export default function BcpPage() {
       {ev ? (
         <>
           <Blueprint as="section" className="panel" style={{ padding: "16px 18px", flexDirection: "row", flexWrap: "wrap", gap: "12px 20px", alignItems: "center" }}>
-            <div className="field" style={{ minWidth: 260 }}>
-              <label htmlFor="bcp-ev">Event</label>
-              <select id="bcp-ev" className="input" value={ev.id} onChange={(e) => setEvSel(e.target.value)}>
-                {evs.map((e) => (
-                  <option key={e.id} value={e.id}>
-                    {e.name} · {fmtY(e.start)}
-                    {stOfEv(e) === "active" ? " (active today)" : stOfEv(e) === "scheduled" ? " (scheduled)" : ""}
-                  </option>
-                ))}
-              </select>
-            </div>
+            {evs.length > 1 ? (
+              <div className="field" style={{ minWidth: 260 }}>
+                <label htmlFor="bcp-ev">Event</label>
+                <select id="bcp-ev" className="input" value={ev.id} onChange={(e) => setEvSel(e.target.value)}>
+                  {evs.map((e) => (
+                    <option key={e.id} value={e.id}>
+                      {e.name} · {fmtY(e.start)}
+                      {stOfEv(e) === "active" ? " (active today)" : stOfEv(e) === "scheduled" ? " (scheduled)" : ""}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            ) : (
+              <h2 className="h2" style={{ margin: 0 }}>
+                {ev.name}
+              </h2>
+            )}
             <div style={{ display: "flex", flexDirection: "column", gap: 4, flex: 1, minWidth: 240 }}>
               <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
                 <span className={"tag " + (evSt === "active" ? "tag-accent" : evSt === "scheduled" ? "tag-outline" : "tag-neutral")}>
@@ -103,10 +109,10 @@ export default function BcpPage() {
                 </span>
                 <span className="small" style={{ fontSize: 13 }}>
                   {(evSt === "active"
-                    ? "Active date " + fmtY(ev.start) + " · check-ins close at midnight"
+                    ? "Today · check in before midnight"
                     : evSt === "scheduled"
-                      ? "Active date " + fmtY(ev.start) + " · check-ins open on that day"
-                      : "Active date " + fmtY(ev.start)) + " · Scope: " + O.by[ev.scope].name}
+                      ? fmtY(ev.start) + " · check-ins open on that day"
+                      : fmtY(ev.start)) + " · " + O.by[ev.scope].name}
                 </span>
               </div>
               {ev.note && <span style={{ fontSize: 14 }}>{ev.note}</span>}
@@ -116,8 +122,8 @@ export default function BcpPage() {
                 <span className="small" style={{ fontSize: 13 }}>Your status</span>
                 <span className={"tag " + (myCi ? BCP_CLS[myCi.status] : "tag-outline")}>{myCi ? BCP_ST[myCi.status] : "Not checked in yet"}</span>
                 <span className="small" style={{ fontSize: 12 }}>{myCi?.at}</span>
-                <button className="btn btn-secondary btn-36" onClick={() => s.setDialog({ kind: "checkin", pid: s.me, evId: ev.id })}>
-                  Update my status
+                <button className={"btn btn-36 " + (myCi ? "btn-secondary" : "btn-primary")} onClick={() => s.setDialog({ kind: "checkin", pid: s.me, evId: ev.id })}>
+                  {myCi ? "Change my status" : "Check in"}
                 </button>
               </div>
             )}

@@ -17,7 +17,7 @@ export default function NotificationsPage() {
     <>
       <div className="page-head">
         <h1>Notifications</h1>
-        <span>Emails and Outlook reminders sent by Workforce Management. Sending goes live with the Microsoft 365 connection; until then they are recorded here.</span>
+        <span>Messages the app sent you: approvals, reminders and updates.</span>
       </div>
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(min(100%,320px),1fr))", gap: 20, alignItems: "start", padding: 6 }}>
         <Blueprint style={{ display: "flex", flexDirection: "column", maxHeight: "70vh", overflow: "auto" }}>

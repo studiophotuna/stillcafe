@@ -367,3 +367,7 @@ button.org-tog:hover { color: var(--color-text); }
 /* "How these are calculated": long explanations folded under the page title. */
 .howto summary { cursor: pointer; color: var(--color-accent-700); font-weight: 500; }
 .howto[open] summary { margin-bottom: 4px; }
+.legend-col .legend-head { margin-top: 6px; font-size: 12px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--color-neutral-700); }
+.legend-col .role-legend { flex-direction: column; gap: 6px; margin: 0; }
+/* A filter with a single choice: shown as text, not a drop-down. */
+.field-static strong { display: block; padding: 8px 0; font-weight: 500; }

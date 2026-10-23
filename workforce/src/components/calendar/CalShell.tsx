@@ -105,26 +105,35 @@ export function CalShell({ children }: { children: React.ReactNode }) {
       : (path === "/calendar/admin/approvals" && !v.multi) || path === "/calendar/admin/settings"
         ? "Approvals and settings apply to the whole team"
         : "";
-  const sel = (id: string, label: string, value: string, opts: { id: string; name: string }[], onChange: (v: string) => void, min: number, all?: string) => (
-    <div className="field">
-      <label htmlFor={id}>{label}</label>
-      <select id={id} className="input" style={{ minWidth: min, fontWeight: all ? 400 : 500 }} value={value} onChange={(e) => onChange(e.target.value)}>
-        {all && <option value="all">{all}</option>}
-        {opts.map((o) => (
-          <option key={o.id} value={o.id}>
-            {o.name}
-          </option>
-        ))}
-      </select>
-    </div>
-  );
+  const sel = (id: string, label: string, value: string, opts: { id: string; name: string }[], onChange: (v: string) => void, min: number, all?: string) =>
+    // Nothing to choose: the name as text, not a drop-down.
+    opts.length === 1 && !all ? (
+      <div className="field field-static">
+        <span className="small">{label}</span>
+        <strong>{opts[0].name}</strong>
+      </div>
+    ) : (
+      <div className="field">
+        <label htmlFor={id}>{label}</label>
+        <select id={id} className="input" style={{ minWidth: min, fontWeight: all ? 400 : 500 }} value={value} onChange={(e) => onChange(e.target.value)}>
+          {all && <option value="all">{all}</option>}
+          {opts.map((o) => (
+            <option key={o.id} value={o.id}>
+              {o.name}
+            </option>
+          ))}
+        </select>
+      </div>
+    );
 
   const filterBar = showUnit ? (
     <>
-      {sel("f-dept", "Department", v.dept.id, v.deptList, (val) => {
-        const b = v.viewBranches.find((x) => O.up(x.id, "dept")!.id === val);
-        s.setSel({ dept: val, branch: b ? b.id : "", system: "all", trade: "all", mTower: "all", span: "team" });
-      }, 200)}
+      {/* One department (the usual case) needs no filter. */}
+      {v.deptList.length > 1 &&
+        sel("f-dept", "Department", v.dept.id, v.deptList, (val) => {
+          const b = v.viewBranches.find((x) => O.up(x.id, "dept")!.id === val);
+          s.setSel({ dept: val, branch: b ? b.id : "", system: "all", trade: "all", mTower: "all", span: "team" });
+        }, 200)}
       {vMgmt && v.mTowers.length > 0 &&
         sel("f-mtower", "Tower", v.mTower, v.mTowers, (val) => s.setSel({ mTower: val }), 220, "All towers")}
       {!vMgmt && !vBcp && sameDept &&

@@ -21,30 +21,36 @@ export default function MyRequestsPage() {
   const pend = mine.filter(anyPending);
   const pendDays = pend.reduce((a, q) => a + c.reqDays(q), 0);
   const year = c.year;
-  const ent = c.entOf(meP);
   const hired = meP.hire?.slice(0, 4) === String(year);
   const carry = c.carryOf(meP);
+  // The balances people check most; the rest are listed under "Other leave".
   const balances = [
     {
       k: "Vacation + sick leave left",
       v: remaining,
       m:
-        `of ${c.poolOf(meP)} (${ent} for ${year}${hired && meP.entitleFirst === undefined ? `, pro-rated from ${meP.entitle} by your hire date` : ""}` +
-        ` + ${carry} carried over from ${year - 1}${c.carrySet(meP) ? "" : ", automatic"})`,
+        `of ${c.poolOf(meP)} for ${year}` +
+        (carry ? ` (incl. ${carry} carried over)` : "") +
+        (hired && meP.entitleFirst === undefined ? " · pro-rated from your hire date" : ""),
     },
-    { k: "Emergency leave left", v: elLeft, m: `of ${meP.elEnt ?? 5} for ${year} · separate from VL and SL` },
-    { k: `Carries into ${year + 1}`, v: c.carryNext(meP), m: `Unused VL/SL, up to ${CARRY_MAX} days` },
-    ...(meP.soloParent ? [{ k: "Solo parent leave left", v: LAW.spl - c.splUsedOf(meP), m: `of ${LAW.spl} working days for ${year}` }] : []),
-    ...(meP.sex !== "M" ? [{ k: "Maternity leave", v: meP.soloParent ? LAW.mlSolo : LAW.ml, m: `calendar days per delivery (${LAW.mlMiscarriage} for a miscarriage)` }] : []),
-    ...(meP.sex !== "F" ? [{ k: "Paternity leave", v: LAW.pl, m: "working days per delivery, first 4 deliveries" }] : []),
-    { k: "Awaiting approval", v: pendDays, m: `${pend.length} request(s) pending` },
+    { k: "Emergency leave left", v: elLeft, m: `of ${meP.elEnt ?? 5} for ${year}` },
+    ...(pend.length ? [{ k: "Waiting for approval", v: pendDays, m: `${pend.length} request${pend.length === 1 ? "" : "s"}` }] : []),
+  ];
+  const other = [
+    `${c.carryNext(meP)} unused VL/SL days carry into ${year + 1} (up to ${CARRY_MAX})`,
+    ...(meP.soloParent ? [`Solo parent leave: ${LAW.spl - c.splUsedOf(meP)} of ${LAW.spl} working days left`] : []),
+    ...(meP.sex !== "M" ? [`Maternity leave: ${meP.soloParent ? LAW.mlSolo : LAW.ml} calendar days per delivery (${LAW.mlMiscarriage} for a miscarriage)`] : []),
+    ...(meP.sex !== "F" ? [`Paternity leave: ${LAW.pl} working days per delivery, first 4 deliveries`] : []),
   ];
   const bName = (k: string) => c.O.by[k]?.name ?? "Removed team";
   return (
     <>
       <div className="page-head">
         <h1>My requests</h1>
-        <span>Balances cover January to December {year}. If you’re in several teams, your main team approves your requests and the decision shows in all of them.</span>
+        <span>
+          Your leave left this year and the requests you sent.
+          {v.myBranches.length > 1 ? " Your main team approves your requests for all your teams." : ""}
+        </span>
       </div>
       <CoverPanel />
       <div className="grid-kpi" style={{ gridTemplateColumns: "repeat(auto-fit,minmax(220px,1fr))" }}>
@@ -59,6 +65,14 @@ export default function MyRequestsPage() {
           </Blueprint>
         ))}
       </div>
+      <details className="howto small">
+        <summary>Other leave</summary>
+        <ul style={{ margin: "6px 0 0", paddingLeft: 18 }}>
+          {other.map((x) => (
+            <li key={x}>{x}</li>
+          ))}
+        </ul>
+      </details>
       <Blueprint className="scroll-x">
         <table className="table" style={{ minWidth: 760 }}>
           <thead>
