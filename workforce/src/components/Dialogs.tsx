@@ -355,7 +355,7 @@ function DoneDialog({ id }: { id: string }) {
         {levels.length > 0 && (
           <div className="ot-split">
             <strong>Contracts by complexity *</strong>
-            <span className="small">How many contracts of each complexity this ticket had, e.g. 1 Simple and 2 Complex. Each counts toward its own target.</span>
+            <span className="small">How many of each did this ticket have? e.g. 1 Simple, 2 Complex.</span>
             <div style={{ display: "grid", gridTemplateColumns: `repeat(${Math.min(levels.length, 4)}, 1fr)`, gap: 10 }}>
               {levels.map((l) => (
                 <div className="field" key={l.id}>

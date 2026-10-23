@@ -32,13 +32,13 @@ export default function MyWorkPage() {
           k: "Productivity",
           v: pct(mm.prod),
           m: typeTargets(data)
-            ? `${Math.round(mm.share * 100)}% of a day’s target done${mm.mix ? ` · ${mm.mix}` : ""} (so far ${Math.round(mm.exp * 100)}%${mm.otDays ? `, incl. ${Math.round(mm.otDays * 100)}% for overtime` : ""})`
-            : `${mm.out} ${basisUnit(data)} of ${mm.target}${mm.otTarget ? ` + ${mm.otTarget} for overtime` : ""} target (so far ${mm.tgt.toFixed(1)})`,
+            ? `${Math.round(mm.share * 100)}% of today’s target done${mm.mix ? ` · ${mm.mix}` : ""}`
+            : `${mm.out} of ${mm.target}${mm.otTarget ? ` + ${mm.otTarget} overtime` : ""} ${basisUnit(data)} today`,
         },
         {
           k: "Utilization",
           v: pct(mm.util),
-          m: `${dur(mm.handle)} on tasks of ${dur(mm.avail)} available (shift so far minus time away)${mm.idle >= M ? ` · idle ${dur(mm.idle)} with no task running` : ""}`,
+          m: `${dur(mm.handle)} on tasks of ${dur(mm.avail)} available${mm.idle >= M ? ` · ${dur(mm.idle)} with no task running` : ""}`,
         },
         {
           k: "Time away",
@@ -47,7 +47,7 @@ export default function MyWorkPage() {
             (Object.entries(mm.away).map(([k, v]) => `${awayLabel(k as never)} ${fmtMin(v)}`).join(" · ") || "nothing logged today") +
             (brkOver > 0 ? ` · break + lunch ${fmtMin(brkOver)} over the ${fmtMin(breakAllowance(data))} allowance (your lead is notified)` : ""),
         },
-        { k: "Timeliness", v: pct(mm.time), m: `${mm.onTime} of ${mm.done} done within SLA` },
+        { k: "On time", v: pct(mm.time), m: `${mm.onTime} of ${mm.done} done in time` },
         { k: "Average time", v: avg, m: "per task today" },
         { k: "Overtime", v: mm.otMin ? fmtMin(mm.otMin) : "—", m: mm.otPending ? `${fmtMin(mm.otPending)} waiting for approval` : "approved today" },
         ...metricF.map((f) => ({
@@ -56,7 +56,11 @@ export default function MyWorkPage() {
           m: "completed today",
         })),
       ]
-    : [{ k: "Waiting in queue", v: waitingAll, m: "all trades" }];
+    : [];
+  // Productivity, on time, average time and time away first; the rest folded away.
+  const MAIN = ["Productivity", "On time", "Average time", "Time away"];
+  const mainK = kpis.filter((k) => MAIN.includes(k.k)).sort((a, b) => MAIN.indexOf(a.k) - MAIN.indexOf(b.k));
+  const moreK = kpis.filter((k) => !MAIN.includes(k.k));
 
   const assignedMine = sortTasks(data.tasks.filter((t) => t.assignee === me.id && (t.status === "assigned" || t.status === "on_hold")), data);
   // Only my own tasks here; tasks to pick are in the Queue.
@@ -106,14 +110,9 @@ export default function MyWorkPage() {
       <PageHead
         title="My work"
         sub={me.trades.length ? `You work on ${trades} · shift ${me.shift}.` : mode === "db"
-            ? "You aren’t allocated to a system and trade in this team, so no tasks come to you. To take tasks, allocate yourself in Admin › Members; to manage the team’s work, use Admin › Manage queue and Workload dashboard."
+            ? "You manage this team. To take tasks yourself, add yourself to a trade in Admin › People."
             : "Admin view. Switch to employee (bottom of the menu) to see a member’s screen."}
       />
-      <div className="grid-kpi">
-        {kpis.map((k) => (
-          <Kpi key={k.k} {...k} />
-        ))}
-      </div>
 
       {claims.map((t) => (
         <Blueprint as="section" key={t.id} className="panel status-bar claim-bar">
@@ -199,7 +198,7 @@ export default function MyWorkPage() {
                   ? `Today is ${me.otDay === "holiday" ? "holiday duty" : "a rest day"}: the time you work counts as ${me.otDay === "holiday" ? "holiday duty" : "rest day"} overtime. Report it at End work.`
                   : me.avail === "offshift" && me.onToday
                   ? "Your shift is over. You can keep taking tasks as overtime and report it at End work."
-                  : "Away from tasks? Log it so utilization stays accurate."}
+                  : "Stepping away? Tap what you’re doing:"}
               </span>
               <div className="row" style={{ gap: 6 }}>
                 {AWAY.map(([k, l]) => (
@@ -264,7 +263,9 @@ export default function MyWorkPage() {
           </div>
           <div className="current-body">
             <div className="kv">
-              {c.fieldRows.map((f) => [<span key={f.label + "k"}>{f.label}</span>, <span key={f.label + "v"}>{f.value}</span>])}
+              {c.fieldRows
+                .filter((f) => f.value !== "—" && f.label !== "Finished" && f.label !== "Time worked")
+                .map((f) => [<span key={f.label + "k"}>{f.label}</span>, <span key={f.label + "v"}>{f.value}</span>])}
             </div>
             {cur.email && <EmailBox email={cur.email} received={c.receivedText} />}
           </div>
@@ -295,6 +296,27 @@ export default function MyWorkPage() {
             </span>
           ) : null}
         </Blueprint>
+      )}
+
+      {mainK.length > 0 && (
+        <section style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+          <h2 className="h2">Your day so far</h2>
+          <div className="grid-kpi">
+            {mainK.map((k) => (
+              <Kpi key={k.k} {...k} />
+            ))}
+          </div>
+          {moreK.length > 0 && (
+            <details className="howto">
+              <summary>More numbers</summary>
+              <div className="grid-kpi" style={{ marginTop: 10 }}>
+                {moreK.map((k) => (
+                  <Kpi key={k.k} {...k} />
+                ))}
+              </div>
+            </details>
+          )}
+        </section>
       )}
 
       {myList.length > 0 && (

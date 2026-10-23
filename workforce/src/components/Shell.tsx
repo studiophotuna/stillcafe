@@ -36,6 +36,8 @@ export function Shell({ children }: { children: React.ReactNode }) {
   const towers = [...new Set(org.teams.map((t) => t.tower))];
   const path = usePathname();
   const router = useRouter();
+  // My work and Upload show only your own work, so they don't filter by system or trade.
+  const unitFilters = path !== "/workload" && path !== "/workload/upload";
   // The Workload dashboard is also for approvers (leads, and stand-ins covering for them).
   const blocked = (!isAdmin && isAdminRoute(path) && !(isApprover && path === "/workload/dashboard")) || (path === "/workload/admin/business" && !(isAdmin && canPrice(data, me.id))) || (!canUpload && path === "/workload/upload") || (!isApprover && (path === "/workload/overtime" || path === "/workload/breaks"));
 
@@ -89,23 +91,31 @@ export function Shell({ children }: { children: React.ReactNode }) {
       }
       filterBar={
         <>
-          <div className="field">
-            <label htmlFor="f-team">Team</label>
-            <select id="f-team" className="input" style={{ minWidth: 220, fontWeight: 500 }} value={org.team.id} onChange={(e) => setTeam(e.target.value)} disabled={org.teams.length < 2}>
-              {towers.map((tw) => (
-                <optgroup key={tw} label={tw || "Teams"}>
-                  {org.teams
-                    .filter((t) => t.tower === tw)
-                    .map((t) => (
-                      <option key={t.id} value={t.id}>
-                        {t.name}
-                      </option>
-                    ))}
-                </optgroup>
-              ))}
-            </select>
-          </div>
-          {org.systems.length > 0 && (
+          {/* One team: its name as text. System and Trade only where a page lists the team's tasks. */}
+          {org.teams.length < 2 ? (
+            <div className="field field-static">
+              <span className="small">Team</span>
+              <strong>{org.team.name}</strong>
+            </div>
+          ) : (
+            <div className="field">
+              <label htmlFor="f-team">Team</label>
+              <select id="f-team" className="input" style={{ minWidth: 220, fontWeight: 500 }} value={org.team.id} onChange={(e) => setTeam(e.target.value)}>
+                {towers.map((tw) => (
+                  <optgroup key={tw} label={tw || "Teams"}>
+                    {org.teams
+                      .filter((t) => t.tower === tw)
+                      .map((t) => (
+                        <option key={t.id} value={t.id}>
+                          {t.name}
+                        </option>
+                      ))}
+                  </optgroup>
+                ))}
+              </select>
+            </div>
+          )}
+          {unitFilters && org.systems.length > 0 && (
             <div className="field">
               <label htmlFor="f-sys">System</label>
               <select id="f-sys" className="input" style={{ minWidth: 150 }} value={sys} onChange={(e) => setSys(e.target.value)}>
@@ -118,7 +128,7 @@ export function Shell({ children }: { children: React.ReactNode }) {
               </select>
             </div>
           )}
-          {trOpts.length > 1 && (
+          {unitFilters && trOpts.length > 1 && (
             <div className="field">
               <label htmlFor="f-tr">Trade</label>
               <select id="f-tr" className="input" style={{ minWidth: 150 }} value={tr} onChange={(e) => setTr(e.target.value)}>
@@ -137,7 +147,7 @@ export function Shell({ children }: { children: React.ReactNode }) {
                 Sample data · not saved
               </span>
             )}
-            <span className="tag tag-outline">{modeLabel(data.settings.mode)}</span>
+            {isAdmin && <span className="tag tag-outline">{modeLabel(data.settings.mode)}</span>}
             {fmtT(now)}
           </span>
         </>

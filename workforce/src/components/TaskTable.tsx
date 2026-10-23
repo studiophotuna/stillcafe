@@ -10,8 +10,10 @@ import { rowAction, type TaskRowVM } from "@/lib/workload/view";
  * highlighted; a Ticket column appears when the team has a ticket field.
  */
 export function TaskTable({ rows, variant }: { rows: TaskRowVM[]; variant: "mine" | "queue" | "history" }) {
-  const { run, me, setDialog, data } = useWorkload();
+  const { run, me, setDialog, data, isAdmin } = useWorkload();
   const q = variant === "queue";
+  // Received: for admins managing the queue; members see how long a task has been waiting.
+  const rc = q && isAdmin;
   const h = variant === "history";
   const tf = ticketField(data);
   // Delay remarks column: in the queue whenever the list has overdue tickets; in completed
@@ -25,7 +27,7 @@ export function TaskTable({ rows, variant }: { rows: TaskRowVM[]; variant: "mine
           <th>Task</th>
           <th>System › Trade</th>
           {!h && <th>Priority</th>}
-          {q && <th>Received</th>}
+          {rc && <th>Received</th>}
           {!h && <th>Waiting</th>}
           {!h && <th>Due</th>}
           {h && <th>Started</th>}
@@ -58,7 +60,7 @@ export function TaskTable({ rows, variant }: { rows: TaskRowVM[]; variant: "mine
                 <span className={"tag " + r.prCls}>{r.priority}</span>
               </td>
             )}
-            {q && (
+            {rc && (
               <td className="nowrap" style={{ color: "var(--color-neutral-800)" }}>
                 {r.receivedShort}
               </td>

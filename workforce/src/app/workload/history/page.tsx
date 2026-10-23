@@ -94,7 +94,7 @@ export default function HistoryPage() {
     <>
       <PageHead
         title={`Task history · ${scope === "team" && lead ? data.org.team.name : "My tasks"}`}
-        sub="Completed tasks with when they were started and finished, the time worked (time pending, breaks and other time away excluded) and time pending. Open a task for its pending dates and reasons."
+        sub="Finished tasks and how long each took (breaks and pending time not counted). Click a task for its details."
       />
       <div className="row" style={{ justifyContent: "space-between", alignItems: "flex-end" }}>
         <DateRangePicker value={p} onChange={setP} today={dayKey(now)} id="hist" />

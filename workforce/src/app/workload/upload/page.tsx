@@ -10,8 +10,8 @@ export default function UploadPage() {
   if (!canUpload) return null;
   return (
     <>
-      <PageHead title={`Upload tasks · ${data.org.team.name}`} sub="Add tasks from the team’s Excel template. They go into the queue like any other task." />
-      <UploadTasks />
+      <PageHead title={`Upload tasks · ${data.org.team.name}`} sub="Add many tasks at once from an Excel file. They join the queue like any other task." />
+      <UploadTasks heading={false} />
     </>
   );
 }

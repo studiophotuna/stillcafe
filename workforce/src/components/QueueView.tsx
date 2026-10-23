@@ -76,7 +76,7 @@ export function QueueView({ manage = false }: { manage?: boolean }) {
           <h1>{manage ? "Manage queue" : "Queue"} · {unitLabel}</h1>
           <span>
             {tab === "active"
-              ? `Oldest first within each priority. ${overdue ? `${overdue} overdue (red); ` : ""}tasks due within 2 hours are amber.`
+              ? `${overdue ? `${overdue} overdue (red) · ` : ""}due within 2 hours (amber) · oldest first`
               : "Completed tasks, newest first, with start and finish times."}
           </span>
         </div>

@@ -12,7 +12,7 @@ import { useWorkload } from "@/lib/workload/store";
  * (Upload tasks). Required fields may be left blank here; they're asked for when the
  * task is marked done.
  */
-export function UploadTasks() {
+export function UploadTasks({ heading = true }: { heading?: boolean }) {
   const { data, run, toast, now } = useWorkload();
   const { org } = data;
   const [upload, setUpload] = useState<{ file: string; rows: UploadRow[] } | null>(null);
@@ -32,13 +32,19 @@ export function UploadTasks() {
 
   return (
     <Blueprint as="section" className="panel">
-      <h2 className="h2">Upload tasks</h2>
-      <span className="note">
+      {heading && <h2 className="h2">Upload tasks</h2>}
+      <ol className="steps">
+        <li>Download the template.</li>
+        <li>Fill in one row per task.</li>
+        <li>Choose the file, check the list, then click Import.</li>
+      </ol>
+      <details className="howto small">
+        <summary>Rules for the columns</summary>
         The template follows this team’s task fields (Admin › Task fields). Columns marked * can be left blank here but must be filled in before a ticket is resolved. Received is when the request actually came in (date and time); the due time counts from it, or from the upload if left blank. System, Trade, Priority and list fields have drop-downs.{" "}
         {data.settings.taskTypes?.length
           ? "Task type sets the SLA (Admin › SLA & task types); leave it blank to detect it from the title’s keywords, or to use the standard SLA."
           : ""}
-      </span>
+      </details>
       <div className="row">
         <button
           className="btn btn-secondary btn-40"

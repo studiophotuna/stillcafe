@@ -371,3 +371,5 @@ button.org-tog:hover { color: var(--color-text); }
 .legend-col .role-legend { flex-direction: column; gap: 6px; margin: 0; }
 /* A filter with a single choice: shown as text, not a drop-down. */
 .field-static strong { display: block; padding: 8px 0; font-weight: 500; }
+/* Numbered how-to steps (e.g. Upload tasks). */
+.steps { margin: 0; padding-left: 22px; display: flex; flex-direction: column; gap: 4px; }
