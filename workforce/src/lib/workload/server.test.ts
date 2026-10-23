@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { Task } from "./types";
 
 /**
- * In-memory stand-in for the two Postgres functions (workforce_snapshot /
+ * In-memory stand-in for the two Postgres functions (workforce_snapshot_window /
  * workforce_apply) with the same guarantees: version checks and one task in
  * progress per person, all-or-nothing.
  */
@@ -58,7 +58,17 @@ vi.mock("@supabase/supabase-js", () => ({
     rpc: async (fn: string, args: { p_changes?: unknown; p_token?: string }) => {
       if (args.p_token !== TOKEN) return { data: null, error: { message: "workforce_unauthorized" } };
       if (fn === "workforce_cal_snapshot") return { data: { data: structuredClone(calendar), version: 1 }, error: null };
-      if (fn === "workforce_snapshot") return { data: structuredClone(snapshot()), error: null };
+      if (fn === "workforce_snapshot_window") {
+        // Open tasks, tasks finished in the window, and tasks asked for by id.
+        const w = args as unknown as { p_from: number; p_to: number | null; p_ids: string[] };
+        const s = structuredClone(snapshot());
+        if (s)
+          s.tasks = s.tasks.filter(
+            (t: { id: string; status: string; doneAt: number | null }) =>
+              t.status !== "done" || (t.doneAt !== null && t.doneAt >= w.p_from && (w.p_to === null || t.doneAt < w.p_to)) || w.p_ids.includes(t.id),
+          );
+        return { data: s, error: null };
+      }
       if (fn === "workforce_activities") return { data: [...db.activities.values()].map(({ a, v }) => ({ ...a, version: v })), error: null };
       if (fn === "workforce_save_activities") {
         for (const r of structuredClone((args as { p_rows: ({ id: string; version: number; deleted?: boolean } & Record<string, unknown>)[] }).p_rows)) {
@@ -77,7 +87,7 @@ vi.mock("@supabase/supabase-js", () => ({
 
 process.env.SUPABASE_URL = "https://example.supabase.co";
 process.env.SUPABASE_SECRET_KEY = "test";
-const { getData: getData0, runAction: runAction0 } = await import("./server");
+const { getData: getData0, runAction: runAction0, getDone } = await import("./server");
 const { seedTasks } = await import("./seed");
 
 const TOKEN = "t";
@@ -203,5 +213,22 @@ describe("server persistence", () => {
     await runAction({ type: "setSettings", patch: { mode: "rr", evil: 1 } as never });
     expect(db.team?.settings).toMatchObject({ mode: "rr" });
     expect(db.team?.settings).not.toHaveProperty("evil");
+  });
+
+  it("loads open and recent tasks only; older finished ones on request, and still editable", async () => {
+    await getData();
+    const day = 24 * 3600_000;
+    const done = (id: string, ago: number): Task => ({ ...db.tasks.values().next().value!.t, id, status: "done", assignee: ANA, startedAt: Date.now() - ago - 3600_000, doneAt: Date.now() - ago });
+    db.tasks.set("T-OLD", { t: done("T-OLD", 90 * day), v: 1 });
+    db.tasks.set("T-NEW", { t: done("T-NEW", 2 * day), v: 1 });
+    const d = await getData0(TOKEN, ADMIN);
+    expect(d.tasks.some((t) => t.id === "T-OLD")).toBe(false);
+    expect(d.tasks.some((t) => t.id === "T-NEW")).toBe(true);
+    expect(d.doneSince).toBeLessThanOrEqual(Date.now() - 34 * day);
+    const older = await getDone(TOKEN, ADMIN, null, Date.now() - 100 * day, Date.now() - 50 * day);
+    expect(older.map((t) => t.id)).toEqual(["T-OLD"]);
+    const r = await runAction({ type: "editDone", id: "T-OLD", vals: { remarks: "checked" }, by: ADMIN });
+    expect(r.data.tasks.find((t) => t.id === "T-OLD")?.fields.remarks).toBe("checked");
+    expect(db.tasks.get("T-OLD")?.t.fields.remarks).toBe("checked");
   });
 });

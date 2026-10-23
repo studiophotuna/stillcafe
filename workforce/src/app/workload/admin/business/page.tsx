@@ -17,6 +17,7 @@ import {
 import { dayKey } from "@/lib/workload/clock";
 import { downloadSheets } from "@/lib/workload/excel";
 import { useWorkload } from "@/lib/workload/store";
+import { useTasksIn } from "@/lib/workload/useTasksIn";
 import type { Billing } from "@/lib/workload/types";
 
 const MON = [
@@ -42,12 +43,14 @@ const monName = (ym: string) =>
  * type), month by month. The team's billing mode says which one it bills on.
  */
 export default function BusinessCasePage() {
-  const { data, run, now, toast, me } = useWorkload();
+  const { data: team, run, now, toast, me } = useWorkload();
+  const today = dayKey(now);
+  const year = team.hc?.year ?? Number(today.slice(0, 4));
+  // The whole year's tickets (older finished ones are fetched once). Team time is UTC+8.
+  const { data } = useTasksIn(Date.UTC(year, 0, 1) - 8 * 3600_000, Math.min(Date.UTC(year + 1, 0, 1) - 8 * 3600_000, now + 60_000));
   const b = billingOf(data);
   const set = (patch: Partial<Billing>) =>
     run({ type: "setSettings", patch: { billing: { ...b, ...patch } } });
-  const today = dayKey(now);
-  const year = data.hc?.year ?? Number(today.slice(0, 4));
   const upTo =
     year === Number(today.slice(0, 4)) ? Number(today.slice(5, 7)) : 12;
   const bc = businessCase(data, year, upTo);

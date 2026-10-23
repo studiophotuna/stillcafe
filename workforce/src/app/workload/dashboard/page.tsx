@@ -14,16 +14,19 @@ import { personPeriod, teamPeriod, typeLabel, type PersonPeriod } from "@/lib/wo
 import { rangeBuckets, rangeGrain, rangeLabel, rangeMs, todayRange } from "@/lib/workload/period";
 import { useWorkload } from "@/lib/workload/store";
 import type { Task } from "@/lib/workload/types";
+import { useTasksIn } from "@/lib/workload/useTasksIn";
 import { useUnit } from "@/lib/workload/useUnit";
 import { usePeriodInput } from "@/lib/workload/usePeriodInput";
 
 export default function DashboardPage() {
-  const { data, now, toast } = useWorkload();
+  const { now, toast } = useWorkload();
   const { inUnit, unitTrades, people, unitLabel } = useUnit();
   // Shared with Handling time, so both pages show the same dates.
   const [rg, setRg] = useStoredRange("perf", todayRange(now));
   const r = rg ?? todayRange(now);
   const [from, to] = rangeMs(r);
+  // Every task finished since the start of the period (older dates are fetched once).
+  const { data } = useTasksIn(from, now + 60_000);
   const grain = rangeGrain(r);
   const live = now >= from && now < to;
   const { input, error } = usePeriodInput(from, to);

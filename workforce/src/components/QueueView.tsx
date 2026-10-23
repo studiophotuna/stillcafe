@@ -11,6 +11,7 @@ import { isOverdue, sortTasks, ticketField, ticketOf } from "@/lib/workload/engi
 import { rangeMs, todayRange, type DateRange } from "@/lib/workload/period";
 import type { Task } from "@/lib/workload/types";
 import { useWorkload } from "@/lib/workload/store";
+import { useTasksIn } from "@/lib/workload/useTasksIn";
 import { useUnit } from "@/lib/workload/useUnit";
 import { taskRow, typeNameOf } from "@/lib/workload/view";
 
@@ -59,7 +60,9 @@ export function QueueView({ manage = false }: { manage?: boolean }) {
     ),
     data,
   );
-  const done = data.tasks
+  // Completed: older finish dates are fetched for the period shown.
+  const { data: withDone } = useTasksIn(tab === "done" ? df : now, dt);
+  const done = withDone.tasks
     .filter((t) => t.status === "done" && t.doneAt !== null && inUnit(t) && t.doneAt >= df && t.doneAt < dt && match(t))
     .sort((a, b) => b.doneAt! - a.doneAt!);
   const overdue = active.filter((t) => isOverdue(t, data, now)).length;

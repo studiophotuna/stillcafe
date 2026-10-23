@@ -59,8 +59,8 @@ export function EmailBox({ email, received }: { email: NonNullable<Task["email"]
 }
 
 function TaskDialog({ id }: { id: string }) {
-  const { data, now, run, me, isAdmin, setDialog } = useWorkload();
-  const t = data.tasks.find((x) => x.id === id);
+  const { data, now, run, me, isAdmin, setDialog, taskById } = useWorkload();
+  const t = taskById(id);
   if (!t) return null;
   const v = taskDetail(data, t, now);
   const close = () => setDialog(null);
@@ -258,8 +258,8 @@ function HoldDialog({ id }: { id: string }) {
 }
 
 function DelayDialog({ id }: { id: string }) {
-  const { run, setDialog, data } = useWorkload();
-  const t = data.tasks.find((x) => x.id === id);
+  const { run, setDialog, data, taskById } = useWorkload();
+  const t = taskById(id);
   const [delay, setDelay] = useState(t?.delay ?? "");
   const close = () => setDialog(null);
   return (
@@ -307,8 +307,8 @@ function DelayDialog({ id }: { id: string }) {
 }
 
 function DoneDialog({ id }: { id: string }) {
-  const { data, run, me, setDialog } = useWorkload();
-  const t = data.tasks.find((x) => x.id === id);
+  const { data, run, me, setDialog, taskById } = useWorkload();
+  const t = taskById(id);
   const [vals, setVals] = useState<Task["fields"]>(() => ({ ...(t?.fields ?? {}) }));
   // Complexity: contracts per level; with a number field as the productivity basis, that field is their total.
   const levels = cxLevels(data.settings);
@@ -657,8 +657,8 @@ const fromLocal = (v: string) => (v ? Date.parse(v + ":00Z") - TZ_OFFSET_H * H :
  * recorded in its history; the original email can't be changed.
  */
 function EditTicketDialog({ id }: { id: string }) {
-  const { data, run, me, isAdmin, setDialog } = useWorkload();
-  const t = data.tasks.find((x) => x.id === id);
+  const { data, run, me, isAdmin, setDialog, taskById } = useWorkload();
+  const t = taskById(id);
   const s = data.settings;
   const levels = cxOn(s) ? cxLevels(s) : [];
   const [f, setF] = useState(() => ({

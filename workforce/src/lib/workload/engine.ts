@@ -31,6 +31,13 @@ export interface WorkloadData {
   approvers: number[];
   /** Calendar holidays for this team (yyyy-mm-dd), skipped in SLA time unless the team counts them. */
   holidays: string[];
+  /**
+   * Saved data only: finished tasks are loaded from this time (ms) on; older ones are fetched
+   * for the dates a page shows (useTasksIn). Unset (sample data): every task is here.
+   */
+  doneSince?: number;
+  /** Saved data only: when the team's first task came in (the team started using Workload). */
+  firstAt?: number;
   /** Business case: the team's billed FTE this year by person and month (Workload admins only). */
   hc?: { year: number; rows: BillRow[] };
   /** Who may see and set the business case (pricing): Workload admins who are managers or directors, and system admins. */

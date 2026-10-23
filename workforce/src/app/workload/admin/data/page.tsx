@@ -9,6 +9,7 @@ import { cxCheck, cxLevels, cxOver, cxText, cxTotal, due, holdPeriods, personOf,
 import { downloadSheets } from "@/lib/workload/excel";
 import { rangeLabel, rangeMs, todayRange } from "@/lib/workload/period";
 import { useWorkload } from "@/lib/workload/store";
+import { useTasksIn } from "@/lib/workload/useTasksIn";
 import type { Task } from "@/lib/workload/types";
 import { useUnit } from "@/lib/workload/useUnit";
 import { typeNameOf } from "@/lib/workload/view";
@@ -21,11 +22,13 @@ type StatusF = "all" | "open" | "done";
  * period, one row each with all its details and fields, to download as an Excel datasheet.
  */
 export default function DataPage() {
-  const { data, now, toast } = useWorkload();
+  const { now, toast } = useWorkload();
   const { inUnit, unitLabel } = useUnit();
   const [rg, setRg] = useStoredRange("data", todayRange(now));
   const r = rg ?? todayRange(now);
   const [from, to] = rangeMs(r);
+  // Every task finished since the start of the period (older dates are fetched once).
+  const { data } = useTasksIn(from, now + 60_000);
   const [by, setBy] = useState<DateBy>("received");
   const [st, setSt] = useState<StatusF>("all");
   const tf = ticketField(data);

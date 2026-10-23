@@ -9,7 +9,7 @@ import { isViewAs, person, personaId } from "./constants";
 import { canUpload } from "./authz";
 import { personOf, type AssistOffer, type WorkloadData } from "./engine";
 import { demoTeamData } from "./demoTeams";
-import type { Person, Toast, ViewAs } from "./types";
+import type { Person, Task, Toast, ViewAs } from "./types";
 
 /**
  * Client store for the Workload module.
@@ -18,7 +18,7 @@ import type { Person, Toast, ViewAs } from "./types";
  * ("db" mode) every action is applied on screen straight away, then sent to
  * /api/wl/action, where the server applies the same rules to the stored data
  * and returns the result; the screen then shows what was saved. Data is also
- * refreshed every 20 s so queues stay current. Without a database ("demo"
+ * refreshed every 30 s while the page is visible, so queues stay current. Without a database ("demo"
  * mode) the sample data lives in memory and resets on reload.
  */
 export type DataMode = "demo" | "db";
@@ -61,6 +61,12 @@ interface Store {
   setTr: (v: string) => void;
   dialog: Dialog;
   setDialog: (d: Dialog) => void;
+  /** Finished tasks fetched for older dates than load with the team (see useTasksIn). */
+  older: Task[];
+  /** Fetch the team's tasks finished between `from` and `to` into `older` (once per period). */
+  loadDone: (from: number, to: number) => Promise<void>;
+  /** A task by id, loaded with the team or fetched for older dates. */
+  taskById: (id: string) => Task | undefined;
 }
 
 const Ctx = createContext<Store | null>(null);
@@ -95,8 +101,14 @@ export function WorkloadProvider({ children }: { children: React.ReactNode }) {
   const [dialog, setDialog] = useState<Dialog>(null);
   const [blocked, setBlocked] = useState("");
   const [session, setSession] = useState<{ id: number; email: string } | null>(null);
+  const [older, setOlder] = useState<Task[]>([]);
+  const fetched = useRef(new Set<string>());
 
   const commit = useCallback((d: WorkloadData) => {
+    const sameTeam = teamRef.current === d.org.team.id;
+    if (!sameTeam) fetched.current.clear();
+    // Older finished tasks belong to the team; keep them current when one of them was changed.
+    setOlder((o) => (!o.length ? o : !sameTeam ? [] : o.map((t) => d.tasks.find((x) => x.id === t.id) ?? t)));
     teamRef.current = d.org.team.id;
     dataRef.current = d;
     setData(d);
@@ -293,6 +305,30 @@ export function WorkloadProvider({ children }: { children: React.ReactNode }) {
     [session, toast, refresh],
   );
 
+  const loadDone = useCallback(
+    async (from: number, to: number) => {
+      const team = teamRef.current;
+      const key = `${team}|${from}|${to}`;
+      if (modeRef.current !== "db" || fetched.current.has(key)) return;
+      fetched.current.add(key);
+      try {
+        const r = await fetch(`/api/wl/done?team=${encodeURIComponent(team)}&from=${from}&to=${to}`, { cache: "no-store" });
+        const j = await r.json().catch(() => ({}));
+        if (!r.ok) throw new Error(j.error || "Older tasks couldn’t be loaded.");
+        if (teamRef.current !== team) return;
+        setOlder((o) => {
+          const m = new Map(o.map((t) => [t.id, t]));
+          for (const t of j.tasks as Task[]) m.set(t.id, t);
+          return [...m.values()];
+        });
+      } catch (e) {
+        fetched.current.delete(key);
+        toast(e instanceof Error ? e.message : "Older tasks couldn’t be loaded.");
+      }
+    },
+    [toast],
+  );
+
   const setViewAs = useCallback((v: ViewAs) => {
     setViewAsState(v);
     try {
@@ -345,8 +381,11 @@ export function WorkloadProvider({ children }: { children: React.ReactNode }) {
       setTr,
       dialog,
       setDialog,
+      older,
+      loadDone,
+      taskById: (id: string) => data.tasks.find((t) => t.id === id) ?? older.find((t) => t.id === id),
     }),
-    [data, mode, now, run, toast, toasts, viewAs, setViewAs, sys, tr, dialog, session, setTeam, setHolidayWork],
+    [data, mode, now, run, toast, toasts, viewAs, setViewAs, sys, tr, dialog, session, setTeam, setHolidayWork, older, loadDone],
   );
 
   if (blocked)

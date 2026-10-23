@@ -38,7 +38,22 @@ type RawTask = Task & { version: number };
 interface RawSnapshot {
   team: Pick<WorkloadData, "settings" | "fields" | "seq" | "mailCount"> & { version: number };
   tasks: RawTask[];
+  /** First task's received time (migration 0025). */
+  first?: number | null;
 }
+
+/**
+ * Which finished tasks to load with a team: those finished from `from` (to `to`, if set), plus
+ * the tasks in `ids`. Open tasks always come. Default: the last DONE_DAYS days.
+ */
+interface Window {
+  from: number;
+  to?: number;
+  ids?: string[];
+}
+/** Finished tasks loaded with a team; older ones are fetched for the dates a page shows. */
+export const DONE_DAYS = 35;
+const recent = (): Window => ({ from: Date.now() - DONE_DAYS * 24 * 3600_000 });
 
 type FromCal = Pick<WorkloadData, "people" | "admins" | "org" | "approvers" | "holidays" | "hc" | "pricers">;
 type RawActivity = Activity & { version: number };
@@ -106,7 +121,7 @@ export async function trackerStatsAll(token: string, me: number, from: number, t
   await Promise.all(
     teams.map(async (t) => {
       const ctx = ctxOf(c, t.id, teams);
-      const s = await load(token, t.id, ctx);
+      const s = await load(token, t.id, ctx, { from, to });
       if (!s) return;
       const { data, error } = await db().rpc("workforce_activities", { p_token: token, p_team: t.id, p_since: from });
       if (error) throw new Error(error.message);
@@ -117,10 +132,10 @@ export async function trackerStatsAll(token: string, me: number, from: number, t
   return out;
 }
 
-async function load(token: string, team: string, ctx: FromCal): Promise<Snapshot | null> {
+async function load(token: string, team: string, ctx: FromCal, win: Window = recent()): Promise<Snapshot | null> {
   const since = Date.now() - ACTIVITY_DAYS * 24 * 3600_000;
   const [{ data, error }, acts] = await Promise.all([
-    db().rpc("workforce_snapshot", { p_token: token, p_team: team }),
+    db().rpc("workforce_snapshot_window", { p_token: token, p_team: team, p_from: win.from, p_to: win.to ?? null, p_ids: win.ids ?? [] }),
     db().rpc("workforce_activities", { p_token: token, p_team: team, p_since: since }),
   ]);
   if (acts.error) throw new Error(acts.error.message);
@@ -144,6 +159,8 @@ async function load(token: string, team: string, ctx: FromCal): Promise<Snapshot
         return a;
       }),
       ...ctx,
+      doneSince: win.from,
+      firstAt: raw.first ?? undefined,
     },
     versions: { team: raw.team.version, tasks, activities },
   };
@@ -188,15 +205,15 @@ async function save(token: string, team: string, before: Snapshot | null, after:
   }
 }
 
-async function loadOrCreate(token: string, team: string, ctx: FromCal): Promise<Snapshot> {
-  const s = await load(token, team, ctx);
+async function loadOrCreate(token: string, team: string, ctx: FromCal, win: Window = recent()): Promise<Snapshot> {
+  const s = await load(token, team, ctx, win);
   if (s) return s;
   try {
     await save(token, team, null, { ...initialData(Date.now(), true), ...ctx });
   } catch (e) {
     if (!(e instanceof ConflictError)) throw e; // someone else created it first
   }
-  return (await load(token, team, ctx))!;
+  return (await load(token, team, ctx, win))!;
 }
 
 /**
@@ -215,6 +232,17 @@ export async function getData(token: string, me: number, want?: string | null): 
 }
 
 /**
+ * Finished tasks of a team for a period (older than what loads with the team): for task
+ * history, the dashboard, the business case and other pages that look further back.
+ */
+export async function getDone(token: string, me: number, want: string | null, from: number, to: number): Promise<Task[]> {
+  const { team, ctx } = await teamContext(token, me, want);
+  const s = await load(token, team, ctx, { from, to });
+  if (!s) return [];
+  return forViewer(s.data, me).tasks.filter((t) => t.status === "done");
+}
+
+/**
  * Apply an action as person `me` with the Workload rules. If someone else
  * changed the same rows in between, reload and re-apply (up to 3 tries), so
  * e.g. two members pressing Start work never get the same task.
@@ -222,8 +250,10 @@ export async function getData(token: string, me: number, want?: string | null): 
 export async function runAction(token: string, me: number, action: Action, want?: string | null): Promise<{ data: WorkloadData; message?: string }> {
   if (action.type === "checkMail") throw new ForbiddenError("The Outlook mailbox isn’t connected yet.");
   const { team, ctx } = await teamContext(token, me, want);
+  // An action on one task (e.g. editing an older resolved ticket) loads that task too.
+  const win = { ...recent(), ids: "id" in action ? [action.id] : [] };
   for (let attempt = 0; attempt < 3; attempt++) {
-    const s = await loadOrCreate(token, team, ctx);
+    const s = await loadOrCreate(token, team, ctx, win);
     const auth = authorizeWl(action, s.data, me);
     if ("error" in auth) throw new ForbiddenError(auth.error);
     const out = applyAction(s.data, auth.action, Date.now());

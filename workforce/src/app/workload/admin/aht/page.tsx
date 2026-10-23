@@ -10,6 +10,7 @@ import { cxOn } from "@/lib/workload/engine";
 import { downloadSheets } from "@/lib/workload/excel";
 import { rangeLabel, rangeMs, todayRange } from "@/lib/workload/period";
 import { useWorkload } from "@/lib/workload/store";
+import { useTasksIn } from "@/lib/workload/useTasksIn";
 import { usePeriodInput } from "@/lib/workload/usePeriodInput";
 
 const t = (ms: number | null) => (ms === null ? "—" : dur(ms));
@@ -20,10 +21,12 @@ const min = (ms: number | null) => (ms === null ? null : Math.round(ms / 60000))
  * away excluded) by member, trade, task type and complexity level. Same dates as the Dashboard.
  */
 export default function AhtPage() {
-  const { data, now, toast } = useWorkload();
+  const { now, toast } = useWorkload();
   const [rg, setRg] = useStoredRange("perf", todayRange(now));
   const r = rg ?? todayRange(now);
   const [from, to] = rangeMs(r);
+  // Tasks finished in the period (older dates are fetched once).
+  const { data } = useTasksIn(from, Math.min(to, now + 60_000));
   const { input, error } = usePeriodInput(from, to);
   const d = input ? { ...data, activities: input.activities } : data;
   const st = useAht(d, from, Math.min(to, now + 1));

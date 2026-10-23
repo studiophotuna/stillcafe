@@ -104,6 +104,10 @@ Both modules save to Supabase: schema `workforce` in its own project
 - **Rules run on the server.** The browser applies an action on screen straight away and posts it
   (`/api/wl/action`, `/api/cal/action`). The server re-runs the same rule on the stored data and
   saves with a version check; if someone else saved in between, it reloads and retries.
+- **Workload loads open tasks and the last 35 days of finished ones** (`workforce_snapshot_window`,
+  migration 0025). Pages that look further back — Task history, Completed, Dashboard, Handling
+  time, Business case, Data pull-out — fetch the finished tasks for the dates they show
+  (`/api/wl/done`, `useTasksIn`), once per period. "All dates" goes back a year.
 - **Workload** stores tasks as rows (`workforce.task`) and only writes rows that changed; the
   database also refuses a second in-progress task for one person, so two members pressing Start
   work never get the same task.
