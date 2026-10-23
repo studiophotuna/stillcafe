@@ -33,7 +33,7 @@ export function AhtPanels({ st, trades = true }: { st: ReturnType<typeof ahtStat
     <Blueprint as="section" className="panel" style={{ gap: 10 }}>
       <h2 className="h2">{title}</h2>
       {rows.length ? (
-        <div className="boxed-scroll">
+        <div className="boxed-scroll" tabIndex={0}>
           <table className="table">
             <thead>
               <tr>
@@ -85,7 +85,7 @@ export function AhtPanels({ st, trades = true }: { st: ReturnType<typeof ahtStat
             Actual AHT per contract of each level. A ticket with several levels shares its time across them by their set AHT. Use the actual AHT to update the level’s AHT
             (used to question tagging in <Link href="/workload/admin/complexity">Complexity</Link>).
           </span>
-          <div className="boxed-scroll">
+          <div className="boxed-scroll" tabIndex={0}>
             <table className="table">
               <thead>
                 <tr>
@@ -95,7 +95,7 @@ export function AhtPanels({ st, trades = true }: { st: ReturnType<typeof ahtStat
                   <th style={{ textAlign: "right" }}>Difference</th>
                   <th style={{ textAlign: "right" }}>Contracts</th>
                   <th style={{ textAlign: "right" }}>Tickets</th>
-                  <th />
+                  <th><span className="sr-only">Actions</span></th>
                 </tr>
               </thead>
               <tbody>

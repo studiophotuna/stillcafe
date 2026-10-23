@@ -14,7 +14,7 @@ import { breakAllowance } from "@/lib/workload/breaks";
 import { taskDetail, taskRow } from "@/lib/workload/view";
 
 export default function MyWorkPage() {
-  const { data, now, run, me, setDialog, setHolidayWork, mode } = useWorkload();
+  const { data, now, run, me, setDialog, setHolidayWork, mode, isAdmin, isApprover } = useWorkload();
   const hol = me.holiday;
   const s = data.settings;
   const trades = me.trades.map((x) => trPathOf(data.org, x)).join(", ");
@@ -25,6 +25,7 @@ export default function MyWorkPage() {
   const mm = personMetrics(data, me, now);
   const brkOver = breakAllowance(data) ? Math.max(0, Math.round((mm.away.break ?? 0) + (mm.away.lunch ?? 0)) - breakAllowance(data)) : 0;
 
+  const waitingAll = data.tasks.filter((t) => t.status === "new").length;
   const kpis = me.trades.length
     ? [
         {
@@ -55,7 +56,7 @@ export default function MyWorkPage() {
           m: "completed today",
         })),
       ]
-    : [{ k: "Waiting in queue", v: data.tasks.filter((t) => t.status === "new").length, m: "all trades" }];
+    : [{ k: "Waiting in queue", v: waitingAll, m: "all trades" }];
 
   const assignedMine = sortTasks(data.tasks.filter((t) => t.assignee === me.id && (t.status === "assigned" || t.status === "on_hold")), data);
   // Only my own tasks here; tasks to pick are in the Queue.
@@ -68,7 +69,12 @@ export default function MyWorkPage() {
 
   let idleTitle = "You’re free";
   let idleText = "";
-  if (!me.trades.length) {
+  // Admins and approvers without a trade manage the team rather than take tasks.
+  const manager = !me.trades.length && (isAdmin || isApprover);
+  if (manager) {
+    idleTitle = "Team at a glance";
+    idleText = `${waitingAll} task${waitingAll === 1 ? "" : "s"} waiting in the queue. Manage it, or see today’s numbers on the dashboard.`;
+  } else if (!me.trades.length) {
     idleTitle = "No trades allocated";
     idleText = "You aren’t allocated to a system and trade, so no tasks come to you. Ask an admin to allocate you (Admin › Members).";
   } else if (hol && !hol.working) {
@@ -278,6 +284,15 @@ export default function MyWorkPage() {
             <Link className="btn btn-primary btn-lg" href="/workload/queue">
               Go to Queue
             </Link>
+          ) : manager ? (
+            <span className="row">
+              <Link className="btn btn-primary btn-lg" href={isAdmin ? "/workload/admin/queue" : "/workload/queue"}>
+                Open the queue
+              </Link>
+              <Link className="btn btn-secondary btn-lg" href="/workload/dashboard">
+                Dashboard
+              </Link>
+            </span>
           ) : null}
         </Blueprint>
       )}

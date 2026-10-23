@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { usePoll } from "@/lib/poll";
+import { nowMs } from "@/lib/workload/clock";
 import { Blueprint } from "./ui";
 
 type Link = { label: string; url: string };
@@ -170,6 +171,20 @@ interface Notices {
   links: { leave: string; ot: string };
   payroll?: { date: string; days: number; note: string } | null;
 }
+// The three pop-ups (BIPO filing, holiday reply, payroll cut-off) share one request: it reads
+// the calendar and recent activities, so it's reused for a minute instead of asked three times.
+let noticesAt = 0;
+let noticesReq: Promise<(Notices & { demo?: boolean }) | null> | null = null;
+function getNotices(fresh = false) {
+  if (fresh || !noticesReq || Date.now() - noticesAt > 60_000) {
+    noticesAt = Date.now();
+    noticesReq = fetch("/api/me/notices", { cache: "no-store" })
+      .then((r) => (r.ok ? r.json() : null))
+      .catch(() => null);
+  }
+  return noticesReq;
+}
+
 const fmtDay = (d: string) =>
   new Date(d + "T00:00:00Z").toLocaleDateString("en-GB", {
     day: "numeric",
@@ -186,10 +201,7 @@ export function BipoNotice() {
   const [n, setN] = useState<Notices | null>(null);
   const [later, setLater] = useState(false);
   const load = useCallback(() => {
-    fetch("/api/me/notices", { cache: "no-store" })
-      .then((r) => (r.ok ? r.json() : null))
-      .then((j) => j && !j.demo && setN(j))
-      .catch(() => {});
+    getNotices().then((j) => j && !j.demo && setN(j));
   }, []);
   useEffect(load, [load]);
   // Rarely changes and costs several reads: every 10 minutes, not on every tab switch.
@@ -300,16 +312,14 @@ export function HolidayPrompt() {
   const [later, setLater] = useState(false);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState("");
-  const load = useCallback(() => {
-    fetch("/api/me/notices", { cache: "no-store" })
-      .then((r) => (r.ok ? r.json() : null))
-      .then((j) => j && !j.demo && setH(j.holiday ?? null))
-      .catch(() => {});
+  const load = useCallback((fresh = false) => {
+    getNotices(fresh).then((j) => j && !j.demo && setH(j.holiday ?? null));
   }, []);
   useEffect(() => {
     load();
-    window.addEventListener("wfm:reload", load);
-    return () => window.removeEventListener("wfm:reload", load);
+    const reload = () => load(true);
+    window.addEventListener("wfm:reload", reload);
+    return () => window.removeEventListener("wfm:reload", reload);
   }, [load]);
   if (!h || h.answer || later) return null;
   const answer = async (code: "RTO" | "WFH" | "HOL") => {
@@ -372,30 +382,27 @@ export function PayrollNotice() {
   const [p, setP] = useState<Notices["payroll"]>(null);
   const [seen, setSeen] = useState(true);
   useEffect(() => {
-    const today = new Date(Date.now() + 8 * 3600_000).toISOString().slice(0, 10);
-    fetch("/api/me/notices", { cache: "no-store" })
-      .then((r) => (r.ok ? r.json() : null))
-      .then((j) => {
-        if (!j) return;
-        let pay: Notices["payroll"] = j.payroll ?? null;
-        // Sample data: cut-offs on the 10th and 25th.
-        if (j.demo) {
-          const now = new Date(Date.now() + 8 * 3600_000);
-          const y = now.getUTCFullYear();
-          const m = now.getUTCMonth();
-          const d = now.getUTCDate();
-          const cut = [10, 25].map((x) => new Date(Date.UTC(y, m, x))).find((x) => x.getUTCDate() >= d) ?? new Date(Date.UTC(y, m + 1, 10));
-          const days = Math.round((cut.getTime() - Date.UTC(y, m, d)) / 86_400_000);
-          pay = days <= 2 ? { date: cut.toISOString().slice(0, 10), days, note: "" } : null;
-        }
-        setP(pay);
-        if (pay) setSeen(read<string>(LS_PAY, "") === pay.date + "|" + today);
-      })
-      .catch(() => {});
+    const today = new Date(nowMs() + 8 * 3600_000).toISOString().slice(0, 10);
+    getNotices().then((j) => {
+      if (!j) return;
+      let pay: Notices["payroll"] = j.payroll ?? null;
+      // Sample data: cut-offs on the 10th and 25th, counted from the sample's own date.
+      if (j.demo) {
+        const now = new Date(nowMs() + 8 * 3600_000);
+        const y = now.getUTCFullYear();
+        const m = now.getUTCMonth();
+        const d = now.getUTCDate();
+        const cut = [10, 25].map((x) => new Date(Date.UTC(y, m, x))).find((x) => x.getUTCDate() >= d) ?? new Date(Date.UTC(y, m + 1, 10));
+        const days = Math.round((cut.getTime() - Date.UTC(y, m, d)) / 86_400_000);
+        pay = days <= 2 ? { date: cut.toISOString().slice(0, 10), days, note: "" } : null;
+      }
+      setP(pay);
+      if (pay) setSeen(read<string>(LS_PAY, "") === pay.date + "|" + today);
+    });
   }, []);
   if (!p || seen) return null;
   const close = () => {
-    const today = new Date(Date.now() + 8 * 3600_000).toISOString().slice(0, 10);
+    const today = new Date(nowMs() + 8 * 3600_000).toISOString().slice(0, 10);
     write(LS_PAY, p.date + "|" + today);
     setSeen(true);
   };

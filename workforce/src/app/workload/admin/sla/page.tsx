@@ -98,7 +98,7 @@ export default function SlaPage() {
           </Blueprint>
         </div>
         {types.length ? (
-          <div className="boxed-scroll">
+          <div className="boxed-scroll" tabIndex={0}>
             <table className="table">
               <thead>
                 <tr>
@@ -108,7 +108,7 @@ export default function SlaPage() {
                   <th>Trades</th>
                   <th>Keywords</th>
                   <th>Open tasks</th>
-                  <th />
+                  <th><span className="sr-only">Actions</span></th>
                 </tr>
               </thead>
               <tbody>

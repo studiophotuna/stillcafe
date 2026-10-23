@@ -273,7 +273,7 @@ main.page { padding: 24px 32px 56px; display: flex; flex-direction: column; gap:
 .table tr.row-soon > td { background: color-mix(in srgb, #c77700 8%, transparent); }
 .table tr.row-soon > td:first-child { box-shadow: inset 3px 0 0 #c77700; }
 .due-flag { display: inline-block; margin-right: 6px; padding: 0 6px; font-size: 10.5px; font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase; color: #fff; background: #b3261e; }
-.due-flag.soon { background: #c77700; }
+.due-flag.soon { background: #9a5c00; }
 
 /* — away timer pop-up — */
 .away-pop { position: fixed; inset: 0; z-index: 60; display: grid; place-items: center; background: color-mix(in srgb, #1d1f20 45%, transparent); }
@@ -303,10 +303,11 @@ main.page { padding: 24px 32px 56px; display: flex; flex-direction: column; gap:
 .hc .hc-cell { background: none; border: 0; font: inherit; cursor: pointer; width: 100%; padding: 0; color: inherit; }
 .hc .hc-cell:hover { text-decoration: underline; }
 
-/* — quick links (top centre, collapsed by default) — */
-/* Sticky, zero-height strip above the filter bar: takes no space until opened. */
-.ql { position: sticky; top: 0; height: 0; z-index: 30; display: flex; justify-content: center; pointer-events: none; }
-.ql-inner { display: flex; flex-direction: column; align-items: center; width: min(900px, calc(100% - 32px)); }
+/* — quick links (top right, collapsed by default) — */
+/* Sticky, zero-height strip above the filter bar: takes no space until opened. Kept in the
+   top-right corner, clear of the filter labels (centred, it covered the Team label). */
+.ql { position: sticky; top: 0; height: 0; z-index: 30; display: flex; justify-content: flex-end; padding-right: 24px; pointer-events: none; }
+.ql-inner { display: flex; flex-direction: column; align-items: flex-end; width: min(900px, calc(100% - 48px)); }
 .ql-inner > * { pointer-events: auto; }
 .ql-tab { padding: 1px 14px 2px; font: inherit; font-size: 11.5px; line-height: 1.3; color: var(--color-accent-700); background: var(--color-bg); border: 1px solid var(--color-divider); border-top: 0; cursor: pointer; }
 .ql-panel { width: 100%; display: flex; flex-direction: column; gap: 8px; padding: 10px 14px; background: var(--color-bg); border: 1px solid var(--color-divider); box-shadow: var(--shadow-md); }
@@ -359,3 +360,10 @@ button.org-tog:hover { color: var(--color-text); }
 .cal-legend:not(.open) .cal-legend-toggle > span:first-child { transform: none !important; }
 .legend.legend-col { flex-direction: column; align-items: flex-start; flex-wrap: nowrap; gap: 6px; padding: 0 12px 12px; }
 @media (max-width: 720px) { .cal-body { flex-direction: column; } .cal-legend { position: static; width: 100%; } .cal-legend:not(.open) .cal-legend-toggle { writing-mode: horizontal-tb; } }
+
+/* Text for screen readers only. */
+.sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
+
+/* "How these are calculated": long explanations folded under the page title. */
+.howto summary { cursor: pointer; color: var(--color-accent-700); font-weight: 500; }
+.howto[open] summary { margin-bottom: 4px; }

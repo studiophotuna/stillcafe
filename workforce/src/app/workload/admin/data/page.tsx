@@ -204,7 +204,7 @@ export default function DataPage() {
           Download Excel ({list.length})
         </button>
       </div>
-      <Blueprint className="scroll-x">
+      <Blueprint className="scroll-x" tabIndex={0}>
         <table className="table" style={{ minWidth: 980 }}>
           <thead>
             <tr>

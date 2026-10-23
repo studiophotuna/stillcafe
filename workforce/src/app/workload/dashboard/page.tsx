@@ -240,7 +240,12 @@ export default function DashboardPage() {
       <PageHead
         title={`Dashboard · ${unitLabel}`}
         style={{ maxWidth: "95ch" }}
-        sub="Productivity = work done ÷ target for the days worked (days scheduled in the Calendar since the team started using Workload; today so far), plus the tasks that fit in any overtime (whole tasks at the daily pace, e.g. 4 a day in 6.8 productive hours: 3 h adds 1). Utilization = time on tasks ÷ available time. Timeliness = tasks done within SLA ÷ tasks done. Targets and working time are set in Admin › Targets."
+        sub={
+          <details className="howto">
+            <summary>How these are calculated</summary>
+            Productivity = work done ÷ target for the days worked (days scheduled in the Calendar since the team started using Workload; today so far), plus the tasks that fit in any overtime (whole tasks at the daily pace, e.g. 4 a day in 6.8 productive hours: 3 h adds 1). Utilization = time on tasks ÷ available time. Timeliness = tasks done within SLA ÷ tasks done. Targets and working time are set in Admin › Targets.
+          </details>
+        }
       />
       <div className="row" style={{ justifyContent: "space-between", alignItems: "center" }}>
         <DateRangePicker value={r} onChange={setRg} today={dayKey(now)} id="dash" />
@@ -261,9 +266,9 @@ export default function DashboardPage() {
             <Kpi k="Received" v={view.team.received} m="tasks in the period" />
             <Kpi k="Done" v={view.team.done} m="tasks in the period" />
             <Kpi k="Average time" v={view.team.avgMs === null ? "—" : dur(view.team.avgMs)} m="worked per task" />
-            <Kpi k="Overtime" v={view.team.otMin ? fmtMin(view.team.otMin) : "—"} m="approved" />
-            <Kpi k="Time away" v={view.team.awayMin ? fmtMin(view.team.awayMin) : "—"} m="breaks, meetings, training…" />
-            <Kpi k="Idle" v={view.team.idleMin ? fmtMin(view.team.idleMin) : "—"} m="in shift, no task running and not away" />
+            <Kpi k="Overtime" v={view.team.otMin ? dur(view.team.otMin * 60_000) : "—"} m="approved" />
+            <Kpi k="Time away" v={view.team.awayMin ? dur(view.team.awayMin * 60_000) : "—"} m="breaks, meetings, training…" />
+            <Kpi k="Idle" v={view.team.idleMin ? dur(view.team.idleMin * 60_000) : "—"} m="in shift, no task running and not away" />
             {metricF.map((f) => (
               <Kpi key={f.key} k={f.label.replace(/^No\. of /, "")} v={sumF(view.doneTasks, f.key)} m="completed" />
             ))}
@@ -380,7 +385,7 @@ export default function DashboardPage() {
           </div>
 
           {view.buckets.length > 0 && (
-            <Blueprint as="section" className="panel tight scroll-x">
+            <Blueprint as="section" className="panel tight scroll-x" tabIndex={0}>
               <details className="table-view">
                 <summary>{grain === "hour" ? "By hour" : grain === "month" ? "By month" : "By day"} · show the numbers</summary>
               <table className="table" style={{ minWidth: 560 }}>
@@ -411,7 +416,7 @@ export default function DashboardPage() {
             </Blueprint>
           )}
 
-          <Blueprint as="section" className="panel tight scroll-x">
+          <Blueprint as="section" className="panel tight scroll-x" tabIndex={0}>
             <h2 className="h2">By trade</h2>
             <table className="table" style={{ minWidth: 760 }}>
               <thead>
@@ -448,7 +453,7 @@ export default function DashboardPage() {
           </Blueprint>
 
           {view.byType.length > 0 && (
-            <Blueprint as="section" className="panel tight scroll-x">
+            <Blueprint as="section" className="panel tight scroll-x" tabIndex={0}>
               <h2 className="h2">By task type</h2>
               <table className="table" style={{ minWidth: 680 }}>
                 <thead>
@@ -481,7 +486,7 @@ export default function DashboardPage() {
             </Blueprint>
           )}
 
-          <Blueprint as="section" className="panel tight scroll-x">
+          <Blueprint as="section" className="panel tight scroll-x" tabIndex={0}>
             <h2 className="h2">People</h2>
             <table className="table" style={{ minWidth: 1200 }}>
               <thead>

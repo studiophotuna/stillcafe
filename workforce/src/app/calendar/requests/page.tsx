@@ -69,7 +69,7 @@ export default function MyRequestsPage() {
               <th>Reason</th>
               <th>Status by team</th>
               <th>Submitted</th>
-              <th />
+              <th><span className="sr-only">Actions</span></th>
             </tr>
           </thead>
           <tbody>

@@ -15,7 +15,7 @@ import { RoleLegend } from "./Roles";
 const WK_BG = "color-mix(in srgb, var(--color-text) 5%, transparent)";
 const HATCH = "repeating-linear-gradient(135deg, transparent 0 5px, color-mix(in srgb, var(--color-text) 9%, transparent) 5px 6px)";
 
-export function MonthNav({ size = 30, minW = 190 }: { size?: number; minW?: number }) {
+export function MonthNav({ size = 30, minW = 190, h1 = false }: { size?: number; minW?: number; h1?: boolean }) {
   const s = useCalendar();
   const prev = () => (s.m === 0 ? s.setMonth(s.y - 1, 11) : s.setMonth(s.y, s.m - 1));
   const next = () => (s.m === 11 ? s.setMonth(s.y + 1, 0) : s.setMonth(s.y, s.m + 1));
@@ -24,9 +24,16 @@ export function MonthNav({ size = 30, minW = 190 }: { size?: number; minW?: numb
       <button className="btn btn-secondary btn-icon" onClick={prev} title="Previous month" aria-label="Previous month">
         <Icon name="left" />
       </button>
-      <h2 style={{ fontSize: size, minWidth: minW }}>
-        {MONL[s.m]} {s.y}
-      </h2>
+      {/* The month is the page heading on the Calendar page. */}
+      {h1 ? (
+        <h1 style={{ fontSize: size, minWidth: minW }}>
+          {MONL[s.m]} {s.y}
+        </h1>
+      ) : (
+        <h2 style={{ fontSize: size, minWidth: minW }}>
+          {MONL[s.m]} {s.y}
+        </h2>
+      )}
       <button className="btn btn-secondary btn-icon" onClick={next} title="Next month" aria-label="Next month">
         <Icon name="right" />
       </button>
@@ -202,7 +209,7 @@ export function CalendarGrid({ mgmt, edit }: { mgmt?: boolean; edit?: boolean })
       {!mgmt && <HolidayToday />}
       <div className="page-head-row" style={{ alignItems: "center" }}>
         <div className="month-nav">
-          <MonthNav />
+          <MonthNav h1={!mgmt} />
           <button
             className="btn btn-secondary btn-36"
             onClick={() => {
@@ -254,11 +261,11 @@ export function CalendarGrid({ mgmt, edit }: { mgmt?: boolean; edit?: boolean })
                 const isToday = d === s.today;
                 return (
                   <div key={d} className="grid-day" role="columnheader" title={c.hols[d] || fmt(d)} style={{ background: isWk(d) ? WK_BG : "transparent" }}>
-                    <span style={{ color: isWk(d) ? "var(--color-neutral-600)" : "var(--color-neutral-700)" }}>{DOW[dowOf(d)]}</span>
+                    <span style={{ color: "var(--color-neutral-700)" }}>{DOW[dowOf(d)]}</span>
                     <span
                       style={{
                         background: isToday ? "var(--color-accent)" : "transparent",
-                        color: isToday ? "var(--color-bg)" : isWk(d) ? "var(--color-neutral-600)" : "var(--color-text)",
+                        color: isToday ? "var(--color-bg)" : isWk(d) ? "var(--color-neutral-700)" : "var(--color-text)",
                       }}
                     >
                       {dayOf(d)}
@@ -269,8 +276,8 @@ export function CalendarGrid({ mgmt, edit }: { mgmt?: boolean; edit?: boolean })
             </div>
             {rows.map((r, i) =>
               "header" in r ? (
-                <div key={"h" + i} className="grid-group">
-                  <div>{r.header}</div>
+                <div key={"h" + i} className="grid-group" role="row">
+                  <div role="rowheader">{r.header}</div>
                 </div>
               ) : (
                 <div key={r.p.id} className={"grid-row role-grid lv-" + r.p.level} role="row">
@@ -328,24 +335,33 @@ export function CalendarGrid({ mgmt, edit }: { mgmt?: boolean; edit?: boolean })
               ),
             )}
             {!rows.length && (
-              <div style={{ padding: "32px 14px", color: "var(--color-neutral-700)" }}>{ql ? `No one matches “${q}”.` : mgmt ? "No directors, managers or team leads here yet." : "No one is allocated here yet."}</div>
+              <div role="row">
+                <div role="gridcell" style={{ padding: "32px 14px", color: "var(--color-neutral-700)" }}>
+                  {ql ? `No one matches “${q}”.` : mgmt ? "No directors, managers or team leads here yet." : "No one is allocated here yet."}
+                </div>
+              </div>
             )}
             {!mgmt && (
-              <div className="grid-counts">
-                <div style={{ display: "flex" }}>
-                  <button className="grid-counts-toggle" onClick={() => setCountsOpen(!countsOpen)} aria-expanded={countsOpen}>
-                    <span style={{ display: "grid", transform: countsOpen ? "none" : "rotate(-90deg)" }}>
-                      <Icon name="down" size={14} />
-                    </span>
-                    {countsOpen ? "Hide daily counts" : `Show daily counts (${countRows.length})`}
-                  </button>
+              <div className="grid-counts" role="rowgroup">
+                <div style={{ display: "flex" }} role="row">
+                  {/* Sticky wrapper (a grid cell), so the toggle stays at the left while scrolling. */}
+                  <div role="gridcell" style={{ position: "sticky", left: 0 }}>
+                    <button className="grid-counts-toggle" onClick={() => setCountsOpen(!countsOpen)} aria-expanded={countsOpen}>
+                      <span style={{ display: "grid", transform: countsOpen ? "none" : "rotate(-90deg)" }}>
+                        <Icon name="down" size={14} />
+                      </span>
+                      {countsOpen ? "Hide daily counts" : `Show daily counts (${countRows.length})`}
+                    </button>
+                  </div>
                 </div>
                 {countsOpen &&
                   countRows.map(([label, vals, fg]) => (
-                    <div key={label} style={{ display: "flex" }}>
-                      <div className="grid-count-label">{label}</div>
+                    <div key={label} style={{ display: "flex" }} role="row">
+                      <div className="grid-count-label" role="rowheader">
+                        {label}
+                      </div>
                       {vals.map((nn, j) => (
-                        <div key={j} className="grid-count" style={{ color: fg, background: isWk(dates[j]) ? WK_BG : "transparent" }}>
+                        <div key={j} className="grid-count" role="gridcell" style={{ color: fg, background: isWk(dates[j]) ? WK_BG : "transparent" }}>
                           {nn || ""}
                         </div>
                       ))}

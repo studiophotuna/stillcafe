@@ -157,7 +157,7 @@ export default function ReportsPage() {
             </button>
           </div>
         </div>
-        <Blueprint className="report-scroll">
+        <Blueprint className="report-scroll" tabIndex={0}>
           <table className="table" style={{ fontSize: 13 }}>
             <thead>
               <tr>{rows[0].map((h, i) => <th key={i} className="nowrap">{h}</th>)}</tr>

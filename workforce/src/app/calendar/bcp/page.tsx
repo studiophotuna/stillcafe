@@ -218,7 +218,7 @@ export default function BcpPage() {
                 </div>
                 <table className="table" style={{ minWidth: 760 }}>
                   <thead>
-                    <tr><th>Name</th><th>Team</th><th>Status</th><th>Note</th><th>Checked in</th><th /></tr>
+                    <tr><th>Name</th><th>Team</th><th>Status</th><th>Note</th><th>Checked in</th><th><span className="sr-only">Actions</span></th></tr>
                   </thead>
                   <tbody>
                     {bcpPeople.map((p) => (

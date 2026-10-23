@@ -279,7 +279,7 @@ function TagDialog({ pid, onClose }: { pid: number; onClose: () => void }) {
             <tr>
               <th>From</th>
               <th>Counted in</th>
-              <th />
+              <th><span className="sr-only">Actions</span></th>
             </tr>
           </thead>
           <tbody>

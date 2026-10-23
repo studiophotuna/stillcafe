@@ -126,7 +126,7 @@ function FteTable({ rows, total, days, prodH, f1 }: { rows: FteRow[]; total: Fte
         </span>
       </div>
       {rows.length ? (
-        <div className="boxed-scroll">
+        <div className="boxed-scroll" tabIndex={0}>
           <table className="table">
             <thead>
               <tr>

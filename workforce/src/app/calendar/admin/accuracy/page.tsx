@@ -78,7 +78,7 @@ export default function AccuracyPage() {
               <th>Preventive solution</th>
               <th>Corrective action</th>
               <th>Logged by</th>
-              <th />
+              <th><span className="sr-only">Actions</span></th>
             </tr>
           </thead>
           <tbody>

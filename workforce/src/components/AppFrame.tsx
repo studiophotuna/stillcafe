@@ -144,7 +144,11 @@ export function AppFrame({
         <div className="content">
           <QuickLinks />
           {banner}
-          {filterBar && <div className="filterbar">{filterBar}</div>}
+          {filterBar && (
+            <header className="filterbar" aria-label="Filters">
+              {filterBar}
+            </header>
+          )}
           <main className="page">
             {here && here.items.length > 1 && (
               <nav className="admin-tabs" aria-label={here.title}>

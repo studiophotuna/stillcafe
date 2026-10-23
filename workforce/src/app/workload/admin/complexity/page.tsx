@@ -210,7 +210,7 @@ export default function ComplexityPage() {
                 <th>Level</th>
                 <th>Target / day</th>
                 <th>Avg handling time (min)</th>
-                <th />
+                <th><span className="sr-only">Actions</span></th>
               </tr>
             </thead>
             <tbody>
@@ -290,7 +290,7 @@ export default function ComplexityPage() {
         {!on ? (
           <div className="banner">Complexity is off. Switch it on above to start tagging.</div>
         ) : qs.length || (showChecked && checked.length) ? (
-          <div className="boxed-scroll">
+          <div className="boxed-scroll" tabIndex={0}>
             <table className="table">
               <thead>
                 <tr>
@@ -300,7 +300,7 @@ export default function ComplexityPage() {
                   <th>Tagged</th>
                   <th>Time worked</th>
                   <th>Why</th>
-                  <th />
+                  <th><span className="sr-only">Actions</span></th>
                 </tr>
               </thead>
               <tbody>{(showChecked ? qs.concat(checked) : qs).map(row)}</tbody>

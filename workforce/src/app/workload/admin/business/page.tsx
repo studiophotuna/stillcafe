@@ -267,7 +267,7 @@ export default function BusinessCasePage() {
         </Blueprint>
         <Blueprint as="section" className="panel" style={{ gap: 12 }}>
           <h2 className="h2">Agreed rates</h2>
-          <div className="boxed-scroll">
+          <div className="boxed-scroll" tabIndex={0}>
             <table className="table">
               <thead>
                 <tr>
@@ -294,7 +294,7 @@ export default function BusinessCasePage() {
               </tbody>
             </table>
           </div>
-          <div className="boxed-scroll">
+          <div className="boxed-scroll" tabIndex={0}>
             <table className="table">
               <thead>
                 <tr>
@@ -400,7 +400,7 @@ export default function BusinessCasePage() {
             Select a month for the breakdown by role and task type.
           </span>
         </div>
-        <div className="boxed-scroll">
+        <div className="boxed-scroll" tabIndex={0}>
           <table className="table">
             <thead>
               <tr>

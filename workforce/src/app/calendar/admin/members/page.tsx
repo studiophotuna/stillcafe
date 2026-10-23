@@ -142,7 +142,7 @@ export default function MembersPage() {
               const sh = shById[p.shift];
               const pool = c.poolOf(p);
               return (
-                <tr key={p.id} className={"role-row lv-" + p.level} style={{ opacity: gone ? 0.6 : 1 }}>
+                <tr key={p.id} className={"role-row lv-" + p.level} style={gone ? { background: "var(--color-neutral-100)" } : undefined}>
                   <td>
                     {canManage(p) && (
                       <input

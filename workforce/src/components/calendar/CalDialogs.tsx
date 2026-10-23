@@ -1049,7 +1049,7 @@ export function IssuedPasswords() {
             <tr>
               <th>Person</th>
               <th>Temporary password</th>
-              <th />
+              <th><span className="sr-only">Actions</span></th>
             </tr>
           </thead>
           <tbody>
@@ -1371,7 +1371,7 @@ function UploadDialog({ mode: mode0 }: { mode: "members" | "schedule" }) {
             <Note>
               {checked.length} changes · {okN} ready · {checked.length - okN} with errors{skipped ? ` · ${skipped} unchanged cells skipped` : ""}
             </Note>
-            <div className="boxed-scroll" style={{ maxHeight: 280 }}>
+            <div className="boxed-scroll" tabIndex={0} style={{ maxHeight: 280 }}>
               <table className="table">
                 <thead>
                   <tr>

@@ -36,14 +36,14 @@ export function TaskTable({ rows, variant }: { rows: TaskRowVM[]; variant: "mine
           {!h && <th>Status</th>}
           {(q || h) && <th>{h ? "Done by" : "Assignee"}</th>}
           {dl && <th>Delay remarks</th>}
-          {!h && <th />}
+          {!h && <th><span className="sr-only">Actions</span></th>}
         </tr>
       </thead>
       <tbody>
         {rows.map((r) => (
           <tr key={r.id} className={!h && r.dueState ? "row-" + r.dueState : undefined}>
             {tf && <td className="nowrap" style={{ fontWeight: 500 }}>{r.ticket || "—"}</td>}
-            <td>
+            <td style={q || h ? { minWidth: 260 } : undefined}>
               <button className="task-link" onClick={() => setDialog({ kind: "task", id: r.id })}>
                 <span>{r.title}</span>
                 <span>
@@ -77,7 +77,7 @@ export function TaskTable({ rows, variant }: { rows: TaskRowVM[]; variant: "mine
             {h && <td className="nowrap">{r.held || "—"}</td>}
             {h && <td>{r.onTime ? "Yes" : <span style={{ color: "var(--color-accent-800)", fontWeight: 600 }}>Late</span>}</td>}
             {!h && (
-              <td>
+              <td className="nowrap">
                 <span className={"tag " + r.stCls}>{r.status}</span>
               </td>
             )}

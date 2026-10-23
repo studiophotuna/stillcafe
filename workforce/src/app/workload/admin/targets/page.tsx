@@ -8,8 +8,10 @@ import { useWorkload } from "@/lib/workload/store";
 import type { Settings, WorkingTime } from "@/lib/workload/types";
 
 /** Number input that commits on blur, so typing isn't interrupted by clamping. */
-function NumInput({ id, value, onCommit, step, min, width, placeholder }: {
+function NumInput({ id, label, value, onCommit, step, min, width, placeholder }: {
   id?: string;
+  /** For inputs in a table, which have no visible label of their own. */
+  label?: string;
   value: number | string;
   onCommit: (raw: string) => void;
   step?: number;
@@ -20,6 +22,7 @@ function NumInput({ id, value, onCommit, step, min, width, placeholder }: {
   return (
     <input
       id={id}
+      aria-label={label}
       key={String(value)}
       className="input"
       type="number"
@@ -155,6 +158,7 @@ export default function TargetsPage() {
                   <td>{data.people.filter((p) => p.trades[0] === t.id).length}</td>
                   <td>
                     <NumInput
+                      label={`${trPathOf(data.org, t.id)} target per day`}
                       min={0}
                       width={100}
                       value={s.targets[t.id] ?? 0}
@@ -169,7 +173,7 @@ export default function TargetsPage() {
         <Blueprint as="section" className="panel tight">
           <h2 className="h2">Member overrides</h2>
           <span style={{ fontSize: 13, color: "var(--color-neutral-700)" }}>Leave blank to use the trade target, e.g. for new joiners on a lower target.</span>
-          <div style={{ maxHeight: 420, overflow: "auto" }}>
+          <div style={{ maxHeight: 420, overflow: "auto" }} tabIndex={0}>
             <table className="table">
               <thead>
                 <tr>
@@ -189,6 +193,7 @@ export default function TargetsPage() {
                       </td>
                       <td>
                         <NumInput
+                          label={`${p.name} own target`}
                           min={0}
                           width={100}
                           placeholder="—"

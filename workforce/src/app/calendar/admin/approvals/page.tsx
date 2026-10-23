@@ -259,9 +259,8 @@ export default function ApprovalsPage() {
                         {assigned(q.pid) === s.me ? "You" : nameOf(assigned(q.pid)!)}
                       </strong>
                     ) : admins.length ? (
-                      <span title={admins.map(nameOf).join(", ")}>
-                        {admins.slice(0, 2).map(nameOf).join(", ")}
-                        {admins.length > 2 ? ` +${admins.length - 2} more` : ""} <span className="muted">(team admins)</span>
+                      <span className="nowrap" title={admins.map(nameOf).join(", ")}>
+                        {admins.length === 1 ? nameOf(admins[0]) : `Team admins (${admins.length})`}
                       </span>
                     ) : (
                       "System admins"

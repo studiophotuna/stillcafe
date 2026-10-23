@@ -65,7 +65,7 @@ export function UploadTasks() {
           <div className="banner">
             {chk.length} rows · {okN} ready · {chk.length - okN} with errors
           </div>
-          <div className="boxed-scroll">
+          <div className="boxed-scroll" tabIndex={0}>
             <table className="table">
               <thead>
                 <tr>

@@ -171,6 +171,7 @@ export function ColumnChart({
                   height={ph + M.b}
                   fill="transparent"
                   tabIndex={0}
+                  role="img"
                   aria-label={`${l}: ${series.map((s) => `${s.name} ${s.values[i] === null ? "none" : fmt(s.values[i]!)}`).join(", ")}`}
                   onPointerEnter={() => setHi(i)}
                   onPointerLeave={() => setHi(null)}

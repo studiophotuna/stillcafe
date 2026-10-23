@@ -255,7 +255,7 @@ function DueBoard({
       <table className="table qb">
         <thead>
           <tr>
-            <th />
+            <th><span className="sr-only">Actions</span></th>
             {cols.map((c) => (
               <th key={c.key} className={"qb-c" + (c.today ? " qb-today" : "")}>
                 <div>{c.label}</div>
