@@ -199,6 +199,15 @@ async function loadOrCreate(token: string, team: string, ctx: FromCal): Promise<
   return (await load(token, team, ctx))!;
 }
 
+/**
+ * A team's change stamp (one cheap read: calendar version plus the team's latest task and
+ * activity changes), or null if it can't be checked. Same stamp = nothing to reload.
+ */
+export async function wlStamp(token: string, team: string): Promise<string | null> {
+  const { data, error } = await db().rpc("workforce_wl_stamp", { p_token: token, p_team: team });
+  return error ? null : (data as string);
+}
+
 /** Current data for a team person `me` can open; creates the team's Workload (no tasks) the first time. */
 export async function getData(token: string, me: number, want?: string | null): Promise<WorkloadData> {
   const { team, ctx } = await teamContext(token, me, want);

@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import { usePoll } from "@/lib/poll";
 import { Blueprint } from "./ui";
 
 type Link = { label: string; url: string };
@@ -190,11 +191,9 @@ export function BipoNotice() {
       .then((j) => j && !j.demo && setN(j))
       .catch(() => {});
   }, []);
-  useEffect(() => {
-    load();
-    const i = setInterval(load, 120_000);
-    return () => clearInterval(i);
-  }, [load]);
+  useEffect(load, [load]);
+  // Rarely changes and costs several reads: every 10 minutes, not on every tab switch.
+  usePoll(load, 10 * 60_000, false);
   if (!n || later) return null;
   const filed = new Set(read<string[]>(LS_FILED, []));
   const leave = n.leave.filter((x) => !filed.has(x.id));

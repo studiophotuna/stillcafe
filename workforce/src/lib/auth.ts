@@ -28,6 +28,11 @@ export async function getSession(): Promise<Session | null> {
   return { ...(data as Omit<Session, "token">), token };
 }
 
+/** The session cookie's token, unchecked: for calls whose database function checks it anyway. */
+export async function sessionToken(): Promise<string | null> {
+  return (await cookies()).get(COOKIE)?.value ?? null;
+}
+
 export function setSessionCookie(res: NextResponse, token: string) {
   res.cookies.set(COOKIE, token, {
     httpOnly: true,

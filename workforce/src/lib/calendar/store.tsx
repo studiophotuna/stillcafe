@@ -1,6 +1,7 @@
 "use client";
 
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
+import { usePoll } from "../poll";
 import { loadMe, toLogin } from "../session";
 import { dayKey, fmtT, nowMs, setRealClock } from "../workload/clock";
 import { isViewAs, personaId } from "../workload/constants";
@@ -80,7 +81,7 @@ interface Store {
 }
 
 const Ctx = createContext<Store | null>(null);
-const REFRESH_MS = 20_000;
+const REFRESH_MS = 30_000;
 
 export function CalendarProvider({ children }: { children: React.ReactNode }) {
   const [data, setData] = useState<CalendarData | null>(null);
@@ -88,6 +89,8 @@ export function CalendarProvider({ children }: { children: React.ReactNode }) {
   const [mode, setMode] = useState<DataMode | null>(null);
   const modeRef = useRef<DataMode | null>(null);
   const pending = useRef(0);
+  // The saved version this page has: the background refresh only reloads when it changes.
+  const version = useRef<number | null>(null);
   const queue = useRef<Promise<void>>(Promise.resolve());
   const [toasts, setToasts] = useState<Toast[]>([]);
   const [viewAs, setViewAsState] = useState<ViewAs>("admin");
@@ -116,10 +119,13 @@ export function CalendarProvider({ children }: { children: React.ReactNode }) {
   const refresh = useCallback(async () => {
     if (modeRef.current !== "db" || pending.current) return;
     try {
-      const r = await fetch("/api/cal/snapshot", { cache: "no-store" });
+      const r = await fetch("/api/cal/snapshot" + (version.current !== null ? "?v=" + version.current : ""), { cache: "no-store" });
       if (r.status === 401 || r.status === 403) return toLogin(r.status === 403 ? "/change-password" : "/login");
       const j = await r.json();
-      if (j.mode === "db" && !pending.current) commit(j.data);
+      if (j.mode === "db" && !j.same && !pending.current) {
+        version.current = j.version ?? null;
+        commit(j.data);
+      }
     } catch {}
   }, [commit]);
 
@@ -135,7 +141,10 @@ export function CalendarProvider({ children }: { children: React.ReactNode }) {
         const r = await fetch("/api/cal/snapshot", { cache: "no-store" });
         if (r.status === 401 || r.status === 403) return toLogin(r.status === 403 ? "/change-password" : "/login");
         const j = await r.json();
-        if (j.mode === "db") [next, saved] = ["db", j.data];
+        if (j.mode === "db") {
+          [next, saved] = ["db", j.data];
+          version.current = j.version ?? null;
+        }
         else if (j.mode === "error") toast("The database couldn’t be reached, so this is sample data. Changes won’t be saved.");
       } catch {}
       if (!live) return;
@@ -152,17 +161,13 @@ export function CalendarProvider({ children }: { children: React.ReactNode }) {
     };
   }, [commit, toast]);
 
+  usePoll(refresh, REFRESH_MS);
   useEffect(() => {
     const tick = setInterval(() => setNow(nowMs()), 30_000);
-    const poll = setInterval(refresh, REFRESH_MS);
-    const onFocus = () => refresh();
-    window.addEventListener("focus", onFocus);
-    window.addEventListener("wfm:reload", onFocus);
+    window.addEventListener("wfm:reload", refresh);
     return () => {
       clearInterval(tick);
-      clearInterval(poll);
-      window.removeEventListener("focus", onFocus);
-      window.removeEventListener("wfm:reload", onFocus);
+      window.removeEventListener("wfm:reload", refresh);
     };
   }, [refresh]);
 

@@ -3,6 +3,7 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 import { applyAction, type Action } from "./actions";
 import { dayKey, nowMs, setRealClock } from "./clock";
+import { usePoll } from "../poll";
 import { loadMe, toLogin } from "../session";
 import { isViewAs, person, personaId } from "./constants";
 import { canUpload } from "./authz";
@@ -64,7 +65,7 @@ interface Store {
 
 const Ctx = createContext<Store | null>(null);
 
-const REFRESH_MS = 20_000;
+const REFRESH_MS = 30_000;
 const TEAM_KEY = "wfm.wlTeam";
 const savedTeam = () => {
   try {
@@ -82,7 +83,9 @@ export function WorkloadProvider({ children }: { children: React.ReactNode }) {
   const pending = useRef(0);
   // The team being shown; the server checks the person may open it.
   const teamRef = useRef("");
-  const q = () => (teamRef.current ? "?team=" + encodeURIComponent(teamRef.current) : "");
+  // The team's change stamp this page has: the background refresh only reloads when it changes.
+  const stamp = useRef("");
+  const q = (v = "") => (teamRef.current ? "?team=" + encodeURIComponent(teamRef.current) + (v ? "&v=" + encodeURIComponent(v) : "") : "");
   const queue = useRef<Promise<void>>(Promise.resolve());
   const [toasts, setToasts] = useState<Toast[]>([]);
   const [viewAs, setViewAsState] = useState<ViewAs>("admin");
@@ -110,11 +113,14 @@ export function WorkloadProvider({ children }: { children: React.ReactNode }) {
   const refresh = useCallback(async () => {
     if (modeRef.current !== "db" || pending.current) return;
     try {
-      const r = await fetch("/api/wl/snapshot" + q(), { cache: "no-store" });
+      const r = await fetch("/api/wl/snapshot" + q(stamp.current), { cache: "no-store" });
       if (r.status === 401) return toLogin();
       const j = await r.json();
       if (r.status === 403 && j.code !== "team") return toLogin("/change-password");
-      if (j.mode === "db" && !pending.current) commit(j.data);
+      if (j.mode === "db" && !j.same && !pending.current) {
+        stamp.current = j.stamp ?? "";
+        commit(j.data);
+      }
     } catch {}
   }, [commit]);
 
@@ -143,7 +149,10 @@ export function WorkloadProvider({ children }: { children: React.ReactNode }) {
           return;
         }
         if (r.status === 403) return toLogin("/change-password");
-        if (j.mode === "db") [next, saved] = ["db", j.data];
+        if (j.mode === "db") {
+          [next, saved] = ["db", j.data];
+          stamp.current = j.stamp ?? "";
+        }
         else if (j.mode === "error") toast("The database couldn’t be reached, so this is sample data. Changes won’t be saved.");
       } catch {}
       if (!live) return;
@@ -158,17 +167,13 @@ export function WorkloadProvider({ children }: { children: React.ReactNode }) {
   }, [commit, toast]);
 
   // Clock tick, plus a refresh of saved data so queues stay current.
+  usePoll(refresh, REFRESH_MS);
   useEffect(() => {
     const tick = setInterval(() => setNow(nowMs()), 30_000);
-    const poll = setInterval(refresh, REFRESH_MS);
-    const onFocus = () => refresh();
-    window.addEventListener("focus", onFocus);
-    window.addEventListener("wfm:reload", onFocus);
+    window.addEventListener("wfm:reload", refresh);
     return () => {
       clearInterval(tick);
-      clearInterval(poll);
-      window.removeEventListener("focus", onFocus);
-      window.removeEventListener("wfm:reload", onFocus);
+      window.removeEventListener("wfm:reload", refresh);
     };
   }, [refresh]);
 
@@ -241,6 +246,7 @@ export function WorkloadProvider({ children }: { children: React.ReactNode }) {
       if (!r.ok) return toast(j.error || "That team couldn’t be opened.");
       setSysState("all");
       setTr("all");
+      stamp.current = j.stamp ?? "";
       commit(j.data);
     },
     [commit, toast],
