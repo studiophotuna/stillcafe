@@ -90,7 +90,7 @@ export default function ApprovalsPage() {
         <span>
           {!v.multi && v.branch.mode === "auto"
             ? "This team approves requests automatically, so nothing will wait here. You can change this in Settings."
-            : `Requests from ${v.multi ? "these teams’" : v.branch.name} members wait here until their approver or another leader decides. Team leads and above don’t need approval. Members in several teams or trades are approved once, by their main team; the decision then shows in all their teams.`}
+            : `Requests from ${v.multi ? "these teams’" : v.branch.name} members wait here until their approver or another leader decides. People in several teams are approved once, by their main team.`}
         </span>
       </div>
       <div className="row" style={{ justifyContent: "space-between", alignItems: "flex-end" }}>
@@ -122,9 +122,10 @@ export default function ApprovalsPage() {
         </div>
         </div>
       </div>
-      {tab === "waiting" && canPick.length > 0 && (
+      {/* Shown once requests are ticked: approve or decline them together. */}
+      {tab === "waiting" && picked.length > 0 && (
         <div className="bulk-bar">
-          <span>{picked.length ? `${picked.length} selected` : "Select requests to approve or decline several at once."}</span>
+          <span>{picked.length} selected</span>
           <div className="row" style={{ gap: 8 }}>
             <button className="btn btn-secondary btn-36" disabled={!picked.length} onClick={() => decideSel("declined")}>
               <Icon name="x" size={16} />
@@ -200,10 +201,8 @@ export default function ApprovalsPage() {
               <th>Employee</th>
               <th>Type</th>
               <th>Dates</th>
-              <th>Days</th>
               <th>Reason</th>
               <th>Approver</th>
-              <th>Other teams</th>
               <th>Submitted</th>
               <th style={{ textAlign: "right" }}>Decision</th>
             </tr>
@@ -227,6 +226,11 @@ export default function ApprovalsPage() {
                       <span className="small" style={{ fontSize: 12 }}>
                         {[v.multi ? bName(bid) : "", p.assign.filter((a) => c.O.anc(a).includes(bid)).map((a) => c.O.sub(a)).filter(Boolean).join(", ")].filter(Boolean).join(" · ") || bName(bid)}
                       </span>
+                      {others.length > 0 && (
+                        <span className="small" style={{ fontSize: 12 }}>
+                          Also {others.map((k) => `${bName(k)}: ${APPR_WORD[q.approvals[k]].toLowerCase()}`).join(", ")}
+                        </span>
+                      )}
                     </div>
                   </td>
                   <td>
@@ -237,6 +241,10 @@ export default function ApprovalsPage() {
                   </td>
                   <td className="nowrap">
                     {rng2(q.start, q.end)}
+                    <div className="small">
+                      {c.reqDays(q)} day{c.reqDays(q) === 1 ? "" : "s"}
+                      {!!q.lwop && <span className="tag tag-amber" title="Filed with no balance left: these days are leave without pay" style={{ marginLeft: 6 }}>LWOP {q.lwop}</span>}
+                    </div>
                     {(() => {
                       const h = capHits(c, q.pid, q.start, q.end, q.type);
                       return h.length ? (
@@ -248,10 +256,6 @@ export default function ApprovalsPage() {
                       ) : null;
                     })()}
                   </td>
-                  <td className="nowrap">
-                  {c.reqDays(q)}
-                  {!!q.lwop && <span className="tag tag-amber" title="Filed with no balance left: these days are leave without pay" style={{ marginLeft: 6 }}>LWOP {q.lwop}</span>}
-                </td>
                   <td style={{ color: "var(--color-neutral-800)" }}>{q.reason || "—"}</td>
                   <td className="small" style={{ fontSize: 13 }}>
                     {assigned(q.pid) !== undefined ? (
@@ -265,9 +269,6 @@ export default function ApprovalsPage() {
                     ) : (
                       "System admins"
                     )}
-                  </td>
-                  <td className="small" style={{ fontSize: 13 }}>
-                    {others.length ? others.map((k) => `${bName(k)}: ${APPR_WORD[q.approvals[k]].toLowerCase()}`).join(", ") : "None"}
                   </td>
                   <td className="nowrap muted">{fmt(q.created)}</td>
                   <td>

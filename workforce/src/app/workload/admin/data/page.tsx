@@ -181,7 +181,16 @@ export default function DataPage() {
     <>
       <PageHead
         title={`Data pull-out · ${unitLabel}`}
-        sub="Every ticket for the period, one row each with all its details: times, SLA, time waiting, worked and pending, overtime, the complexity breakdown per level with its checks and review, the e-mail and every task field. Two more sheets list each pending period and each ticket’s history. Choose a system or trade at the top to narrow it down."
+        sub={
+          <>
+            Every ticket in the period with all its details, as an Excel file. Below is a preview.
+            <details className="howto">
+              <summary>What’s in the file?</summary>
+              One row per ticket: times, SLA, time waiting, worked and pending, overtime, the complexity breakdown per level with its checks and review, the e-mail and
+              every task field. Two more sheets list each pending period and each ticket’s history. Choose a system or trade at the top to narrow it down.
+            </details>
+          </>
+        }
       />
       <div className="row" style={{ justifyContent: "space-between", alignItems: "flex-end", flexWrap: "wrap", gap: 10 }}>
         <div className="row" style={{ alignItems: "flex-end", flexWrap: "wrap", gap: 10 }}>
@@ -224,7 +233,7 @@ export default function DataPage() {
             </tr>
           </thead>
           <tbody>
-            {list.slice(0, 50).map((t) => (
+            {list.slice(0, 10).map((t) => (
               <tr key={t.id}>
                 <td className="nowrap">{t.id}</td>
                 {tf && <td className="nowrap">{ticketOf(data, t)}</td>}
@@ -247,7 +256,7 @@ export default function DataPage() {
             )}
           </tbody>
         </table>
-        {list.length > 50 && <div className="small" style={{ padding: "10px 14px" }}>Showing the first 50 of {list.length}. The download has them all.</div>}
+        {list.length > 10 && <div className="small" style={{ padding: "10px 14px" }}>Showing the first 10 of {list.length}. The download has them all.</div>}
       </Blueprint>
     </>
   );

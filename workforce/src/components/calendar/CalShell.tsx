@@ -102,9 +102,7 @@ export function CalShell({ children }: { children: React.ReactNode }) {
       ? v.mTower === "all"
         ? "Showing leaders across all towers"
         : `Showing leaders in ${O.by[v.mTower].name}`
-      : (path === "/calendar/admin/approvals" && !v.multi) || path === "/calendar/admin/settings"
-        ? "Approvals and settings apply to the whole team"
-        : "";
+      : "";
   const sel = (id: string, label: string, value: string, opts: { id: string; name: string }[], onChange: (v: string) => void, min: number, all?: string) =>
     // Nothing to choose: the name as text, not a drop-down.
     opts.length === 1 && !all ? (

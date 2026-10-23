@@ -81,10 +81,7 @@ export function AhtPanels({ st, trades = true }: { st: ReturnType<typeof ahtStat
       {on ? (
         <Blueprint as="section" className="panel" style={{ gap: 10 }}>
           <h2 className="h2">Handling time by complexity</h2>
-          <span className="small">
-            Actual AHT per contract of each level. A ticket with several levels shares its time across them by their set AHT. Use the actual AHT to update the level’s AHT
-            (used to question tagging in <Link href="/workload/admin/complexity">Complexity</Link>).
-          </span>
+          <span className="small">Use the actual time to update a level’s set AHT (used to question tagging in <Link href="/workload/admin/complexity">Complexity</Link>).</span>
           <div className="boxed-scroll" tabIndex={0}>
             <table className="table">
               <thead>
@@ -140,9 +137,10 @@ export function AhtPanels({ st, trades = true }: { st: ReturnType<typeof ahtStat
           {table("Handling time by task type", st.types, "Task type", false)}
         </div>
       )}
-      <span className="small">
-        Time worked excludes time pending, breaks, meetings and other time away.{on ? " Time vs expected: time worked on tickets tagged with complexity ÷ the time their levels’ AHT implies (100% = as expected). Questions: tickets still waiting for an admin’s check." : ""}
-      </span>
+      <details className="howto small">
+        <summary>What do these numbers mean?</summary>
+        Time worked excludes time pending, breaks, meetings and other time away.{on ? " A ticket with several complexity levels shares its time across them by their set AHT. Time vs expected: time worked on tickets tagged with complexity ÷ the time their levels’ AHT implies (100% = as expected). Questions: tickets still waiting for an admin’s check." : ""}
+      </details>
     </>
   );
 }

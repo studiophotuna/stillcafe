@@ -23,11 +23,12 @@ const ABOUT: Record<string, string> = {
   "/calendar/admin/holidays": "Holidays by department, tower or team",
   "/calendar/admin/organization":
     "Departments, towers, teams, systems and trades; payroll cut-offs",
-  "/workload/dashboard": "Productivity, timeliness and handling time",
+  "/workload/dashboard": "Productivity, timeliness and the queue",
   "/workload/admin/queue": "Assign, re-prioritise and share out tickets",
   "/workload/overtime": "Overtime to approve",
   "/workload/breaks": "Breaks over the allowance",
   "/workload/admin/aht": "Handling time and FTE needed",
+  "/workload/admin/data": "Every ticket with all its details, as an Excel file",
   "/workload/admin/complexity": "Complexity levels and tickets to review",
   "/workload/admin/intake": "Mailbox and uploads",
   "/workload/admin/allocation": "How tasks are given out",
@@ -58,7 +59,6 @@ export default function AdminHome() {
   };
   // Filters: find a function by name or description, one area, or only what's waiting.
   const [q, setQ] = useState("");
-  const [area, setArea] = useState("all");
   const [waiting, setWaiting] = useState(false);
   const words = q.trim().toLowerCase().split(/\s+/).filter(Boolean);
   const all = adminSections(flags).map((sec) => ({
@@ -66,7 +66,6 @@ export default function AdminHome() {
     items: sec.items.filter((n) => n.href !== "/calendar/admin"),
   }));
   const shown = all
-    .filter((sec) => area === "all" || sec.title === area)
     .map((sec) => ({
       ...sec,
       items: sec.items.filter(
@@ -84,12 +83,8 @@ export default function AdminHome() {
     <>
       <div className="page-head">
         <h1>Admin</h1>
-        <span>
-          Everything for managing people and work in one place. Calendar and
-          Workload keep the everyday pages.
-        </span>
+        <span>Everything for managing people and work.</span>
       </div>
-      <CoverPanel />
       <div className="row" style={{ gap: 10, flexWrap: "wrap" }}>
         <input
           className="input"
@@ -100,16 +95,6 @@ export default function AdminHome() {
           onChange={(e) => setQ(e.target.value)}
           style={{ width: 280, maxWidth: "100%" }}
         />
-        {all.length > 1 && (
-          <select className="input" aria-label="Section" value={area} onChange={(e) => setArea(e.target.value)} style={{ width: "auto" }}>
-            <option value="all">All sections</option>
-            {all.map((sec) => (
-              <option key={sec.title} value={sec.title}>
-                {sec.title}
-              </option>
-            ))}
-          </select>
-        )}
         <label className="check-row" style={{ alignItems: "center" }}>
           <input
             type="checkbox"
@@ -130,7 +115,6 @@ export default function AdminHome() {
               className="btn btn-ghost"
               onClick={() => {
                 setQ("");
-                setArea("all");
                 setWaiting(false);
               }}
             >
@@ -170,6 +154,8 @@ export default function AdminHome() {
           </div>
         </Blueprint>
       ))}
+      {/* Set now and then, so it sits below the everyday functions. */}
+      <CoverPanel />
     </>
   );
 }

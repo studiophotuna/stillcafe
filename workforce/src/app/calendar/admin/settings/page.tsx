@@ -67,7 +67,7 @@ export default function SettingsPage() {
     <>
       <div className="page-head">
         <h1>Settings · {b.name}</h1>
-        <span>Settings apply to the whole team, including its systems and trades. Changes save immediately.</span>
+        <span>For the whole team, its systems and trades. Changes save straight away.</span>
       </div>
       <div className="field" style={{ maxWidth: 320 }}>
         <label htmlFor="cc">Cost centre (headcount report)</label>
@@ -107,8 +107,7 @@ export default function SettingsPage() {
             </div>
             {byRole.length > 0 && (
               <span className="small" style={{ fontSize: 12 }}>
-                Also admins by role: {byRole.map((p) => `${p.name} (${LEVELS[p.level]})`).join(", ")}. Directors administer their department, managers their
-                tower and team leads their team, without being added here.
+                Also admins by their role: {byRole.map((p) => `${p.name} (${LEVELS[p.level]})`).join(", ")}.
               </span>
             )}
             <select
@@ -147,14 +146,12 @@ export default function SettingsPage() {
           <div className="field">
             <label>Plan member schedules and shifts per</label>
             <Seg name="schedper" value={b.schedPeriod ?? "week"} options={[["week", "Week"], ["month", "Month"]]} onChange={(val) => set({ schedPeriod: val })} />
-            <span className="small">Update schedules (Calendar) opens on a week or a month. Admins can still switch for a single update.</span>
           </div>
         </Blueprint>
         <Blueprint as="section" className="panel" style={{ gap: 10 }}>
           <h2 className="h2">Leave limit per day</h2>
           <span className="small" style={{ fontSize: 13 }}>
-            Most people on approved leave on the same day. Someone filing for a day that’s already full is told and shown other dates, but can still file; approvers are
-            warned before approving past it. Leave the box empty for no limit.
+            Most people on leave on the same day. Past it, people filing are warned and approvers too. Empty = no limit.
           </span>
           {capInput("lm-team", "Whole team", b.leaveMax, (n) => set({ leaveMax: n }))}
           {systems.length > 0 && (
@@ -166,8 +163,13 @@ export default function SettingsPage() {
             </>
           )}
         </Blueprint>
+      </div>
+      {/* Company-wide reference, not team settings: folded away. */}
+      <details className="howto">
+        <summary>Leave policy and status codes</summary>
+        <div className="grid-2" style={{ marginTop: 10 }}>
         <Blueprint as="section" className="panel" style={{ gap: 10 }}>
-          <h2 className="h2">Leave policy</h2>
+          <h3 className="h2">Leave policy</h3>
           <div className="stat-grid">
             <div>
               <span>VL + SL</span>
@@ -190,7 +192,7 @@ export default function SettingsPage() {
           </span>
         </Blueprint>
         <Blueprint as="section" className="panel tight">
-          <h2 className="h2">Status codes</h2>
+          <h3 className="h2">Status codes</h3>
           <table className="table">
             <thead>
               <tr>
@@ -214,7 +216,8 @@ export default function SettingsPage() {
             </tbody>
           </table>
         </Blueprint>
-      </div>
+        </div>
+      </details>
     </>
   );
 }

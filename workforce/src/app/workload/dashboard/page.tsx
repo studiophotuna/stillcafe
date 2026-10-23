@@ -8,7 +8,7 @@ import { AV, PR, tradeOf, trPathOf } from "@/lib/workload/constants";
 import { awayLabel, cxCheck, cxOver, cxOn, cxText, basisUnit, due, fmtMin, isOverdue, slaOf, slaText, taskTypeOf, taskWorkMs, typeScope, ticketField, ticketOf, typeTargets } from "@/lib/workload/engine";
 import { downloadSheets } from "@/lib/workload/excel";
 import { ahtStats } from "@/lib/workload/aht";
-import { AhtPanels } from "@/components/AhtPanels";
+import Link from "next/link";
 import { BarList, ColumnChart, LineChart, VIZ } from "@/components/Charts";
 import { personPeriod, teamPeriod, typeLabel, type PersonPeriod } from "@/lib/workload/metrics";
 import { rangeBuckets, rangeGrain, rangeLabel, rangeMs, todayRange } from "@/lib/workload/period";
@@ -19,7 +19,7 @@ import { useUnit } from "@/lib/workload/useUnit";
 import { usePeriodInput } from "@/lib/workload/usePeriodInput";
 
 export default function DashboardPage() {
-  const { now, toast } = useWorkload();
+  const { now, toast, isAdmin } = useWorkload();
   const { inUnit, unitTrades, people, unitLabel } = useUnit();
   // Shared with Handling time, so both pages show the same dates.
   const [rg, setRg] = useStoredRange("perf", todayRange(now));
@@ -262,22 +262,27 @@ export default function DashboardPage() {
         !error && <div className="banner">Loading {label}…</div>
       ) : (
         <>
+          {/* The numbers people act on first; the rest folded away. */}
           <div className="grid-kpi dense">
             <Kpi k="Productivity" v={pct(view.team.prod)} m={`${label}`} />
-            <Kpi k="Utilization" v={pct(view.team.util)} m="task time ÷ available time" />
             <Kpi k="Timeliness" v={pct(view.team.time)} m={`${view.team.onTime} of ${view.team.done} within SLA`} />
-            <Kpi k="Received" v={view.team.received} m="tasks in the period" />
-            <Kpi k="Done" v={view.team.done} m="tasks in the period" />
-            <Kpi k="Average time" v={view.team.avgMs === null ? "—" : dur(view.team.avgMs)} m="worked per task" />
-            <Kpi k="Overtime" v={view.team.otMin ? dur(view.team.otMin * 60_000) : "—"} m="approved" />
-            <Kpi k="Time away" v={view.team.awayMin ? dur(view.team.awayMin * 60_000) : "—"} m="breaks, meetings, training…" />
-            <Kpi k="Idle" v={view.team.idleMin ? dur(view.team.idleMin * 60_000) : "—"} m="in shift, no task running and not away" />
-            {metricF.map((f) => (
-              <Kpi key={f.key} k={f.label.replace(/^No\. of /, "")} v={sumF(view.doneTasks, f.key)} m="completed" />
-            ))}
+            <Kpi k="Done" v={view.team.done} m={`of ${view.team.received} received in the period`} />
             {live && <Kpi k="In queue now" v={q.length} m={`oldest waiting ${oldest}`} />}
             {live && <Kpi k="Overdue now" v={ut.filter((t) => isOverdue(t, data, now)).length} m="open past their SLA" />}
           </div>
+          <details className="howto">
+            <summary>More numbers</summary>
+            <div className="grid-kpi dense" style={{ marginTop: 10 }}>
+              <Kpi k="Utilization" v={pct(view.team.util)} m="task time ÷ available time" />
+              <Kpi k="Average time" v={view.team.avgMs === null ? "—" : dur(view.team.avgMs)} m="worked per task" />
+              <Kpi k="Overtime" v={view.team.otMin ? dur(view.team.otMin * 60_000) : "—"} m="approved" />
+              <Kpi k="Time away" v={view.team.awayMin ? dur(view.team.awayMin * 60_000) : "—"} m="breaks, meetings, training…" />
+              <Kpi k="Idle" v={view.team.idleMin ? dur(view.team.idleMin * 60_000) : "—"} m="in shift, no task running and not away" />
+              {metricF.map((f) => (
+                <Kpi key={f.key} k={f.label.replace(/^No\. of /, "")} v={sumF(view.doneTasks, f.key)} m="completed" />
+              ))}
+            </div>
+          </details>
 
           <div className="chart-grid">
             <Blueprint as="section" className="panel">
@@ -352,25 +357,6 @@ export default function DashboardPage() {
                 />
               </Blueprint>
             )}
-            {view.aht.length > 0 && (
-              <Blueprint as="section" className="panel">
-                <div className="chart-head">
-                  <h2 className="h2">Handling time by complexity</h2>
-                  <span className="small">{label} · per contract</span>
-                </div>
-                <BarList
-                  rows={view.aht.map(({ level, row }) => ({
-                    key: level.id,
-                    label: level.name,
-                    value: row.contracts ? Math.round(row.ms / row.contracts / 60000) : null,
-                    note: `${row.contracts} contract${row.contracts === 1 ? "" : "s"}${level.aht ? ` · set ${level.aht} min` : ""}`,
-                  }))}
-                  fmt={(n) => fmtMin(Math.round(n))}
-                  empty="No tickets tagged with complexity in this period."
-                />
-                <span className="small">Details and the set AHT are in Handling time below.</span>
-              </Blueprint>
-            )}
             {view.byType.length > 0 && (
               <Blueprint as="section" className="panel">
                 <div className="chart-head">
@@ -420,7 +406,8 @@ export default function DashboardPage() {
           )}
 
           <Blueprint as="section" className="panel tight scroll-x" tabIndex={0}>
-            <h2 className="h2">By trade</h2>
+            <details className="table-view">
+            <summary>By trade · show the numbers</summary>
             <table className="table" style={{ minWidth: 760 }}>
               <thead>
                 <tr>
@@ -453,11 +440,13 @@ export default function DashboardPage() {
                 ))}
               </tbody>
             </table>
+            </details>
           </Blueprint>
 
           {view.byType.length > 0 && (
             <Blueprint as="section" className="panel tight scroll-x" tabIndex={0}>
-              <h2 className="h2">By task type</h2>
+              <details className="table-view">
+              <summary>By task type · show the numbers</summary>
               <table className="table" style={{ minWidth: 680 }}>
                 <thead>
                   <tr>
@@ -486,6 +475,7 @@ export default function DashboardPage() {
                   ))}
                 </tbody>
               </table>
+              </details>
             </Blueprint>
           )}
 
@@ -517,7 +507,7 @@ export default function DashboardPage() {
                   return (
                     <tr key={r.p.id}>
                       <td>
-                        <span style={{ fontWeight: 500 }}>{r.p.name}</span>
+                        <span className="nowrap" style={{ fontWeight: 500 }}>{r.p.name}</span>
                         <div className="small">{r.p.trades.map((x) => tradeOf(data.org, x)?.name ?? x).join(", ")}</div>
                       </td>
                       {live && grain === "hour" && (
@@ -527,7 +517,7 @@ export default function DashboardPage() {
                       )}
                       {live && grain === "hour" && <td style={{ fontSize: 13 }}>{w ? `${w.id} · ${dur(now - w.startedAt!)}` : "—"}</td>}
                       <td>{Math.round(r.days * 10) / 10}</td>
-                      <td title={r.mix || undefined}>
+                      <td title={r.mix || undefined} style={{ minWidth: 170 }}>
                         {r.done.length} · {shareText(r)}
                         {weighted && r.mix && <div className="small">{r.mix}</div>}
                       </td>
@@ -551,7 +541,10 @@ export default function DashboardPage() {
             </table>
           </Blueprint>
 
-          <AhtPanels st={view.ahtAll} />
+          {/* Handling time has its own page (same dates); not repeated here. */}
+          {isAdmin && <span className="small">
+            Handling time per complexity level, member and trade, and the FTE needed: <Link href="/workload/admin/aht">Handling time</Link>.
+          </span>}
         </>
       )}
     </>

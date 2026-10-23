@@ -1,6 +1,5 @@
 "use client";
 
-import Link from "next/link";
 import { AhtPanels, useAht } from "@/components/AhtPanels";
 import { DateRangePicker, useStoredRange } from "@/components/DateRangePicker";
 import { Blueprint, Icon, Kpi, PageHead } from "@/components/ui";
@@ -71,12 +70,7 @@ export default function AhtPage() {
     <>
       <PageHead
         title={`Average handling time · ${data.org.team.name}`}
-        sub={
-          <>
-            Time worked on resolved tickets, per ticket and per contract. The dates are shared with the <Link href="/workload/dashboard">Dashboard</Link>, which shows the
-            same figures.
-          </>
-        }
+        sub="Time worked on resolved tickets, per ticket and per contract, and the people needed."
       />
       <div className="row" style={{ justifyContent: "space-between" }}>
         <DateRangePicker value={r} onChange={setRg} today={dayKey(now)} id="aht" />
@@ -151,10 +145,11 @@ function FteTable({ rows, total, days, prodH, f1 }: { rows: FteRow[]; total: Fte
       ) : (
         <span className="small">No tickets received or members allocated in this period.</span>
       )}
-      <span className="small">
+      <details className="howto small">
+        <summary>How this is worked out</summary>
         Allocated: members in each trade (someone in two trades counts ½ in each). Gap: allocated − needed; red means short of people. Trades with no resolved
         tickets in the period use the team’s AHT. Productive hours per day come from Targets.
-      </span>
+      </details>
     </Blueprint>
   );
 }

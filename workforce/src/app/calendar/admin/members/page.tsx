@@ -6,7 +6,7 @@ import { MoreMenu } from "@/components/MoreMenu";
 import { Blueprint, Icon } from "@/components/ui";
 import { LAW, LEVELS } from "@/lib/calendar/constants";
 import { leadersOf } from "@/lib/calendar/approvals";
-import { RoleFilter, RoleLegend, RoleTag } from "@/components/calendar/Roles";
+import { RoleFilter, RoleTag } from "@/components/calendar/Roles";
 import { fmtY } from "@/lib/calendar/dates";
 import { useCalendar } from "@/lib/calendar/store";
 import { useCalView } from "@/lib/calendar/useCalView";
@@ -99,7 +99,6 @@ export default function MembersPage() {
           </button>
         </div>
       </div>
-      <RoleLegend />
       {picked.length > 0 && (
         <Blueprint as="section" className="panel" style={{ flexDirection: "row", alignItems: "center", gap: 10, padding: "10px 16px", flexWrap: "wrap" }}>
           <strong>{picked.length} selected</strong>
