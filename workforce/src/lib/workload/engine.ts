@@ -38,6 +38,11 @@ export interface WorkloadData {
   doneSince?: number;
   /** Saved data only: when the team's first task came in (the team started using Workload). */
   firstAt?: number;
+  /**
+   * Tasks the viewer has in progress in their other teams. One task at a time counts across
+   * teams, so these stop them starting one here.
+   */
+  busyElsewhere?: BusyElsewhere[];
   /** Business case: the team's billed FTE this year by person and month (Workload admins only). */
   hc?: { year: number; rows: BillRow[] };
   /** Who may see and set the business case (pricing): Workload admins who are managers or directors, and system admins. */
@@ -134,6 +139,17 @@ export function sortTasks(list: Task[], c: SlaCtx): Task[] {
 export const canWork = (p: Person, s: Settings) => !s.skipUnavail || p.avail === "available" || (p.avail === "offshift" && !!p.onToday);
 export const isBusy = (tasks: Task[], pid: number) => tasks.some((t) => t.assignee === pid && t.status === "in_progress");
 
+export interface BusyElsewhere {
+  pid: number;
+  team: string;
+  teamName: string;
+  id: string;
+  title: string;
+}
+/** A task the person has in progress in another team, if any. */
+export const busyOther = (d: WorkloadData, pid: number) => d.busyElsewhere?.find((b) => b.pid === pid);
+const otherMsg = (b: BusyElsewhere) => `You already have ${b.id} in progress in ${b.teamName}. Resolve it, pause it or set it to pending there first.`;
+
 const hist = (t: Task, at: number, text: string) => [...t.history, { at, text }];
 const patch = (d: WorkloadData, id: string, fn: (t: Task) => Task): WorkloadData => ({
   ...d,
@@ -228,6 +244,8 @@ const helping = (d: WorkloadData, me: Person, t: Task) =>
 export function startWork(d: WorkloadData, pid: number, now: number, assist: boolean | "own" = false): Outcome {
   const me = personOf(d, pid);
   if (!me || isBusy(d.tasks, pid)) return { data: d };
+  const other = busyOther(d, pid);
+  if (other) return { data: d, message: otherMsg(other) };
   const stop = notWorking(d, pid, now);
   if (stop) return { data: d, message: stop };
   if (!canWork(me, d.settings)) return { data: d, message: "You’re marked unavailable, so tasks aren’t given to you." };
@@ -254,6 +272,8 @@ export function startTask(d: WorkloadData, id: string, pid: number, now: number)
   const me = personOf(d, pid);
   const t = d.tasks.find((x) => x.id === id);
   if (!me || !t || isBusy(d.tasks, pid)) return { data: d };
+  const other = busyOther(d, pid);
+  if (other) return { data: d, message: otherMsg(other) };
   const stop = notWorking(d, pid, now);
   if (stop) return { data: d, message: stop };
   const take = d.settings.mode === "self" && canTake(d, me, t, now);
@@ -406,6 +426,8 @@ export function resumeTask(d: WorkloadData, id: string, pid: number, now: number
   if (stop) return { data: d, message: stop };
   const t = d.tasks.find((x) => x.id === id);
   if (!t || t.assignee !== pid || t.status !== "on_hold" || isBusy(d.tasks, pid)) return { data: d };
+  const other = busyOther(d, pid);
+  if (other) return { data: d, message: otherMsg(other) };
   return { data: patch(d, id, (x) => ({ ...x, status: "in_progress", history: hist(x, now, "Resumed") })) };
 }
 

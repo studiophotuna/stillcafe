@@ -3,6 +3,7 @@
  * the Rate Desk keeps its detailed sample; the other teams get their people, systems and
  * trades from the Calendar sample and a day of sample tickets.
  */
+import { visibleTeams } from "../calendar/authz";
 import { Cal } from "../calendar/engine";
 import { initialCalendar } from "../calendar/seed";
 import { H, M, dayKey } from "./clock";
@@ -31,6 +32,12 @@ const sampleCal = (now: number) => {
 export function demoTeams(now: number) {
   const c = sampleCal(now);
   return { c, teams: c.d.nodes.filter((n) => n.type === "branch") };
+}
+
+/** Sample teams a persona may open: the same rule as saved data (their teams, teams they admin or lead). */
+export function demoVisibleTeams(pid: number, now: number): string[] {
+  const c = sampleCal(now);
+  return visibleTeams(c, pid).map((b) => b.id);
 }
 
 /** Sample tickets for a team: waiting, in progress, assigned, pending and done today. */

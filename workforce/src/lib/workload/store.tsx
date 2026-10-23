@@ -2,13 +2,14 @@
 
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 import { applyAction, type Action } from "./actions";
+import type { BusyElsewhere } from "./engine";
 import { dayKey, nowMs, setRealClock } from "./clock";
 import { usePoll } from "../poll";
 import { loadMe, toLogin } from "../session";
 import { isViewAs, person, personaId } from "./constants";
 import { canUpload } from "./authz";
 import { personOf, type AssistOffer, type WorkloadData } from "./engine";
-import { demoTeamData } from "./demoTeams";
+import { demoTeamData, demoVisibleTeams } from "./demoTeams";
 import type { Person, Task, Toast, ViewAs } from "./types";
 
 /**
@@ -196,11 +197,34 @@ export function WorkloadProvider({ children }: { children: React.ReactNode }) {
     } catch {}
   }, []);
 
+  // Sample data: each team's sample, kept while switching between teams.
+  const demoCache = useRef<Record<string, WorkloadData>>({});
+  // Sample data seen as a persona: only the teams they may open (as with saved data), and
+  // their tasks in progress in those other teams, so one task at a time counts across teams.
+  const demoView = useCallback(
+    (d: WorkloadData): WorkloadData => {
+      const pid = personaId(viewAs);
+      const ids = demoVisibleTeams(pid, nowMs());
+      const teams = d.org.teams.filter((t) => ids.includes(t.id));
+      const busyElsewhere: BusyElsewhere[] = [];
+      for (const t of teams) {
+        if (t.id === d.org.team.id) continue;
+        const other = (demoCache.current[t.id] ??= demoTeamData(t.id, nowMs()));
+        for (const x of other.tasks)
+          if (x.assignee === pid && x.status === "in_progress") busyElsewhere.push({ pid, team: t.id, teamName: t.name, id: x.id, title: x.title });
+      }
+      return { ...d, org: { ...d.org, teams: teams.length ? teams : d.org.teams }, busyElsewhere };
+    },
+    [viewAs],
+  );
+
   const run = useCallback(
     (action: Action) => {
       if (!dataRef.current) return;
-      const local = applyAction(dataRef.current, action, nowMs());
-      commit(local.data);
+      const demo = modeRef.current === "demo";
+      const local = applyAction(demo ? demoView(dataRef.current) : dataRef.current, action, nowMs());
+      // Keep the full sample team list; the persona's view is worked out again on show.
+      commit(demo ? { ...local.data, org: { ...local.data.org, teams: dataRef.current.org.teams }, busyElsewhere: undefined } : local.data);
       // Nothing left in the member's trades: ask whether they'll help elsewhere.
       if (local.ask) setDialog({ kind: "assist", offer: local.ask });
       if (modeRef.current !== "db") {
@@ -234,11 +258,9 @@ export function WorkloadProvider({ children }: { children: React.ReactNode }) {
         }
       });
     },
-    [commit, toast, refresh],
+    [commit, toast, refresh, demoView],
   );
 
-  // Sample data: each team's sample, kept while switching between teams.
-  const demoCache = useRef<Record<string, WorkloadData>>({});
   const setTeam = useCallback(
     async (id: string) => {
       if (id === teamRef.current) return;
@@ -336,9 +358,16 @@ export function WorkloadProvider({ children }: { children: React.ReactNode }) {
     } catch {}
   }, []);
 
+  // A persona who can't open the sample team on show starts on their own.
+  useEffect(() => {
+    if (mode !== "demo" || !data) return;
+    const ids = demoVisibleTeams(personaId(viewAs), nowMs());
+    if (ids.length && !ids.includes(data.org.team.id)) setTeam(ids[0]);
+  }, [mode, data, viewAs, setTeam]);
+
   const value = useMemo<Store | null>(
     () => data && mode && ({
-      data,
+      data: mode === "demo" ? demoView(data) : data,
       now,
       run,
       mode,
@@ -385,7 +414,7 @@ export function WorkloadProvider({ children }: { children: React.ReactNode }) {
       loadDone,
       taskById: (id: string) => data.tasks.find((t) => t.id === id) ?? older.find((t) => t.id === id),
     }),
-    [data, mode, now, run, toast, toasts, viewAs, setViewAs, sys, tr, dialog, session, setTeam, setHolidayWork, older, loadDone],
+    [data, mode, now, run, toast, toasts, viewAs, setViewAs, sys, tr, dialog, session, setTeam, setHolidayWork, older, loadDone, demoView],
   );
 
   if (blocked)

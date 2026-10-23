@@ -14,6 +14,8 @@ const db = {
   /** Runs once just before the next apply — simulates someone else writing in between. */
   beforeApply: null as null | (() => void),
   applies: 0,
+  /** What workforce_my_busy returns: the person's tasks in progress in other teams. */
+  busy: [] as { pid: number; team: string; id: string; title: string }[],
 };
 
 function snapshot() {
@@ -69,6 +71,7 @@ vi.mock("@supabase/supabase-js", () => ({
           );
         return { data: s, error: null };
       }
+      if (fn === "workforce_my_busy") return { data: db.busy, error: null };
       if (fn === "workforce_activities") return { data: [...db.activities.values()].map(({ a, v }) => ({ ...a, version: v })), error: null };
       if (fn === "workforce_save_activities") {
         for (const r of structuredClone((args as { p_rows: ({ id: string; version: number; deleted?: boolean } & Record<string, unknown>)[] }).p_rows)) {
@@ -109,6 +112,7 @@ beforeEach(() => {
   db.activities = new Map();
   db.beforeApply = null;
   db.applies = 0;
+  db.busy = [];
 });
 
 describe("server persistence", () => {
@@ -162,6 +166,16 @@ describe("server persistence", () => {
     const r = await runAction({ type: "startWork", pid: LEO }, ANA);
     expect(r.data.tasks.some((t) => t.assignee === ANA && t.status === "in_progress")).toBe(true);
     expect(leo(r.data)).toEqual(leo(before));
+  });
+
+  it("one task in progress at a time counts across teams", async () => {
+    await getData();
+    db.busy = [{ pid: ANA, team: "cs", id: "CS-1", title: "x" }];
+    const r = await runAction({ type: "startWork", pid: ANA }, ANA);
+    expect(r.message).toMatch(/already have CS-1 in progress in /);
+    expect(r.data.tasks.some((t) => t.assignee === ANA && t.status === "in_progress")).toBe(false);
+    expect(r.data.busyElsewhere?.[0]).toMatchObject({ id: "CS-1", teamName: expect.any(String) });
+    expect(db.applies).toBe(1); // only the team's creation
   });
 
   it("saves only what an action changed", async () => {

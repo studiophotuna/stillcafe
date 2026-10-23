@@ -15,7 +15,7 @@ import type { OrgNode } from "../calendar/types";
 import { trackerStats } from "./metrics";
 import { billedFor, workloadPricers, holidaysFor, orgFor, peopleFromCalendar, workloadAdmins, workloadApprovers } from "./people";
 import { applyAction, type Action } from "./actions";
-import type { WorkloadData } from "./engine";
+import type { BusyElsewhere, WorkloadData } from "./engine";
 import { initialData } from "./seed";
 import { forViewer } from "./business";
 import type { Activity, Task } from "./types";
@@ -225,10 +225,18 @@ export async function wlStamp(token: string, team: string): Promise<string | nul
   return error ? null : (data as string);
 }
 
+/** The person's tasks in progress in their other teams (one task at a time counts across teams). */
+async function busyElsewhere(token: string, team: string, c: Cal): Promise<BusyElsewhere[]> {
+  const { data, error } = await db().rpc("workforce_my_busy", { p_token: token, p_team: team });
+  if (error) throw new Error(error.message);
+  return ((data ?? []) as Omit<BusyElsewhere, "teamName">[]).map((b) => ({ ...b, teamName: c.O.by[b.team]?.name ?? "another team" }));
+}
+
 /** Current data for a team person `me` can open; creates the team's Workload (no tasks) the first time. */
 export async function getData(token: string, me: number, want?: string | null): Promise<WorkloadData> {
-  const { team, ctx } = await teamContext(token, me, want);
-  return forViewer((await loadOrCreate(token, team, ctx)).data, me);
+  const { team, ctx, c } = await teamContext(token, me, want);
+  const [s, busy] = await Promise.all([loadOrCreate(token, team, ctx), busyElsewhere(token, team, c)]);
+  return forViewer({ ...s.data, busyElsewhere: busy }, me);
 }
 
 /**
@@ -249,14 +257,15 @@ export async function getDone(token: string, me: number, want: string | null, fr
  */
 export async function runAction(token: string, me: number, action: Action, want?: string | null): Promise<{ data: WorkloadData; message?: string }> {
   if (action.type === "checkMail") throw new ForbiddenError("The Outlook mailbox isn’t connected yet.");
-  const { team, ctx } = await teamContext(token, me, want);
+  const { team, ctx, c } = await teamContext(token, me, want);
+  const busy = await busyElsewhere(token, team, c);
   // An action on one task (e.g. editing an older resolved ticket) loads that task too.
   const win = { ...recent(), ids: "id" in action ? [action.id] : [] };
   for (let attempt = 0; attempt < 3; attempt++) {
     const s = await loadOrCreate(token, team, ctx, win);
     const auth = authorizeWl(action, s.data, me);
     if ("error" in auth) throw new ForbiddenError(auth.error);
-    const out = applyAction(s.data, auth.action, Date.now());
+    const out = applyAction({ ...s.data, busyElsewhere: busy }, auth.action, Date.now());
     try {
       await save(token, team, s, out.data);
       return { data: forViewer(out.data, me), message: out.message };

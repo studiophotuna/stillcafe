@@ -6,7 +6,7 @@ import { TaskTable } from "@/components/TaskTable";
 import { Blueprint, Icon, Kpi, PageHead, pct } from "@/components/ui";
 import { M, dur } from "@/lib/workload/clock";
 import { AV, trPathOf } from "@/lib/workload/constants";
-import { personOf, AWAY, canPause, otAllowed, awayLabel, basisUnit, typeTargets, canWork, currentAway, doneToday, endedToday, fmtMin, helpQueue, missingRequired, ownQueue, personMetrics, sortTasks } from "@/lib/workload/engine";
+import { personOf, busyOther, AWAY, canPause, otAllowed, awayLabel, basisUnit, typeTargets, canWork, currentAway, doneToday, endedToday, fmtMin, helpQueue, missingRequired, ownQueue, personMetrics, sortTasks } from "@/lib/workload/engine";
 import { fmtT } from "@/lib/workload/clock";
 import { TaskTimer } from "@/components/WorkloadBits";
 import { useWorkload } from "@/lib/workload/store";
@@ -14,7 +14,7 @@ import { breakAllowance } from "@/lib/workload/breaks";
 import { taskDetail, taskRow } from "@/lib/workload/view";
 
 export default function MyWorkPage() {
-  const { data, now, run, me, setDialog, setHolidayWork, mode, isAdmin, isApprover } = useWorkload();
+  const { data, now, run, me, setDialog, setHolidayWork, mode, isAdmin, isApprover, setTeam } = useWorkload();
   const hol = me.holiday;
   const s = data.settings;
   const trades = me.trades.map((x) => trPathOf(data.org, x)).join(", ");
@@ -75,7 +75,12 @@ export default function MyWorkPage() {
   let idleText = "";
   // Admins and approvers without a trade manage the team rather than take tasks.
   const manager = !me.trades.length && (isAdmin || isApprover);
-  if (manager) {
+  // One task at a time across all your teams.
+  const elsewhere = busyOther(data, me.id);
+  if (elsewhere) {
+    idleTitle = `You’re working in ${elsewhere.teamName}`;
+    idleText = `${elsewhere.id} · ${elsewhere.title} is in progress there. Resolve it, pause it or set it to pending before you start a task here.`;
+  } else if (manager) {
     idleTitle = "Team at a glance";
     idleText = `${waitingAll} task${waitingAll === 1 ? "" : "s"} waiting in the queue. Manage it, or see today’s numbers on the dashboard.`;
   } else if (!me.trades.length) {
@@ -276,7 +281,11 @@ export default function MyWorkPage() {
             <h2>{idleTitle}</h2>
             <span>{idleText}</span>
           </div>
-          {showStart ? (
+          {elsewhere ? (
+            <Blueprint as="button" className="btn btn-primary btn-lg" onClick={() => setTeam(elsewhere.team)}>
+              Go to {elsewhere.teamName}
+            </Blueprint>
+          ) : showStart ? (
             <Blueprint as="button" className="btn btn-primary btn-lg" disabled={unavailable || !!away || !!ended} onClick={() => run({ type: "startWork", pid: me.id })}>
               <Icon name="play" size={20} />
               Start work
