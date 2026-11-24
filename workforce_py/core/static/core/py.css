@@ -1,0 +1,6 @@
+/* Small additions for the server-rendered (Django) pages. The three other stylesheets are copied
+   unchanged from the original app so both versions look the same. */
+.tabs a { padding: 10px 16px; border-bottom: 2px solid transparent; color: var(--color-neutral-800); text-decoration: none; }
+.tabs a[aria-selected="true"] { border-bottom-color: var(--color-accent); color: var(--color-text); font-weight: 600; }
+a.btn { text-decoration: none; }
+.dialog-backdrop[hidden] { display: none; }

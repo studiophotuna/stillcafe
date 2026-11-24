@@ -1,0 +1,181 @@
+{% extends "core/base.html" %}{% load wfm %}
+{% block title %}My work · Workforce Management{% endblock %}
+{% block filters %}
+<form method="get" class="field">
+  <label for="f-team">Team</label>
+  <select id="f-team" name="team" class="input" style="min-width:220px;font-weight:400" onchange="this.form.submit()">
+    {% for t in teams %}<option value="{{ t.id }}"{% if t.id == team.id %} selected{% endif %}>{{ t.name }}</option>{% endfor %}
+  </select>
+</form>
+{% endblock %}
+{% block main %}
+<div class="page-head"><h1>My work</h1>{% if sub %}<span>{{ sub }}</span>{% endif %}</div>
+
+{% if on_team %}
+<section class="blueprint panel status-bar">{% corners %}
+  {% if status.ended %}
+    <span><strong>Work ended at {{ status.ended }}.</strong> No overtime reported.</span>
+  {% elif status.away %}
+    <span><strong>On {{ status.away.label }}</strong> since {{ status.away.since }} · {{ status.away.mins }}{% if cur %} · the time isn’t counted on your task{% endif %}</span>
+    <form method="post">{% csrf_token %}<input type="hidden" name="action" value="back">
+      <button class="blueprint btn btn-primary btn-36" style="padding:0 16px">{% corners %}Back to work</button></form>
+  {% else %}
+    <span class="small">Stepping away? Tap what you’re doing:</span>
+    <form method="post" class="row" style="gap:6px">{% csrf_token %}<input type="hidden" name="action" value="away">
+      {% for k, l in status.kinds %}<button class="btn btn-secondary btn-36" name="kind" value="{{ k }}">{{ l }}</button>{% endfor %}
+      <button class="btn btn-secondary btn-36" style="margin-left:10px" name="action" value="endWork" {% if cur %}disabled title="Resolve your ticket or set it to pending first"{% endif %}>End work</button>
+    </form>
+  {% endif %}
+</section>
+{% endif %}
+
+{% if cur %}
+<section class="blueprint current">{% corners %}
+  <div class="current-top">
+    <div>
+      <div class="task-meta">
+        <span class="tag tag-accent">In progress</span>
+        <span class="tag {{ cur.pr.1 }}">{{ cur.pr.0 }}</span>
+        <span>{{ cur.t.id }} · {{ cur.path }} · {{ cur.source }}</span>
+      </div>
+      <h2>{{ cur.t.title }}</h2>
+      <div style="display:flex;gap:16px;align-items:baseline;flex-wrap:wrap">
+        <span style="display:inline-flex;gap:8px;align-items:baseline" title="Time worked on this task; breaks and other time away aren’t counted">
+          <span class="task-timer" id="timer" data-s="{{ cur.worked_s }}" data-paused="{{ cur.paused|yesno:'1,0' }}"></span>
+          <span class="small">{% if cur.paused %}paused · {% endif %}started {{ cur.started }}</span>
+        </span>
+        <span style="font-size:13.5px;color:{{ cur.due_color }}">{{ cur.due_text }}</span>
+      </div>
+      {% if cur.missing %}<span style="display:block;font-size:13px;color:var(--color-accent-800);margin-top:4px">Needed before you can resolve it: {{ cur.missing|join:", " }}</span>{% endif %}
+    </div>
+    <div class="row">
+      <button class="btn btn-secondary btn-md" data-open="dlg-hold">Pending</button>
+      <button class="blueprint btn btn-primary btn-md" style="padding:0 20px;font-size:15px" data-open="dlg-done">{% corners %}{% icon "check" %}Resolve ticket</button>
+    </div>
+  </div>
+  <div class="current-body">
+    <div class="kv">{% for k, v in cur.rows %}<span>{{ k }}</span><span>{{ v }}</span>{% endfor %}</div>
+    {% if cur.email %}
+    <div class="email">
+      <div class="email-head"><span>From</span><span>{{ cur.email.from }}</span><span>Cc</span><span>{{ cur.email.cc }}</span><span>Received</span><span>{{ cur.received }}</span></div>
+      <strong>{{ cur.email.subject }}</strong>
+      <p>{{ cur.email.body }}</p>
+      <div class="tags">{% for a in cur.email.attachments %}<span class="tag tag-neutral">{{ a }}</span>{% endfor %}</div>
+    </div>
+    {% endif %}
+  </div>
+</section>
+
+<div class="dialog-backdrop" id="dlg-done" hidden>
+  <form method="post" class="blueprint dialog solid" role="dialog" aria-modal="true" style="width:min(520px,100%);padding:20px;gap:12px">{% corners %}
+    {% csrf_token %}<input type="hidden" name="action" value="complete"><input type="hidden" name="task" value="{{ cur.t.id }}">
+    <div class="dialog-title" style="font-size:26px">Resolve {{ cur.t.id }}</div>
+    <span class="small">{{ cur.t.title }}</span>
+    {% for f in cur.fields %}
+    <div class="field">
+      <label for="f_{{ f.key }}">{{ f.label }}{% if f.required %} *{% endif %}</label>
+      {% if f.type == "select" %}
+        <select id="f_{{ f.key }}" name="f_{{ f.key }}" class="input" {% if f.required %}required{% endif %}>
+          <option value="">Choose…</option>{% for o in f.opts %}<option{% if o == f.value %} selected{% endif %}>{{ o }}</option>{% endfor %}
+        </select>
+      {% else %}
+        <input id="f_{{ f.key }}" name="f_{{ f.key }}" class="input" type="{% if f.type == 'number' %}number{% else %}text{% endif %}" value="{{ f.value }}" {% if f.required %}required{% endif %}>
+      {% endif %}
+    </div>
+    {% endfor %}
+    <div class="dialog-actions" style="gap:10px">
+      <button type="button" class="btn btn-secondary btn-36" data-close>Cancel</button>
+      <button class="blueprint btn btn-primary btn-36" style="padding:0 16px">{% corners %}Resolve ticket</button>
+    </div>
+  </form>
+</div>
+<div class="dialog-backdrop" id="dlg-hold" hidden>
+  <form method="post" class="blueprint dialog solid" role="dialog" aria-modal="true" style="padding:20px;gap:12px">{% corners %}
+    {% csrf_token %}<input type="hidden" name="action" value="hold"><input type="hidden" name="task" value="{{ cur.t.id }}">
+    <div class="dialog-title" style="font-size:26px">Set {{ cur.t.id }} to pending</div>
+    <div class="field"><label for="reason">Reason</label><input id="reason" name="reason" class="input" required placeholder="e.g. Waiting for the carrier’s reply"></div>
+    <div class="dialog-actions" style="gap:10px">
+      <button type="button" class="btn btn-secondary btn-36" data-close>Cancel</button>
+      <button class="blueprint btn btn-primary btn-36" style="padding:0 16px">{% corners %}Set to pending</button>
+    </div>
+  </form>
+</div>
+{% elif idle %}
+<section class="blueprint idle">{% corners %}
+  <div><h2>{{ idle.title }}</h2><span>{{ idle.text }}</span></div>
+  {% if idle.manager %}
+    <span class="row"><a class="btn btn-primary btn-lg" href="/workload/queue/">Open the queue</a></span>
+  {% elif idle.start %}
+    <form method="post">{% csrf_token %}<input type="hidden" name="action" value="startWork">
+      <button class="blueprint btn btn-primary btn-lg" {% if idle.disabled %}disabled{% endif %}>{% corners %}{% icon "play" 20 %}Start work</button></form>
+  {% endif %}
+</section>
+{% endif %}
+
+{% if ask %}
+<div class="dialog-backdrop" id="dlg-ask">
+  <form method="post" class="blueprint dialog solid" role="dialog" aria-modal="true" style="padding:20px;gap:12px">{% corners %}
+    {% csrf_token %}<input type="hidden" name="action" value="startWork"><input type="hidden" name="assist" value="1">
+    <div class="dialog-title" style="font-size:26px">Nothing waiting in your trades</div>
+    <div class="dialog-body">{{ ask.system }} task{{ ask.system|pluralize }} waiting in other trades of your system and {{ ask.team }} elsewhere in the team. Help with them?</div>
+    <div class="dialog-actions" style="gap:10px">
+      <button type="button" class="btn btn-secondary btn-36" data-close>Not now</button>
+      <button class="blueprint btn btn-primary btn-36" style="padding:0 16px">{% corners %}Help other trades</button>
+    </div>
+  </form>
+</div>
+{% endif %}
+
+{% if kpis and on_team %}
+<section style="display:flex;flex-direction:column;gap:10px">
+  <h2 class="h2">Your day so far</h2>
+  <div class="grid-kpi">
+    {% for k in kpis %}<div class="blueprint card kpi">{% corners %}<span class="card-kicker">{{ k.k }}</span><span class="kpi-value">{{ k.v }}</span><span class="card-meta">{{ k.m }}</span></div>{% endfor %}
+  </div>
+</section>
+{% endif %}
+
+{% if my_list %}
+<section class="panel" style="padding:0;gap:8px">
+  <h2 class="h2">Assigned to you and pending</h2>
+  <div class="blueprint scroll-x">{% corners %}
+    <table class="table">
+      <thead><tr><th>Ticket no.</th><th>Task</th><th>System › Trade</th><th>Priority</th><th>Due</th><th>Status</th><th><span class="sr-only">Actions</span></th></tr></thead>
+      <tbody>
+      {% for r in my_list %}
+      <tr{% if r.due_state %} class="row-{{ r.due_state }}"{% endif %}>
+        <td class="nowrap" style="font-weight:500">{{ r.ticket }}</td>
+        <td><span class="task-link" style="cursor:default"><span>{{ r.t.title }}</span><span>{{ r.t.id }} · {{ r.source }}{% if r.hold %} · {{ r.hold }}{% endif %}</span></span></td>
+        <td class="nowrap">{{ r.path }}</td>
+        <td><span class="tag {{ r.pr.1 }}">{{ r.pr.0 }}</span></td>
+        <td class="nowrap" style="color:{{ r.due_color }}">{{ r.due }}</td>
+        <td class="nowrap"><span class="tag {{ r.st.1 }}">{{ r.st.0 }}</span></td>
+        <td>{% if r.t.status == "on_hold" %}<form method="post">{% csrf_token %}<input type="hidden" name="action" value="resume"><input type="hidden" name="task" value="{{ r.t.id }}"><button class="btn btn-secondary btn-36" {% if busy %}disabled{% endif %}>Resume</button></form>{% endif %}</td>
+      </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</section>
+{% endif %}
+{% endblock %}
+
+{% block scripts %}
+<script>
+  // Dialogs
+  document.querySelectorAll("[data-open]").forEach((b) => b.addEventListener("click", () => (document.getElementById(b.dataset.open).hidden = false)));
+  document.querySelectorAll(".dialog-backdrop").forEach((d) => {
+    d.addEventListener("click", (e) => { if (e.target === d) d.hidden = true; });
+    d.querySelectorAll("[data-close]").forEach((b) => b.addEventListener("click", () => (d.hidden = true)));
+  });
+  addEventListener("keydown", (e) => { if (e.key === "Escape") document.querySelectorAll(".dialog-backdrop").forEach((d) => (d.hidden = true)); });
+  // Task timer (time away excluded; stops while away)
+  const el = document.getElementById("timer");
+  if (el) {
+    const t0 = Date.now(), base = +el.dataset.s, paused = el.dataset.paused === "1";
+    const pad = (n) => String(n).padStart(2, "0");
+    const tick = () => { const s = base + (paused ? 0 : Math.floor((Date.now() - t0) / 1000)); el.textContent = `${pad(Math.floor(s / 3600))}:${pad(Math.floor(s / 60) % 60)}:${pad(s % 60)}`; };
+    tick(); setInterval(tick, 1000);
+  }
+</script>
+{% endblock %}

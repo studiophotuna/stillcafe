@@ -1,0 +1,109 @@
+{% extends "core/base.html" %}{% load wfm %}
+{% block title %}Calendar · Workforce Management{% endblock %}
+{% block side_top %}
+<a class="blueprint btn btn-primary side-action" href="/calendar/requests/">{% corners %}{% icon "plus" %}Request</a>
+{% endblock %}
+{% block filters %}
+<form method="get" class="row" style="gap:16px;align-items:flex-end" id="cf">
+  <input type="hidden" name="m" value="{{ m_cur }}"><input type="hidden" name="scope" value="{{ scope }}"><input type="hidden" name="cells" value="{{ cellmode }}">
+  <div class="field">
+    <label for="f-tower">Tower</label>
+    <select id="f-tower" class="input" style="min-width:220px;font-weight:400" disabled><option>{{ tower.name|default:"All towers" }}</option></select>
+  </div>
+  <div class="field">
+    <label for="f-team">Team</label>
+    <select id="f-team" name="team" class="input" style="min-width:180px;font-weight:400" onchange="this.form.sys.value='all';this.form.tr.value='all';this.form.submit()">
+      {% for t in teams %}<option value="{{ t.id }}"{% if t.id == team.id %} selected{% endif %}>{{ t.name }}</option>{% endfor %}
+    </select>
+  </div>
+  <div class="field">
+    <label for="f-sys">System</label>
+    <select id="f-sys" name="sys" class="input" style="min-width:150px;font-weight:400" onchange="this.form.tr.value='all';this.form.submit()">
+      <option value="all">All systems</option>
+      {% for s in systems %}<option value="{{ s.id }}"{% if s.id == sys_f %} selected{% endif %}>{{ s.name }}</option>{% endfor %}
+    </select>
+  </div>
+  <div class="field">
+    <label for="f-tr">Trade</label>
+    <select id="f-tr" name="tr" class="input" style="min-width:150px;font-weight:400" onchange="this.form.submit()">
+      <option value="all">All trades</option>
+      {% for t in trades %}<option value="{{ t.id }}"{% if t.id == tr_f %} selected{% endif %}>{{ t.name }}</option>{% endfor %}
+    </select>
+  </div>
+</form>
+{% endblock %}
+{% block main %}
+<div class="page-head-row" style="align-items:center">
+  <div class="month-nav">
+    <div class="month-nav">
+      <a class="btn btn-secondary btn-icon" href="?m={{ m_prev }}&team={{ team.id }}&sys={{ sys_f }}&tr={{ tr_f }}&scope={{ scope }}&cells={{ cellmode }}" title="Previous month" aria-label="Previous month">{% icon "left" %}</a>
+      <h1 style="font-size:30px;min-width:190px">{{ month_title }}</h1>
+      <a class="btn btn-secondary btn-icon" href="?m={{ m_next }}&team={{ team.id }}&sys={{ sys_f }}&tr={{ tr_f }}&scope={{ scope }}&cells={{ cellmode }}" title="Next month" aria-label="Next month">{% icon "right" %}</a>
+    </div>
+    <a class="btn btn-secondary btn-36" href="?m={{ m_today }}&team={{ team.id }}&sys={{ sys_f }}&tr={{ tr_f }}&scope={{ scope }}&cells={{ cellmode }}">Today</a>
+  </div>
+  <div class="row">
+    <div class="seg" role="radiogroup">
+      <label class="seg-opt lg"><input type="radio" name="scope" value="all" form="cf" {% if scope != "me" %}checked{% endif %} onchange="setHidden('scope','all')">Everyone ({{ total }})</label>
+      <label class="seg-opt lg"><input type="radio" name="scope" value="me" form="cf" {% if scope == "me" %}checked{% endif %} onchange="setHidden('scope','me')">Just me</label>
+    </div>
+    <div class="seg" role="radiogroup">
+      <label class="seg-opt lg"><input type="radio" name="cellmode" {% if cellmode != "shift" %}checked{% endif %} onchange="setHidden('cells','status')">Leave &amp; office</label>
+      <label class="seg-opt lg"><input type="radio" name="cellmode" {% if cellmode == "shift" %}checked{% endif %} onchange="setHidden('cells','shift')">Shift times</label>
+    </div>
+    <div style="position:relative;width:220px">
+      <span style="position:absolute;left:10px;top:10px;color:var(--color-neutral-600);display:grid">{% icon "search" 16 %}</span>
+      <input class="input" form="cf" name="q" aria-label="Find a name" placeholder="Find a name" type="search" value="{{ q }}" style="padding-left:32px">
+    </div>
+  </div>
+</div>
+
+<div class="cal-body">
+  <div class="blueprint" style="min-width:0;flex:1 1 0%">{% corners %}
+    <div class="grid-wrap">
+      <div class="grid-inner" role="grid" aria-label="{{ team.name }} calendar, {{ month_title }}">
+        <div class="grid-head" role="row">
+          <div class="grid-namecol" role="columnheader">Name · {{ rows|length }}</div>
+          <div class="grid-shiftcol" role="columnheader" title="Today's shift hours">Shift</div>
+          {% for d in days %}
+          <div class="grid-day" role="columnheader" title="{{ d.title }}" style="background:{% if d.wk %}color-mix(in srgb, var(--color-text) 5%, transparent){% else %}transparent{% endif %}">
+            <span style="color:var(--color-neutral-700)">{{ d.dow }}</span>
+            <span style="{% if d.today %}background:var(--color-accent);color:var(--color-bg){% else %}background:transparent;color:{% if d.wk %}var(--color-neutral-700){% else %}var(--color-text){% endif %}{% endif %}">{{ d.n }}</span>
+          </div>
+          {% endfor %}
+        </div>
+        {% for r in rows %}
+        <div class="grid-row role-grid lv-{{ r.lv }}" role="row">
+          <div class="grid-name" role="rowheader">
+            <div><span>{{ r.p.name }}</span>{% if r.level %}<span class="tag tag-neutral">{{ r.level }}</span>{% endif %}</div>
+            <span style="color:var(--color-neutral-700)">{{ r.line }}</span>
+          </div>
+          <div class="grid-shift{% if r.shift_off %} off{% endif %}" title="{{ r.shift_title }}"><span>{{ r.shift }}</span>{% if r.shift_off %}<span class="grid-shift-off">{{ r.shift_off }}</span>{% endif %}</div>
+          {% for c in r.cells %}
+          <div class="grid-cell" role="gridcell" style="background:{% if c.gone %}repeating-linear-gradient(135deg, transparent 0 4px, color-mix(in srgb, var(--color-text) 8%, transparent) 4px 5px){% elif c.wk %}color-mix(in srgb, var(--color-text) 5%, transparent){% else %}transparent{% endif %};box-shadow:{% if c.today %}inset 1px 0 0 var(--color-accent), inset -1px 0 0 var(--color-accent){% else %}none{% endif %}">
+            <button type="button" title="{{ c.title }}" aria-label="{{ c.title }}" tabindex="-1" style="background:{{ c.bg }};color:{{ c.fg }};border:{{ c.bd }};cursor:default">{{ c.label }}</button>
+          </div>
+          {% endfor %}
+        </div>
+        {% empty %}
+        <div class="muted" style="padding:24px">No one matches these filters.</div>
+        {% endfor %}
+      </div>
+    </div>
+  </div>
+</div>
+
+<section class="blueprint panel">{% corners %}
+  <h2 class="h2">Legend</h2>
+  <div class="row" style="flex-wrap:wrap;gap:10px">
+    {% for code, label, bg, fg, bd in legend %}
+    <span class="row" style="gap:6px;font-size:13px"><span style="display:inline-grid;place-items:center;min-width:40px;height:24px;font-size:11px;font-weight:600;background:{{ bg }};color:{{ fg }};border:{{ bd }}">{{ code }}</span>{{ label }}</span>
+    {% endfor %}
+  </div>
+</section>
+{% endblock %}
+{% block scripts %}
+<script>
+  function setHidden(name, v) { const f = document.getElementById("cf"); f.elements[name].value = v; f.submit(); }
+</script>
+{% endblock %}

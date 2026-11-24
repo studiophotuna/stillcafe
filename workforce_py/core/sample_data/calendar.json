@@ -1,0 +1,3646 @@
+{
+ "people": [
+  {
+   "id": 0,
+   "name": "Ana Reyes",
+   "email": "ana.reyes@demobss.com",
+   "level": "member",
+   "assign": [
+    "lcl",
+    "cs"
+   ],
+   "pattern": "B",
+   "shift": "D",
+   "hire": "2017-01-01",
+   "ytd": 3,
+   "ytdEl": 0,
+   "carry": 0,
+   "resign": null,
+   "entitle": 25,
+   "elEnt": 5
+  },
+  {
+   "id": 1,
+   "name": "Bea Santos",
+   "email": "bea.santos@demobss.com",
+   "level": "senior",
+   "assign": [
+    "inas"
+   ],
+   "pattern": "A",
+   "shift": "D",
+   "hire": "2024-06-12",
+   "ytd": 8,
+   "ytdEl": 1,
+   "carry": 3,
+   "resign": null,
+   "entitle": 25,
+   "elEnt": 5
+  },
+  {
+   "id": 2,
+   "name": "Carla Mendoza",
+   "email": "carla.mendoza@demobss.com",
+   "level": "specialist",
+   "assign": [
+    "inas"
+   ],
+   "pattern": "A",
+   "shift": "M",
+   "hire": "2022-11-23",
+   "ytd": 13,
+   "ytdEl": 2,
+   "carry": 5,
+   "resign": null,
+   "entitle": 25,
+   "elEnt": 5
+  },
+  {
+   "id": 3,
+   "name": "Dan Villanueva",
+   "email": "dan.villanueva@demobss.com",
+   "level": "member",
+   "assign": [
+    "eu"
+   ],
+   "pattern": "B",
+   "shift": "MID",
+   "hire": "2020-04-07",
+   "ytd": 4,
+   "ytdEl": 0,
+   "carry": 2,
+   "resign": null,
+   "entitle": 25,
+   "elEnt": 5
+  },
+  {
+   "id": 4,
+   "name": "Eli Navarro",
+   "email": "eli.navarro@demobss.com",
+   "level": "member",
+   "assign": [
+    "eu"
+   ],
+   "pattern": "A",
+   "shift": "D",
+   "hire": "2018-09-18",
+   "ytd": 9,
+   "ytdEl": 1,
+   "carry": 0,
+   "resign": null,
+   "entitle": 25,
+   "elEnt": 5
+  },
+  {
+   "id": 5,
+   "name": "Franco Dizon",
+   "email": "franco.dizon@demobss.com",
+   "level": "senior",
+   "assign": [
+    "fewb"
+   ],
+   "pattern": "A",
+   "shift": "GY",
+   "hire": "2025-02-02",
+   "ytd": 14,
+   "ytdEl": 2,
+   "carry": 1,
+   "resign": null,
+   "entitle": 25,
+   "elEnt": 5
+  },
+  {
+   "id": 6,
+   "name": "Gio Ramos",
+   "email": "gio.ramos@demobss.com",
+   "level": "member",
+   "assign": [
+    "eu"
+   ],
+   "pattern": "B",
+   "shift": "E",
+   "hire": "2023-07-13",
+   "ytd": 5,
+   "ytdEl": 0,
+   "carry": 4,
+   "resign": null,
+   "entitle": 25,
+   "elEnt": 5
+  },
+  {
+   "id": 7,
+   "name": "Tess Ocampo",
+   "email": "tess.ocampo@demobss.com",
+   "level": "specialist",
+   "assign": [
+    "eu"
+   ],
+   "pattern": "A",
+   "shift": "D",
+   "hire": "2021-12-24",
+   "ytd": 10,
+   "ytdEl": 1,
+   "carry": 5,
+   "resign": null,
+   "entitle": 25,
+   "elEnt": 5
+  },
+  {
+   "id": 8,
+   "name": "Uriel Pascual",
+   "email": "uriel.pascual@demobss.com",
+   "level": "member",
+   "assign": [
+    "rm"
+   ],
+   "pattern": "A",
+   "shift": "N",
+   "hire": "2019-05-08",
+   "ytd": 15,
+   "ytdEl": 2,
+   "carry": 0,
+   "resign": null,
+   "entitle": 25,
+   "elEnt": 5
+  },
+  {
+   "id": 9,
+   "name": "Hana Cruz",
+   "email": "hana.cruz@demobss.com",
+   "level": "member",
+   "assign": [
+    "fewb"
+   ],
+   "pattern": "B",
+   "shift": "SW",
+   "hire": "2017-10-19",
+   "ytd": 6,
+   "ytdEl": 0,
+   "carry": 2,
+   "resign": null,
+   "entitle": 25,
+   "elEnt": 5
+  },
+  {
+   "id": 10,
+   "name": "Ivan Torres",
+   "email": "ivan.torres@demobss.com",
+   "level": "specialist",
+   "assign": [
+    "fewb"
+   ],
+   "pattern": "A",
+   "shift": "D",
+   "hire": "2024-03-03",
+   "ytd": 11,
+   "ytdEl": 1,
+   "carry": 0,
+   "resign": null,
+   "entitle": 25,
+   "elEnt": 5
+  },
+  {
+   "id": 11,
+   "name": "Jessa Flores",
+   "email": "jessa.flores@demobss.com",
+   "level": "member",
+   "assign": [
+    "fewb"
+   ],
+   "pattern": "A",
+   "shift": "D",
+   "hire": "2022-08-14",
+   "ytd": 16,
+   "ytdEl": 2,
+   "carry": 3,
+   "resign": null,
+   "entitle": 25,
+   "elEnt": 5
+  },
+  {
+   "id": 12,
+   "name": "Vince Robles",
+   "email": "vince.robles@demobss.com",
+   "level": "member",
+   "assign": [
+    "fewb"
+   ],
+   "pattern": "B",
+   "shift": "M",
+   "hire": "2020-01-25",
+   "ytd": 7,
+   "ytdEl": 0,
+   "carry": 5,
+   "resign": null,
+   "entitle": 25,
+   "elEnt": 5
+  },
+  {
+   "id": 13,
+   "name": "Wendy Lacson",
+   "email": "wendy.lacson@demobss.com",
+   "level": "member",
+   "assign": [
+    "fewb"
+   ],
+   "pattern": "A",
+   "shift": "MID",
+   "hire": "2018-06-09",
+   "ytd": 12,
+   "ytdEl": 1,
+   "carry": 2,
+   "resign": null,
+   "entitle": 25,
+   "elEnt": 5
+  },
+  {
+   "id": 14,
+   "name": "Kim Bautista",
+   "email": "kim.bautista@demobss.com",
+   "level": "lead",
+   "assign": [
+    "rcm"
+   ],
+   "pattern": "A",
+   "shift": "D",
+   "hire": "2025-11-20",
+   "ytd": 3,
+   "ytdEl": 2,
+   "carry": 0,
+   "resign": null,
+   "entitle": 25,
+   "elEnt": 5
+  },
+  {
+   "id": 15,
+   "name": "Leo Aquino",
+   "email": "leo.aquino@demobss.com",
+   "level": "member",
+   "assign": [
+    "lcl"
+   ],
+   "pattern": "B",
+   "shift": "GY",
+   "hire": "2023-04-04",
+   "ytd": 8,
+   "ytdEl": 0,
+   "carry": 1,
+   "resign": null,
+   "entitle": 25,
+   "elEnt": 5
+  },
+  {
+   "id": 16,
+   "name": "Mia Castillo",
+   "email": "mia.castillo@demobss.com",
+   "level": "member",
+   "assign": [
+    "lcl"
+   ],
+   "pattern": "A",
+   "shift": "E",
+   "hire": "2021-09-15",
+   "ytd": 13,
+   "ytdEl": 1,
+   "carry": 4,
+   "resign": null,
+   "entitle": 25,
+   "elEnt": 5
+  },
+  {
+   "id": 17,
+   "name": "Xandro Manalo",
+   "email": "xandro.manalo@demobss.com",
+   "level": "member",
+   "assign": [
+    "inas"
+   ],
+   "pattern": "A",
+   "shift": "D",
+   "hire": "2019-02-26",
+   "ytd": 4,
+   "ytdEl": 2,
+   "carry": 5,
+   "resign": null,
+   "entitle": 25,
+   "elEnt": 5
+  },
+  {
+   "id": 18,
+   "name": "Yna Galang",
+   "email": "yna.galang@demobss.com",
+   "level": "member",
+   "assign": [
+    "rm"
+   ],
+   "pattern": "B",
+   "shift": "N",
+   "hire": "2017-07-10",
+   "ytd": 9,
+   "ytdEl": 0,
+   "carry": 0,
+   "resign": "2026-08-14",
+   "entitle": 25,
+   "elEnt": 5
+  },
+  {
+   "id": 19,
+   "name": "Nico Salazar",
+   "email": "nico.salazar@demobss.com",
+   "level": "member",
+   "assign": [
+    "lcl"
+   ],
+   "pattern": "A",
+   "shift": "SW",
+   "hire": "2024-12-21",
+   "ytd": 14,
+   "ytdEl": 1,
+   "carry": 2,
+   "resign": null,
+   "entitle": 25,
+   "elEnt": 5
+  },
+  {
+   "id": 20,
+   "name": "Zach Dela Rosa",
+   "email": "zach.rosa@demobss.com",
+   "level": "member",
+   "assign": [
+    "lcl"
+   ],
+   "pattern": "A",
+   "shift": "D",
+   "hire": "2022-05-05",
+   "ytd": 5,
+   "ytdEl": 2,
+   "carry": 0,
+   "resign": null,
+   "entitle": 25,
+   "elEnt": 5
+  },
+  {
+   "id": 21,
+   "name": "Arvin Tolentino",
+   "email": "arvin.tolentino@demobss.com",
+   "level": "supervisor",
+   "assign": [
+    "eu"
+   ],
+   "pattern": "B",
+   "shift": "D",
+   "hire": "2020-10-16",
+   "ytd": 10,
+   "ytdEl": 0,
+   "carry": 3,
+   "resign": null,
+   "entitle": 25,
+   "elEnt": 5
+  },
+  {
+   "id": 22,
+   "name": "Bettina Sison",
+   "email": "bettina.sison@demobss.com",
+   "level": "member",
+   "assign": [
+    "lcl"
+   ],
+   "pattern": "A",
+   "shift": "M",
+   "hire": "2018-03-27",
+   "ytd": 15,
+   "ytdEl": 1,
+   "carry": 5,
+   "resign": null,
+   "entitle": 25,
+   "elEnt": 5
+  },
+  {
+   "id": 23,
+   "name": "Sam Delgado",
+   "email": "sam.delgado@demobss.com",
+   "level": "manager",
+   "assign": [
+    "rm"
+   ],
+   "pattern": "A",
+   "shift": "MID",
+   "hire": "2025-08-11",
+   "ytd": 6,
+   "ytdEl": 2,
+   "carry": 2,
+   "resign": null,
+   "entitle": 25,
+   "elEnt": 5
+  },
+  {
+   "id": 24,
+   "name": "Carlo Ignacio",
+   "email": "carlo.ignacio@demobss.com",
+   "level": "srlead",
+   "assign": [
+    "gpm"
+   ],
+   "pattern": "B",
+   "shift": "D",
+   "hire": "2023-01-22",
+   "ytd": 11,
+   "ytdEl": 0,
+   "carry": 0,
+   "resign": null,
+   "entitle": 25,
+   "elEnt": 5
+  },
+  {
+   "id": 25,
+   "name": "Olive Tan",
+   "email": "olive.tan@demobss.com",
+   "level": "member",
+   "assign": [
+    "us"
+   ],
+   "pattern": "A",
+   "shift": "GY",
+   "hire": "2021-06-06",
+   "ytd": 16,
+   "ytdEl": 1,
+   "carry": 1,
+   "resign": null,
+   "entitle": 25,
+   "elEnt": 5
+  },
+  {
+   "id": 26,
+   "name": "Diego Samonte",
+   "email": "diego.samonte@demobss.com",
+   "level": "director",
+   "assign": [
+    "rm",
+    "cs"
+   ],
+   "pattern": "A",
+   "shift": "E",
+   "hire": "2019-11-17",
+   "ytd": 7,
+   "ytdEl": 2,
+   "carry": 4,
+   "resign": null,
+   "entitle": 25,
+   "elEnt": 5
+  },
+  {
+   "id": 27,
+   "name": "Erika Valdez",
+   "email": "erika.valdez@demobss.com",
+   "level": "manager",
+   "assign": [
+    "cs"
+   ],
+   "pattern": "B",
+   "shift": "D",
+   "hire": "2017-04-01",
+   "ytd": 12,
+   "ytdEl": 0,
+   "carry": 5,
+   "resign": null,
+   "entitle": 25,
+   "elEnt": 5
+  },
+  {
+   "id": 28,
+   "name": "Felix Aguilar",
+   "email": "felix.aguilar@demobss.com",
+   "level": "member",
+   "assign": [
+    "rm"
+   ],
+   "pattern": "A",
+   "shift": "N",
+   "hire": "2024-09-12",
+   "ytd": 3,
+   "ytdEl": 1,
+   "carry": 0,
+   "resign": "2026-09-18",
+   "entitle": 25,
+   "elEnt": 5
+  },
+  {
+   "id": 29,
+   "name": "Paolo Lim",
+   "email": "paolo.lim@demobss.com",
+   "level": "member",
+   "assign": [
+    "asla"
+   ],
+   "pattern": "A",
+   "shift": "SW",
+   "hire": "2022-02-23",
+   "ytd": 8,
+   "ytdEl": 2,
+   "carry": 2,
+   "resign": null,
+   "entitle": 25,
+   "elEnt": 5
+  },
+  {
+   "id": 30,
+   "name": "Rhea Soriano",
+   "email": "rhea.soriano@demobss.com",
+   "level": "member",
+   "assign": [
+    "asla"
+   ],
+   "pattern": "B",
+   "shift": "D",
+   "hire": "2020-07-07",
+   "ytd": 13,
+   "ytdEl": 0,
+   "carry": 0,
+   "resign": null,
+   "entitle": 25,
+   "elEnt": 5
+  },
+  {
+   "id": 31,
+   "name": "Gwen Salcedo",
+   "email": "gwen.salcedo@demobss.com",
+   "level": "member",
+   "assign": [
+    "cs"
+   ],
+   "pattern": "A",
+   "shift": "D",
+   "hire": "2018-12-18",
+   "ytd": 4,
+   "ytdEl": 1,
+   "carry": 3,
+   "resign": null,
+   "entitle": 25,
+   "elEnt": 5
+  },
+  {
+   "id": 32,
+   "name": "Hector Dimaculangan",
+   "email": "hector.dimaculangan@demobss.com",
+   "level": "member",
+   "assign": [
+    "fewb"
+   ],
+   "pattern": "A",
+   "shift": "M",
+   "hire": "2025-05-02",
+   "ytd": 9,
+   "ytdEl": 2,
+   "carry": 5,
+   "resign": null,
+   "entitle": 25,
+   "elEnt": 5
+  },
+  {
+   "id": 33,
+   "name": "Iris Montemayor",
+   "email": "iris.montemayor@demobss.com",
+   "level": "member",
+   "assign": [
+    "fewb",
+    "eu"
+   ],
+   "pattern": "B",
+   "shift": "MID",
+   "hire": "2023-10-13",
+   "ytd": 14,
+   "ytdEl": 0,
+   "carry": 2,
+   "resign": null,
+   "entitle": 25,
+   "elEnt": 5
+  },
+  {
+   "id": 34,
+   "name": "Liza Mercado",
+   "email": "liza.mercado@demobss.com",
+   "level": "lead",
+   "assign": [
+    "imp"
+   ],
+   "pattern": "A",
+   "shift": "D",
+   "hire": "2021-03-24",
+   "ytd": 5,
+   "ytdEl": 1,
+   "carry": 0,
+   "resign": null,
+   "entitle": 25,
+   "elEnt": 5
+  },
+  {
+   "id": 35,
+   "name": "Marco Villareal",
+   "email": "marco.villareal@demobss.com",
+   "level": "senior",
+   "assign": [
+    "imp"
+   ],
+   "pattern": "A",
+   "shift": "GY",
+   "hire": "2019-08-08",
+   "ytd": 10,
+   "ytdEl": 2,
+   "carry": 1,
+   "resign": null,
+   "entitle": 25,
+   "elEnt": 5
+  },
+  {
+   "id": 36,
+   "name": "Nina Pangilinan",
+   "email": "nina.pangilinan@demobss.com",
+   "level": "member",
+   "assign": [
+    "imp"
+   ],
+   "pattern": "B",
+   "shift": "E",
+   "hire": "2017-01-19",
+   "ytd": 15,
+   "ytdEl": 0,
+   "carry": 4,
+   "resign": null,
+   "entitle": 25,
+   "elEnt": 5
+  },
+  {
+   "id": 37,
+   "name": "Oscar Bernardo",
+   "email": "oscar.bernardo@demobss.com",
+   "level": "member",
+   "assign": [
+    "imp"
+   ],
+   "pattern": "A",
+   "shift": "D",
+   "hire": "2024-06-03",
+   "ytd": 6,
+   "ytdEl": 1,
+   "carry": 5,
+   "resign": null,
+   "entitle": 25,
+   "elEnt": 5
+  },
+  {
+   "id": 38,
+   "name": "Pia Alcantara",
+   "email": "pia.alcantara@demobss.com",
+   "level": "member",
+   "assign": [
+    "imp"
+   ],
+   "pattern": "A",
+   "shift": "N",
+   "hire": "2022-11-14",
+   "ytd": 11,
+   "ytdEl": 2,
+   "carry": 0,
+   "resign": null,
+   "entitle": 25,
+   "elEnt": 5
+  },
+  {
+   "id": 39,
+   "name": "Quentin Esguerra",
+   "email": "quentin.esguerra@demobss.com",
+   "level": "srlead",
+   "assign": [
+    "exp"
+   ],
+   "pattern": "B",
+   "shift": "SW",
+   "hire": "2020-04-25",
+   "ytd": 16,
+   "ytdEl": 0,
+   "carry": 2,
+   "resign": null,
+   "entitle": 25,
+   "elEnt": 5
+  },
+  {
+   "id": 40,
+   "name": "Rosa Dimalanta",
+   "email": "rosa.dimalanta@demobss.com",
+   "level": "member",
+   "assign": [
+    "exp"
+   ],
+   "pattern": "A",
+   "shift": "D",
+   "hire": "2018-09-09",
+   "ytd": 7,
+   "ytdEl": 1,
+   "carry": 0,
+   "resign": null,
+   "entitle": 25,
+   "elEnt": 5
+  },
+  {
+   "id": 41,
+   "name": "Simon Cajucom",
+   "email": "simon.cajucom@demobss.com",
+   "level": "specialist",
+   "assign": [
+    "exp"
+   ],
+   "pattern": "A",
+   "shift": "D",
+   "hire": "2025-02-20",
+   "ytd": 12,
+   "ytdEl": 2,
+   "carry": 3,
+   "resign": null,
+   "entitle": 25,
+   "elEnt": 5
+  },
+  {
+   "id": 42,
+   "name": "Trina Velasco",
+   "email": "trina.velasco@demobss.com",
+   "level": "member",
+   "assign": [
+    "exp"
+   ],
+   "pattern": "B",
+   "shift": "M",
+   "hire": "2023-07-04",
+   "ytd": 3,
+   "ytdEl": 0,
+   "carry": 5,
+   "resign": null,
+   "entitle": 25,
+   "elEnt": 5
+  },
+  {
+   "id": 43,
+   "name": "Ulysses Gatchalian",
+   "email": "ulysses.gatchalian@demobss.com",
+   "level": "manager",
+   "assign": [
+    "t_ie"
+   ],
+   "pattern": "A",
+   "shift": "MID",
+   "hire": "2021-12-15",
+   "ytd": 8,
+   "ytdEl": 1,
+   "carry": 2,
+   "resign": null,
+   "entitle": 25,
+   "elEnt": 5
+  },
+  {
+   "id": 44,
+   "name": "Vera Lualhati",
+   "email": "vera.lualhati@demobss.com",
+   "level": "lead",
+   "assign": [
+    "key"
+   ],
+   "pattern": "A",
+   "shift": "D",
+   "hire": "2019-05-26",
+   "ytd": 13,
+   "ytdEl": 2,
+   "carry": 0,
+   "resign": null,
+   "entitle": 25,
+   "elEnt": 5
+  },
+  {
+   "id": 45,
+   "name": "Warren Magbanua",
+   "email": "warren.magbanua@demobss.com",
+   "level": "member",
+   "assign": [
+    "key"
+   ],
+   "pattern": "B",
+   "shift": "GY",
+   "hire": "2017-10-10",
+   "ytd": 4,
+   "ytdEl": 0,
+   "carry": 1,
+   "resign": null,
+   "entitle": 25,
+   "elEnt": 5
+  },
+  {
+   "id": 46,
+   "name": "Xyza Fernandez",
+   "email": "xyza.fernandez@demobss.com",
+   "level": "senior",
+   "assign": [
+    "sme"
+   ],
+   "pattern": "A",
+   "shift": "E",
+   "hire": "2024-03-21",
+   "ytd": 9,
+   "ytdEl": 1,
+   "carry": 4,
+   "resign": null,
+   "entitle": 25,
+   "elEnt": 5
+  },
+  {
+   "id": 47,
+   "name": "Yago Panganiban",
+   "email": "yago.panganiban@demobss.com",
+   "level": "member",
+   "assign": [
+    "sme"
+   ],
+   "pattern": "A",
+   "shift": "D",
+   "hire": "2022-08-05",
+   "ytd": 14,
+   "ytdEl": 2,
+   "carry": 5,
+   "resign": null,
+   "entitle": 25,
+   "elEnt": 5
+  },
+  {
+   "id": 48,
+   "name": "Zara Quiambao",
+   "email": "zara.quiambao@demobss.com",
+   "level": "manager",
+   "assign": [
+    "t_com"
+   ],
+   "pattern": "B",
+   "shift": "N",
+   "hire": "2020-01-16",
+   "ytd": 5,
+   "ytdEl": 0,
+   "carry": 0,
+   "resign": null,
+   "entitle": 25,
+   "elEnt": 5
+  },
+  {
+   "id": 49,
+   "name": "Andre Macaraeg",
+   "email": "andre.macaraeg@demobss.com",
+   "level": "lead",
+   "assign": [
+    "doc"
+   ],
+   "pattern": "A",
+   "shift": "SW",
+   "hire": "2018-06-27",
+   "ytd": 10,
+   "ytdEl": 1,
+   "carry": 2,
+   "resign": null,
+   "entitle": 25,
+   "elEnt": 5
+  },
+  {
+   "id": 50,
+   "name": "Bianca Roque",
+   "email": "bianca.roque@demobss.com",
+   "level": "member",
+   "assign": [
+    "doc"
+   ],
+   "pattern": "A",
+   "shift": "D",
+   "hire": "2025-11-11",
+   "ytd": 15,
+   "ytdEl": 2,
+   "carry": 0,
+   "resign": null,
+   "entitle": 25,
+   "elEnt": 5
+  },
+  {
+   "id": 51,
+   "name": "Cesar Lagman",
+   "email": "cesar.lagman@demobss.com",
+   "level": "specialist",
+   "assign": [
+    "doc"
+   ],
+   "pattern": "B",
+   "shift": "D",
+   "hire": "2023-04-22",
+   "ytd": 6,
+   "ytdEl": 0,
+   "carry": 3,
+   "resign": null,
+   "entitle": 25,
+   "elEnt": 5
+  },
+  {
+   "id": 52,
+   "name": "Dina Saldana",
+   "email": "dina.saldana@demobss.com",
+   "level": "member",
+   "assign": [
+    "doc"
+   ],
+   "pattern": "A",
+   "shift": "M",
+   "hire": "2021-09-06",
+   "ytd": 11,
+   "ytdEl": 1,
+   "carry": 5,
+   "resign": null,
+   "entitle": 25,
+   "elEnt": 5
+  },
+  {
+   "id": 53,
+   "name": "Emil Navarrete",
+   "email": "emil.navarrete@demobss.com",
+   "level": "supervisor",
+   "assign": [
+    "t_cus"
+   ],
+   "pattern": "A",
+   "shift": "MID",
+   "hire": "2019-02-17",
+   "ytd": 16,
+   "ytdEl": 2,
+   "carry": 2,
+   "resign": null,
+   "entitle": 25,
+   "elEnt": 5
+  },
+  {
+   "id": 54,
+   "name": "Faye Ilagan",
+   "email": "faye.ilagan@demobss.com",
+   "level": "lead",
+   "assign": [
+    "bk"
+   ],
+   "pattern": "B",
+   "shift": "D",
+   "hire": "2017-07-01",
+   "ytd": 7,
+   "ytdEl": 0,
+   "carry": 0,
+   "resign": null,
+   "entitle": 25,
+   "elEnt": 5
+  },
+  {
+   "id": 55,
+   "name": "Gabriel Sevilla",
+   "email": "gabriel.sevilla@demobss.com",
+   "level": "member",
+   "assign": [
+    "bk"
+   ],
+   "pattern": "A",
+   "shift": "GY",
+   "hire": "2024-12-12",
+   "ytd": 12,
+   "ytdEl": 1,
+   "carry": 1,
+   "resign": null,
+   "entitle": 25,
+   "elEnt": 5
+  },
+  {
+   "id": 56,
+   "name": "Honey Tuazon",
+   "email": "honey.tuazon@demobss.com",
+   "level": "specialist",
+   "assign": [
+    "bk"
+   ],
+   "pattern": "A",
+   "shift": "E",
+   "hire": "2022-05-23",
+   "ytd": 3,
+   "ytdEl": 2,
+   "carry": 4,
+   "resign": null,
+   "entitle": 25,
+   "elEnt": 5
+  },
+  {
+   "id": 57,
+   "name": "Ian Valenzuela",
+   "email": "ian.valenzuela@demobss.com",
+   "level": "member",
+   "assign": [
+    "bk",
+    "cs"
+   ],
+   "pattern": "B",
+   "shift": "D",
+   "hire": "2020-10-07",
+   "ytd": 8,
+   "ytdEl": 0,
+   "carry": 5,
+   "resign": null,
+   "entitle": 25,
+   "elEnt": 5
+  }
+ ],
+ "nodes": [
+  {
+   "id": "bss",
+   "type": "dept",
+   "name": "GSS (Global Shared Services)",
+   "parent": null,
+   "admins": [
+    26
+   ]
+  },
+  {
+   "id": "t_ops",
+   "type": "tower",
+   "name": "Customer Operations",
+   "parent": "bss"
+  },
+  {
+   "id": "t_ie",
+   "type": "tower",
+   "name": "Import & Export",
+   "parent": "bss"
+  },
+  {
+   "id": "t_rm",
+   "type": "tower",
+   "name": "Pricing & Rates",
+   "parent": "bss",
+   "admins": [
+    23
+   ]
+  },
+  {
+   "id": "t_com",
+   "type": "tower",
+   "name": "Commercial Support",
+   "parent": "bss"
+  },
+  {
+   "id": "t_cus",
+   "type": "tower",
+   "name": "Trade Compliance",
+   "parent": "bss"
+  },
+  {
+   "id": "rm",
+   "type": "branch",
+   "name": "Rate Desk",
+   "parent": "t_rm",
+   "mode": "approval",
+   "admins": [
+    23
+   ],
+   "notifyAdmin": true,
+   "notifyUser": true,
+   "invite": true,
+   "defaultScope": "all",
+   "leaveMax": 3
+  },
+  {
+   "id": "gpm",
+   "type": "system",
+   "name": "RateHub",
+   "parent": "rm"
+  },
+  {
+   "id": "rcm",
+   "type": "system",
+   "name": "TariffPro",
+   "parent": "rm"
+  },
+  {
+   "id": "fewb",
+   "type": "trade",
+   "name": "Far East",
+   "parent": "gpm"
+  },
+  {
+   "id": "inas",
+   "type": "trade",
+   "name": "Indian Ocean",
+   "parent": "gpm"
+  },
+  {
+   "id": "eu",
+   "type": "trade",
+   "name": "Europe",
+   "parent": "gpm"
+  },
+  {
+   "id": "us",
+   "type": "trade",
+   "name": "Americas",
+   "parent": "rcm"
+  },
+  {
+   "id": "asla",
+   "type": "trade",
+   "name": "Latin America",
+   "parent": "rcm"
+  },
+  {
+   "id": "lcl",
+   "type": "trade",
+   "name": "Consolidation",
+   "parent": "rcm"
+  },
+  {
+   "id": "cs",
+   "type": "branch",
+   "name": "Customer Care",
+   "parent": "t_ops",
+   "mode": "auto",
+   "admins": [
+    27
+   ],
+   "notifyAdmin": true,
+   "notifyUser": true,
+   "invite": true,
+   "defaultScope": "all"
+  },
+  {
+   "id": "bk",
+   "type": "branch",
+   "name": "Booking Desk",
+   "parent": "t_ops",
+   "mode": "approval",
+   "admins": [
+    54
+   ],
+   "notifyAdmin": true,
+   "notifyUser": true,
+   "invite": true,
+   "defaultScope": "all"
+  },
+  {
+   "id": "imp",
+   "type": "branch",
+   "name": "Import Desk",
+   "parent": "t_ie",
+   "mode": "approval",
+   "admins": [
+    34
+   ],
+   "notifyAdmin": true,
+   "notifyUser": true,
+   "invite": true,
+   "defaultScope": "all"
+  },
+  {
+   "id": "exp",
+   "type": "branch",
+   "name": "Export Desk",
+   "parent": "t_ie",
+   "mode": "approval",
+   "admins": [
+    39
+   ],
+   "notifyAdmin": true,
+   "notifyUser": true,
+   "invite": true,
+   "defaultScope": "all",
+   "leaveMax": 2
+  },
+  {
+   "id": "sales",
+   "type": "branch",
+   "name": "Sales Support",
+   "parent": "t_com",
+   "mode": "approval",
+   "admins": [
+    44
+   ],
+   "notifyAdmin": true,
+   "notifyUser": true,
+   "invite": true,
+   "defaultScope": "all"
+  },
+  {
+   "id": "crm",
+   "type": "system",
+   "name": "ClientHub",
+   "parent": "sales"
+  },
+  {
+   "id": "key",
+   "type": "trade",
+   "name": "Key Accounts",
+   "parent": "crm"
+  },
+  {
+   "id": "sme",
+   "type": "trade",
+   "name": "SME Accounts",
+   "parent": "crm"
+  },
+  {
+   "id": "doc",
+   "type": "branch",
+   "name": "Customs Documentation",
+   "parent": "t_cus",
+   "mode": "approval",
+   "admins": [
+    49
+   ],
+   "notifyAdmin": true,
+   "notifyUser": true,
+   "invite": true,
+   "defaultScope": "all"
+  }
+ ],
+ "requests": [
+  {
+   "id": "LR000001",
+   "half": null,
+   "reason": "Family trip",
+   "pid": 0,
+   "type": "VL",
+   "start": "2026-09-28",
+   "end": "2026-09-30",
+   "created": "2026-09-21",
+   "approvals": {
+    "rm": "pending",
+    "cs": "approved"
+   }
+  },
+  {
+   "id": "LR000002",
+   "half": null,
+   "reason": "Sister’s wedding",
+   "pid": 14,
+   "type": "VL",
+   "start": "2026-10-05",
+   "end": "2026-10-06",
+   "created": "2026-09-22",
+   "approvals": {
+    "rm": "pending"
+   }
+  },
+  {
+   "id": "LR000003",
+   "half": "PM",
+   "reason": "Medical appointment",
+   "pid": 8,
+   "type": "HD",
+   "start": "2026-09-25",
+   "end": "2026-09-25",
+   "created": "2026-09-23",
+   "approvals": {
+    "rm": "pending"
+   }
+  },
+  {
+   "id": "LR000004",
+   "half": null,
+   "reason": "Client visit",
+   "pid": 5,
+   "type": "BT",
+   "start": "2026-10-01",
+   "end": "2026-10-02",
+   "created": "2026-09-23",
+   "approvals": {
+    "rm": "pending"
+   }
+  },
+  {
+   "id": "LR000005",
+   "half": null,
+   "reason": "Personal errand",
+   "pid": 0,
+   "type": "VL",
+   "start": "2026-09-11",
+   "end": "2026-09-11",
+   "created": "2026-09-02",
+   "approvals": {
+    "rm": "declined",
+    "cs": "approved"
+   }
+  },
+  {
+   "id": "LR000006",
+   "half": null,
+   "reason": "",
+   "pid": 28,
+   "type": "VL",
+   "start": "2026-09-14",
+   "end": "2026-09-15",
+   "created": "2026-09-01",
+   "approvals": {
+    "rm": "approved"
+   }
+  },
+  {
+   "id": "LR000007",
+   "half": null,
+   "reason": "",
+   "pid": 26,
+   "type": "VL",
+   "start": "2026-09-16",
+   "end": "2026-09-18",
+   "created": "2026-09-01",
+   "approvals": {
+    "rm": "approved",
+    "cs": "approved"
+   }
+  },
+  {
+   "id": "LR000008",
+   "half": null,
+   "reason": "Regional meeting",
+   "pid": 27,
+   "type": "BT",
+   "start": "2026-09-29",
+   "end": "2026-09-30",
+   "created": "2026-09-10",
+   "approvals": {
+    "cs": "approved"
+   }
+  },
+  {
+   "id": "LR000009",
+   "half": null,
+   "reason": "",
+   "pid": 2,
+   "type": "SL",
+   "start": "2026-09-25",
+   "end": "2026-09-25",
+   "created": "2026-08-10",
+   "approvals": {
+    "rm": "approved"
+   }
+  },
+  {
+   "id": "LR000010",
+   "half": null,
+   "reason": "",
+   "pid": 3,
+   "type": "VL",
+   "start": "2026-09-08",
+   "end": "2026-09-10",
+   "created": "2026-08-10",
+   "approvals": {
+    "rm": "approved"
+   }
+  },
+  {
+   "id": "LR000011",
+   "half": null,
+   "reason": "",
+   "pid": 5,
+   "type": "VL",
+   "start": "2026-10-12",
+   "end": "2026-10-12",
+   "created": "2026-08-10",
+   "approvals": {
+    "rm": "approved"
+   }
+  },
+  {
+   "id": "LR000012",
+   "half": null,
+   "reason": "",
+   "pid": 6,
+   "type": "VL",
+   "start": "2026-09-14",
+   "end": "2026-09-14",
+   "created": "2026-08-10",
+   "approvals": {
+    "rm": "approved"
+   }
+  },
+  {
+   "id": "LR000013",
+   "half": null,
+   "reason": "",
+   "pid": 7,
+   "type": "BT",
+   "start": "2026-09-17",
+   "end": "2026-09-18",
+   "created": "2026-08-10",
+   "approvals": {
+    "rm": "approved"
+   }
+  },
+  {
+   "id": "LR000014",
+   "half": "AM",
+   "reason": "",
+   "pid": 9,
+   "type": "HD",
+   "start": "2026-09-03",
+   "end": "2026-09-03",
+   "created": "2026-08-10",
+   "approvals": {
+    "rm": "approved"
+   }
+  },
+  {
+   "id": "LR000015",
+   "half": null,
+   "reason": "",
+   "pid": 9,
+   "type": "VL",
+   "start": "2026-10-09",
+   "end": "2026-10-09",
+   "created": "2026-08-11",
+   "approvals": {
+    "rm": "approved"
+   }
+  },
+  {
+   "id": "LR000016",
+   "half": null,
+   "reason": "",
+   "pid": 10,
+   "type": "VL",
+   "start": "2026-10-09",
+   "end": "2026-10-13",
+   "created": "2026-08-10",
+   "approvals": {
+    "rm": "approved"
+   }
+  },
+  {
+   "id": "LR000017",
+   "half": null,
+   "reason": "",
+   "pid": 10,
+   "type": "VL",
+   "start": "2026-10-21",
+   "end": "2026-10-23",
+   "created": "2026-08-11",
+   "approvals": {
+    "rm": "approved"
+   }
+  },
+  {
+   "id": "LR000018",
+   "half": null,
+   "reason": "",
+   "pid": 11,
+   "type": "VL",
+   "start": "2026-09-01",
+   "end": "2026-09-03",
+   "created": "2026-08-10",
+   "approvals": {
+    "rm": "approved"
+   }
+  },
+  {
+   "id": "LR000019",
+   "half": null,
+   "reason": "",
+   "pid": 12,
+   "type": "VL",
+   "start": "2026-09-21",
+   "end": "2026-09-22",
+   "created": "2026-08-10",
+   "approvals": {
+    "rm": "approved"
+   }
+  },
+  {
+   "id": "LR000020",
+   "half": null,
+   "reason": "",
+   "pid": 12,
+   "type": "EL",
+   "start": "2026-09-15",
+   "end": "2026-09-15",
+   "created": "2026-08-11",
+   "approvals": {
+    "rm": "approved"
+   }
+  },
+  {
+   "id": "LR000021",
+   "half": null,
+   "reason": "",
+   "pid": 13,
+   "type": "EL",
+   "start": "2026-10-12",
+   "end": "2026-10-12",
+   "created": "2026-08-10",
+   "approvals": {
+    "rm": "approved"
+   }
+  },
+  {
+   "id": "LR000022",
+   "half": null,
+   "reason": "",
+   "pid": 13,
+   "type": "VL",
+   "start": "2026-09-07",
+   "end": "2026-09-07",
+   "created": "2026-08-11",
+   "approvals": {
+    "rm": "approved"
+   }
+  },
+  {
+   "id": "LR000023",
+   "half": null,
+   "reason": "",
+   "pid": 14,
+   "type": "SL",
+   "start": "2026-09-16",
+   "end": "2026-09-16",
+   "created": "2026-08-10",
+   "approvals": {
+    "rm": "approved"
+   }
+  },
+  {
+   "id": "LR000024",
+   "half": "AM",
+   "reason": "",
+   "pid": 15,
+   "type": "HD",
+   "start": "2026-09-07",
+   "end": "2026-09-07",
+   "created": "2026-08-10",
+   "approvals": {
+    "rm": "approved"
+   }
+  },
+  {
+   "id": "LR000025",
+   "half": null,
+   "reason": "",
+   "pid": 16,
+   "type": "VL",
+   "start": "2026-09-28",
+   "end": "2026-09-30",
+   "created": "2026-08-10",
+   "approvals": {
+    "rm": "approved"
+   }
+  },
+  {
+   "id": "LR000026",
+   "half": null,
+   "reason": "",
+   "pid": 16,
+   "type": "EL",
+   "start": "2026-09-11",
+   "end": "2026-09-11",
+   "created": "2026-08-11",
+   "approvals": {
+    "rm": "approved"
+   }
+  },
+  {
+   "id": "LR000027",
+   "half": null,
+   "reason": "",
+   "pid": 17,
+   "type": "VL",
+   "start": "2026-09-15",
+   "end": "2026-09-17",
+   "created": "2026-08-10",
+   "approvals": {
+    "rm": "approved"
+   }
+  },
+  {
+   "id": "LR000028",
+   "half": null,
+   "reason": "",
+   "pid": 19,
+   "type": "EL",
+   "start": "2026-09-03",
+   "end": "2026-09-03",
+   "created": "2026-08-10",
+   "approvals": {
+    "rm": "approved"
+   }
+  },
+  {
+   "id": "LR000029",
+   "half": null,
+   "reason": "",
+   "pid": 20,
+   "type": "EL",
+   "start": "2026-10-12",
+   "end": "2026-10-12",
+   "created": "2026-08-10",
+   "approvals": {
+    "rm": "approved"
+   }
+  },
+  {
+   "id": "LR000030",
+   "half": "AM",
+   "reason": "",
+   "pid": 21,
+   "type": "HD",
+   "start": "2026-09-01",
+   "end": "2026-09-01",
+   "created": "2026-08-10",
+   "approvals": {
+    "rm": "approved"
+   }
+  },
+  {
+   "id": "LR000031",
+   "half": null,
+   "reason": "",
+   "pid": 23,
+   "type": "SL",
+   "start": "2026-09-28",
+   "end": "2026-09-28",
+   "created": "2026-08-10",
+   "approvals": {
+    "rm": "approved"
+   }
+  },
+  {
+   "id": "LR000032",
+   "half": null,
+   "reason": "",
+   "pid": 24,
+   "type": "VL",
+   "start": "2026-09-14",
+   "end": "2026-09-14",
+   "created": "2026-08-10",
+   "approvals": {
+    "rm": "approved"
+   }
+  },
+  {
+   "id": "LR000033",
+   "half": null,
+   "reason": "",
+   "pid": 25,
+   "type": "SL",
+   "start": "2026-09-09",
+   "end": "2026-09-09",
+   "created": "2026-08-10",
+   "approvals": {
+    "rm": "approved"
+   }
+  },
+  {
+   "id": "LR000034",
+   "half": null,
+   "reason": "",
+   "pid": 26,
+   "type": "SL",
+   "start": "2026-09-23",
+   "end": "2026-09-23",
+   "created": "2026-08-10",
+   "approvals": {
+    "rm": "approved",
+    "cs": "approved"
+   }
+  },
+  {
+   "id": "LR000035",
+   "half": null,
+   "reason": "",
+   "pid": 27,
+   "type": "VL",
+   "start": "2026-10-12",
+   "end": "2026-10-13",
+   "created": "2026-08-10",
+   "approvals": {
+    "cs": "approved"
+   }
+  },
+  {
+   "id": "LR000036",
+   "half": null,
+   "reason": "",
+   "pid": 30,
+   "type": "VL",
+   "start": "2026-09-07",
+   "end": "2026-09-07",
+   "created": "2026-08-10",
+   "approvals": {
+    "rm": "approved"
+   }
+  },
+  {
+   "id": "LR000037",
+   "half": null,
+   "reason": "",
+   "pid": 30,
+   "type": "BT",
+   "start": "2026-09-28",
+   "end": "2026-09-29",
+   "created": "2026-08-11",
+   "approvals": {
+    "rm": "approved"
+   }
+  },
+  {
+   "id": "LR000038",
+   "half": null,
+   "reason": "",
+   "pid": 31,
+   "type": "BT",
+   "start": "2026-09-14",
+   "end": "2026-09-15",
+   "created": "2026-08-10",
+   "approvals": {
+    "cs": "approved"
+   }
+  },
+  {
+   "id": "LR000039",
+   "half": null,
+   "reason": "",
+   "pid": 33,
+   "type": "SL",
+   "start": "2026-09-22",
+   "end": "2026-09-22",
+   "created": "2026-08-10",
+   "approvals": {
+    "rm": "approved"
+   }
+  },
+  {
+   "id": "LR000040",
+   "half": null,
+   "reason": "",
+   "pid": 33,
+   "type": "EL",
+   "start": "2026-09-01",
+   "end": "2026-09-01",
+   "created": "2026-08-11",
+   "approvals": {
+    "rm": "approved"
+   }
+  },
+  {
+   "id": "LR000041",
+   "half": null,
+   "reason": "",
+   "pid": 34,
+   "type": "VL",
+   "start": "2026-09-07",
+   "end": "2026-09-08",
+   "created": "2026-08-10",
+   "approvals": {
+    "imp": "approved"
+   }
+  },
+  {
+   "id": "LR000042",
+   "half": null,
+   "reason": "",
+   "pid": 34,
+   "type": "SL",
+   "start": "2026-10-22",
+   "end": "2026-10-22",
+   "created": "2026-08-11",
+   "approvals": {
+    "imp": "approved"
+   }
+  },
+  {
+   "id": "LR000043",
+   "half": null,
+   "reason": "",
+   "pid": 36,
+   "type": "VL",
+   "start": "2026-10-09",
+   "end": "2026-10-12",
+   "created": "2026-08-10",
+   "approvals": {
+    "imp": "approved"
+   }
+  },
+  {
+   "id": "LR000044",
+   "half": null,
+   "reason": "",
+   "pid": 37,
+   "type": "BT",
+   "start": "2026-09-17",
+   "end": "2026-09-18",
+   "created": "2026-08-10",
+   "approvals": {
+    "imp": "approved"
+   }
+  },
+  {
+   "id": "LR000045",
+   "half": null,
+   "reason": "",
+   "pid": 37,
+   "type": "VL",
+   "start": "2026-10-14",
+   "end": "2026-10-14",
+   "created": "2026-08-11",
+   "approvals": {
+    "imp": "approved"
+   }
+  },
+  {
+   "id": "LR000046",
+   "half": null,
+   "reason": "",
+   "pid": 38,
+   "type": "VL",
+   "start": "2026-09-16",
+   "end": "2026-09-17",
+   "created": "2026-08-10",
+   "approvals": {
+    "imp": "approved"
+   }
+  },
+  {
+   "id": "LR000047",
+   "half": null,
+   "reason": "",
+   "pid": 39,
+   "type": "EL",
+   "start": "2026-09-25",
+   "end": "2026-09-25",
+   "created": "2026-08-10",
+   "approvals": {
+    "exp": "approved"
+   }
+  },
+  {
+   "id": "LR000048",
+   "half": null,
+   "reason": "",
+   "pid": 40,
+   "type": "EL",
+   "start": "2026-09-21",
+   "end": "2026-09-21",
+   "created": "2026-08-10",
+   "approvals": {
+    "exp": "approved"
+   }
+  },
+  {
+   "id": "LR000049",
+   "half": "AM",
+   "reason": "",
+   "pid": 42,
+   "type": "HD",
+   "start": "2026-09-10",
+   "end": "2026-09-10",
+   "created": "2026-08-10",
+   "approvals": {
+    "exp": "approved"
+   }
+  },
+  {
+   "id": "LR000050",
+   "half": "AM",
+   "reason": "",
+   "pid": 42,
+   "type": "HD",
+   "start": "2026-09-03",
+   "end": "2026-09-03",
+   "created": "2026-08-11",
+   "approvals": {
+    "exp": "approved"
+   }
+  },
+  {
+   "id": "LR000051",
+   "half": null,
+   "reason": "",
+   "pid": 43,
+   "type": "VL",
+   "start": "2026-09-28",
+   "end": "2026-09-29",
+   "created": "2026-08-10",
+   "approvals": {}
+  },
+  {
+   "id": "LR000052",
+   "half": null,
+   "reason": "",
+   "pid": 43,
+   "type": "BT",
+   "start": "2026-10-14",
+   "end": "2026-10-15",
+   "created": "2026-08-11",
+   "approvals": {}
+  },
+  {
+   "id": "LR000053",
+   "half": null,
+   "reason": "",
+   "pid": 44,
+   "type": "VL",
+   "start": "2026-09-25",
+   "end": "2026-09-25",
+   "created": "2026-08-10",
+   "approvals": {
+    "sales": "approved"
+   }
+  },
+  {
+   "id": "LR000054",
+   "half": null,
+   "reason": "",
+   "pid": 44,
+   "type": "VL",
+   "start": "2026-10-20",
+   "end": "2026-10-22",
+   "created": "2026-08-11",
+   "approvals": {
+    "sales": "approved"
+   }
+  },
+  {
+   "id": "LR000055",
+   "half": "AM",
+   "reason": "",
+   "pid": 47,
+   "type": "HD",
+   "start": "2026-09-17",
+   "end": "2026-09-17",
+   "created": "2026-08-10",
+   "approvals": {
+    "sales": "approved"
+   }
+  },
+  {
+   "id": "LR000056",
+   "half": null,
+   "reason": "",
+   "pid": 48,
+   "type": "VL",
+   "start": "2026-09-23",
+   "end": "2026-09-23",
+   "created": "2026-08-10",
+   "approvals": {}
+  },
+  {
+   "id": "LR000057",
+   "half": null,
+   "reason": "",
+   "pid": 49,
+   "type": "VL",
+   "start": "2026-10-12",
+   "end": "2026-10-14",
+   "created": "2026-08-10",
+   "approvals": {
+    "doc": "approved"
+   }
+  },
+  {
+   "id": "LR000058",
+   "half": "AM",
+   "reason": "",
+   "pid": 51,
+   "type": "HD",
+   "start": "2026-09-28",
+   "end": "2026-09-28",
+   "created": "2026-08-10",
+   "approvals": {
+    "doc": "approved"
+   }
+  },
+  {
+   "id": "LR000059",
+   "half": null,
+   "reason": "",
+   "pid": 53,
+   "type": "VL",
+   "start": "2026-09-03",
+   "end": "2026-09-03",
+   "created": "2026-08-10",
+   "approvals": {}
+  },
+  {
+   "id": "LR000060",
+   "half": null,
+   "reason": "",
+   "pid": 55,
+   "type": "SL",
+   "start": "2026-09-15",
+   "end": "2026-09-15",
+   "created": "2026-08-10",
+   "approvals": {
+    "bk": "approved"
+   }
+  },
+  {
+   "id": "LR000061",
+   "half": null,
+   "reason": "",
+   "pid": 56,
+   "type": "EL",
+   "start": "2026-09-21",
+   "end": "2026-09-21",
+   "created": "2026-08-10",
+   "approvals": {
+    "bk": "approved"
+   }
+  },
+  {
+   "id": "LR000062",
+   "half": null,
+   "reason": "",
+   "pid": 56,
+   "type": "VL",
+   "start": "2026-10-16",
+   "end": "2026-10-19",
+   "created": "2026-08-11",
+   "approvals": {
+    "bk": "approved"
+   }
+  },
+  {
+   "id": "LR000063",
+   "half": null,
+   "reason": "",
+   "pid": 57,
+   "type": "VL",
+   "start": "2026-09-21",
+   "end": "2026-09-22",
+   "created": "2026-08-10",
+   "approvals": {
+    "bk": "approved",
+    "cs": "approved"
+   }
+  }
+ ],
+ "overrides": {
+  "3|2026-09-22": "RTO",
+  "7|2026-09-24": "WFH",
+  "12|2026-09-26": "RTO",
+  "23|2026-11-30": "HDY",
+  "14|2026-11-30": "HDY",
+  "25|2026-11-30": "HDY",
+  "5|2026-10-16": "HDY",
+  "9|2026-10-16": "HDY"
+ },
+ "roster": {
+  "5|2026-09-08": "N",
+  "5|2026-09-09": "N",
+  "5|2026-09-10": "N",
+  "5|2026-09-11": "N",
+  "5|2026-09-14": "N",
+  "5|2026-09-22": "N",
+  "5|2026-09-23": "N",
+  "5|2026-09-24": "N",
+  "5|2026-09-25": "N",
+  "5|2026-09-28": "N",
+  "8|2026-09-08": "GY",
+  "8|2026-09-09": "GY",
+  "8|2026-09-10": "GY",
+  "8|2026-09-11": "GY",
+  "8|2026-09-14": "GY",
+  "8|2026-09-22": "GY",
+  "8|2026-09-23": "GY",
+  "8|2026-09-24": "GY",
+  "8|2026-09-25": "GY",
+  "8|2026-09-28": "GY",
+  "15|2026-09-08": "N",
+  "15|2026-09-09": "N",
+  "15|2026-09-10": "N",
+  "15|2026-09-11": "N",
+  "15|2026-09-14": "N",
+  "15|2026-09-22": "N",
+  "15|2026-09-23": "N",
+  "15|2026-09-24": "N",
+  "15|2026-09-25": "N",
+  "15|2026-09-28": "N",
+  "18|2026-09-08": "GY",
+  "18|2026-09-09": "GY",
+  "18|2026-09-10": "GY",
+  "18|2026-09-11": "GY",
+  "18|2026-09-14": "GY",
+  "18|2026-09-22": "GY",
+  "18|2026-09-23": "GY",
+  "18|2026-09-24": "GY",
+  "18|2026-09-25": "GY",
+  "18|2026-09-28": "GY",
+  "25|2026-09-08": "N",
+  "25|2026-09-09": "N",
+  "25|2026-09-10": "N",
+  "25|2026-09-11": "N",
+  "25|2026-09-14": "N",
+  "25|2026-09-22": "N",
+  "25|2026-09-23": "N",
+  "25|2026-09-24": "N",
+  "25|2026-09-25": "N",
+  "25|2026-09-28": "N",
+  "28|2026-09-08": "GY",
+  "28|2026-09-09": "GY",
+  "28|2026-09-10": "GY",
+  "28|2026-09-11": "GY",
+  "28|2026-09-14": "GY",
+  "28|2026-09-22": "GY",
+  "28|2026-09-23": "GY",
+  "28|2026-09-24": "GY",
+  "28|2026-09-25": "GY",
+  "28|2026-09-28": "GY",
+  "35|2026-09-08": "N",
+  "35|2026-09-09": "N",
+  "35|2026-09-10": "N",
+  "35|2026-09-11": "N",
+  "35|2026-09-14": "N",
+  "35|2026-09-22": "N",
+  "35|2026-09-23": "N",
+  "35|2026-09-24": "N",
+  "35|2026-09-25": "N",
+  "35|2026-09-28": "N",
+  "38|2026-09-08": "GY",
+  "38|2026-09-09": "GY",
+  "38|2026-09-10": "GY",
+  "38|2026-09-11": "GY",
+  "38|2026-09-14": "GY",
+  "38|2026-09-22": "GY",
+  "38|2026-09-23": "GY",
+  "38|2026-09-24": "GY",
+  "38|2026-09-25": "GY",
+  "38|2026-09-28": "GY",
+  "45|2026-09-08": "N",
+  "45|2026-09-09": "N",
+  "45|2026-09-10": "N",
+  "45|2026-09-11": "N",
+  "45|2026-09-14": "N",
+  "45|2026-09-22": "N",
+  "45|2026-09-23": "N",
+  "45|2026-09-24": "N",
+  "45|2026-09-25": "N",
+  "45|2026-09-28": "N",
+  "48|2026-09-08": "GY",
+  "48|2026-09-09": "GY",
+  "48|2026-09-10": "GY",
+  "48|2026-09-11": "GY",
+  "48|2026-09-14": "GY",
+  "48|2026-09-22": "GY",
+  "48|2026-09-23": "GY",
+  "48|2026-09-24": "GY",
+  "48|2026-09-25": "GY",
+  "48|2026-09-28": "GY",
+  "55|2026-09-08": "N",
+  "55|2026-09-09": "N",
+  "55|2026-09-10": "N",
+  "55|2026-09-11": "N",
+  "55|2026-09-14": "N",
+  "55|2026-09-22": "N",
+  "55|2026-09-23": "N",
+  "55|2026-09-24": "N",
+  "55|2026-09-25": "N",
+  "55|2026-09-28": "N"
+ },
+ "shifts": [
+  {
+   "id": "E",
+   "name": "Early morning",
+   "start": "05:00",
+   "end": "14:00",
+   "bucket": "morning"
+  },
+  {
+   "id": "M",
+   "name": "Morning",
+   "start": "06:00",
+   "end": "15:00",
+   "bucket": "morning"
+  },
+  {
+   "id": "D",
+   "name": "Day",
+   "start": "08:00",
+   "end": "17:00",
+   "bucket": "morning"
+  },
+  {
+   "id": "MID",
+   "name": "Midshift",
+   "start": "12:00",
+   "end": "21:00",
+   "bucket": "mid"
+  },
+  {
+   "id": "SW",
+   "name": "Swing",
+   "start": "15:00",
+   "end": "00:00",
+   "bucket": "mid"
+  },
+  {
+   "id": "N",
+   "name": "Night",
+   "start": "18:00",
+   "end": "03:00",
+   "bucket": "gy"
+  },
+  {
+   "id": "GY",
+   "name": "Graveyard",
+   "start": "22:00",
+   "end": "07:00",
+   "bucket": "gy"
+  }
+ ],
+ "holidays": [
+  {
+   "id": "H0",
+   "date": "2026-08-21",
+   "name": "Ninoy Aquino Day",
+   "type": "special",
+   "scope": "all"
+  },
+  {
+   "id": "H1",
+   "date": "2026-08-31",
+   "name": "National Heroes Day",
+   "type": "regular",
+   "scope": "all"
+  },
+  {
+   "id": "H2",
+   "date": "2026-10-16",
+   "name": "Rate Desk team day",
+   "type": "company",
+   "scope": "rm"
+  },
+  {
+   "id": "H3",
+   "date": "2026-11-02",
+   "name": "All Souls’ Day",
+   "type": "special",
+   "scope": "all"
+  },
+  {
+   "id": "H4",
+   "date": "2026-11-30",
+   "name": "Bonifacio Day",
+   "type": "regular",
+   "scope": "all"
+  },
+  {
+   "id": "H5",
+   "date": "2026-12-08",
+   "name": "Immaculate Conception",
+   "type": "special",
+   "scope": "all"
+  },
+  {
+   "id": "H6",
+   "date": "2026-12-24",
+   "name": "Christmas Eve",
+   "type": "special",
+   "scope": "all"
+  },
+  {
+   "id": "H7",
+   "date": "2026-12-25",
+   "name": "Christmas Day",
+   "type": "regular",
+   "scope": "all"
+  },
+  {
+   "id": "H8",
+   "date": "2026-12-30",
+   "name": "Rizal Day",
+   "type": "regular",
+   "scope": "all"
+  },
+  {
+   "id": "H9",
+   "date": "2026-12-31",
+   "name": "New Year’s Eve",
+   "type": "special",
+   "scope": "all"
+  }
+ ],
+ "bcpReady": {
+  "2": {
+   "laptop": true,
+   "internet": true,
+   "backup": false,
+   "power": true,
+   "setup": true,
+   "updated": "2026-08-11"
+  },
+  "3": {
+   "laptop": true,
+   "internet": true,
+   "backup": true,
+   "power": true,
+   "setup": true,
+   "updated": "2026-09-10"
+  },
+  "5": {
+   "laptop": true,
+   "internet": true,
+   "backup": true,
+   "power": false,
+   "setup": true,
+   "updated": "2026-08-18"
+  },
+  "6": {
+   "laptop": true,
+   "internet": true,
+   "backup": true,
+   "power": false,
+   "setup": true,
+   "updated": "2026-08-07"
+  },
+  "7": {
+   "laptop": true,
+   "internet": true,
+   "backup": false,
+   "power": false,
+   "setup": true,
+   "updated": "2026-08-25"
+  },
+  "8": {
+   "laptop": true,
+   "internet": true,
+   "backup": true,
+   "power": true,
+   "setup": true,
+   "updated": "2026-08-05"
+  },
+  "9": {
+   "laptop": true,
+   "internet": true,
+   "backup": true,
+   "power": false,
+   "setup": true,
+   "updated": "2026-08-14"
+  },
+  "10": {
+   "laptop": true,
+   "internet": true,
+   "backup": true,
+   "power": false,
+   "setup": true,
+   "updated": "2026-09-13"
+  },
+  "11": {
+   "laptop": true,
+   "internet": true,
+   "backup": true,
+   "power": false,
+   "setup": false,
+   "updated": "2026-08-16"
+  },
+  "12": {
+   "laptop": true,
+   "internet": true,
+   "backup": true,
+   "power": false,
+   "setup": false,
+   "updated": "2026-08-17"
+  },
+  "14": {
+   "laptop": true,
+   "internet": true,
+   "backup": false,
+   "power": false,
+   "setup": false,
+   "updated": "2026-08-05"
+  },
+  "15": {
+   "laptop": true,
+   "internet": true,
+   "backup": false,
+   "power": true,
+   "setup": true,
+   "updated": "2026-08-10"
+  },
+  "17": {
+   "laptop": true,
+   "internet": true,
+   "backup": false,
+   "power": false,
+   "setup": false,
+   "updated": "2026-08-05"
+  },
+  "18": {
+   "laptop": true,
+   "internet": true,
+   "backup": false,
+   "power": false,
+   "setup": true,
+   "updated": "2026-08-06"
+  },
+  "19": {
+   "laptop": true,
+   "internet": true,
+   "backup": false,
+   "power": false,
+   "setup": true,
+   "updated": "2026-08-02"
+  },
+  "20": {
+   "laptop": true,
+   "internet": true,
+   "backup": true,
+   "power": false,
+   "setup": true,
+   "updated": "2026-08-08"
+  },
+  "21": {
+   "laptop": true,
+   "internet": false,
+   "backup": false,
+   "power": false,
+   "setup": true,
+   "updated": "2026-09-07"
+  },
+  "22": {
+   "laptop": true,
+   "internet": true,
+   "backup": false,
+   "power": false,
+   "setup": true,
+   "updated": "2026-09-23"
+  },
+  "23": {
+   "laptop": true,
+   "internet": true,
+   "backup": false,
+   "power": false,
+   "setup": false,
+   "updated": "2026-09-04"
+  },
+  "24": {
+   "laptop": true,
+   "internet": true,
+   "backup": true,
+   "power": true,
+   "setup": true,
+   "updated": "2026-09-01"
+  },
+  "25": {
+   "laptop": true,
+   "internet": true,
+   "backup": false,
+   "power": false,
+   "setup": true,
+   "updated": "2026-09-12"
+  },
+  "26": {
+   "laptop": true,
+   "internet": true,
+   "backup": false,
+   "power": true,
+   "setup": true,
+   "updated": "2026-09-08"
+  },
+  "27": {
+   "laptop": true,
+   "internet": true,
+   "backup": false,
+   "power": true,
+   "setup": true,
+   "updated": "2026-08-15"
+  },
+  "28": {
+   "laptop": true,
+   "internet": true,
+   "backup": true,
+   "power": true,
+   "setup": true,
+   "updated": "2026-09-09"
+  },
+  "29": {
+   "laptop": true,
+   "internet": true,
+   "backup": true,
+   "power": false,
+   "setup": true,
+   "updated": "2026-09-21"
+  },
+  "30": {
+   "laptop": true,
+   "internet": true,
+   "backup": false,
+   "power": false,
+   "setup": true,
+   "updated": "2026-09-11"
+  },
+  "31": {
+   "laptop": true,
+   "internet": true,
+   "backup": false,
+   "power": true,
+   "setup": true,
+   "updated": "2026-09-03"
+  },
+  "32": {
+   "laptop": true,
+   "internet": true,
+   "backup": true,
+   "power": false,
+   "setup": true,
+   "updated": "2026-08-12"
+  },
+  "33": {
+   "laptop": true,
+   "internet": true,
+   "backup": true,
+   "power": false,
+   "setup": true,
+   "updated": "2026-08-26"
+  },
+  "35": {
+   "laptop": true,
+   "internet": true,
+   "backup": true,
+   "power": true,
+   "setup": true,
+   "updated": "2026-08-23"
+  },
+  "37": {
+   "laptop": true,
+   "internet": true,
+   "backup": true,
+   "power": true,
+   "setup": true,
+   "updated": "2026-09-18"
+  },
+  "38": {
+   "laptop": true,
+   "internet": true,
+   "backup": true,
+   "power": true,
+   "setup": true,
+   "updated": "2026-09-04"
+  },
+  "39": {
+   "laptop": true,
+   "internet": true,
+   "backup": true,
+   "power": true,
+   "setup": true,
+   "updated": "2026-08-26"
+  },
+  "40": {
+   "laptop": true,
+   "internet": false,
+   "backup": true,
+   "power": false,
+   "setup": true,
+   "updated": "2026-09-25"
+  },
+  "42": {
+   "laptop": false,
+   "internet": true,
+   "backup": false,
+   "power": false,
+   "setup": true,
+   "updated": "2026-08-19"
+  },
+  "43": {
+   "laptop": true,
+   "internet": true,
+   "backup": true,
+   "power": false,
+   "setup": false,
+   "updated": "2026-08-05"
+  },
+  "44": {
+   "laptop": true,
+   "internet": true,
+   "backup": true,
+   "power": false,
+   "setup": true,
+   "updated": "2026-09-10"
+  },
+  "45": {
+   "laptop": true,
+   "internet": false,
+   "backup": true,
+   "power": false,
+   "setup": true,
+   "updated": "2026-09-22"
+  },
+  "46": {
+   "laptop": true,
+   "internet": false,
+   "backup": false,
+   "power": false,
+   "setup": true,
+   "updated": "2026-09-12"
+  },
+  "47": {
+   "laptop": true,
+   "internet": true,
+   "backup": false,
+   "power": false,
+   "setup": true,
+   "updated": "2026-09-15"
+  },
+  "48": {
+   "laptop": true,
+   "internet": true,
+   "backup": true,
+   "power": false,
+   "setup": false,
+   "updated": "2026-08-11"
+  },
+  "49": {
+   "laptop": true,
+   "internet": true,
+   "backup": false,
+   "power": true,
+   "setup": true,
+   "updated": "2026-08-16"
+  },
+  "50": {
+   "laptop": true,
+   "internet": true,
+   "backup": true,
+   "power": false,
+   "setup": true,
+   "updated": "2026-08-16"
+  },
+  "51": {
+   "laptop": true,
+   "internet": true,
+   "backup": false,
+   "power": false,
+   "setup": true,
+   "updated": "2026-09-20"
+  },
+  "52": {
+   "laptop": true,
+   "internet": true,
+   "backup": true,
+   "power": true,
+   "setup": true,
+   "updated": "2026-09-09"
+  },
+  "53": {
+   "laptop": true,
+   "internet": true,
+   "backup": true,
+   "power": true,
+   "setup": true,
+   "updated": "2026-08-22"
+  },
+  "54": {
+   "laptop": true,
+   "internet": true,
+   "backup": false,
+   "power": false,
+   "setup": false,
+   "updated": "2026-08-11"
+  },
+  "55": {
+   "laptop": true,
+   "internet": true,
+   "backup": true,
+   "power": true,
+   "setup": true,
+   "updated": "2026-09-25"
+  },
+  "56": {
+   "laptop": true,
+   "internet": true,
+   "backup": false,
+   "power": false,
+   "setup": true,
+   "updated": "2026-09-26"
+  }
+ },
+ "bcpEvents": [
+  {
+   "id": "E2",
+   "name": "Typhoon Helen – Signal No. 3",
+   "start": "2026-09-24",
+   "end": "",
+   "scope": "bss",
+   "status": "active",
+   "note": "Office closes at 12:00. Work from home if it is safe to do so, and check in below."
+  },
+  {
+   "id": "E1",
+   "name": "Power interruption – main office",
+   "start": "2026-08-12",
+   "end": "2026-08-12",
+   "scope": "bss",
+   "status": "closed",
+   "note": ""
+  }
+ ],
+ "checkins": {
+  "E2": {
+   "1": {
+    "status": "wfh",
+    "note": "",
+    "at": "Thu 24 Sep, 09:41"
+   },
+   "2": {
+    "status": "wfh",
+    "note": "",
+    "at": "Thu 24 Sep, 08:33"
+   },
+   "3": {
+    "status": "aff_ok",
+    "note": "Brownouts, using mobile data",
+    "at": "Thu 24 Sep, 09:06"
+   },
+   "4": {
+    "status": "wfh",
+    "note": "",
+    "at": "Thu 24 Sep, 09:29"
+   },
+   "5": {
+    "status": "wfh",
+    "note": "",
+    "at": "Thu 24 Sep, 09:13"
+   },
+   "6": {
+    "status": "wfh",
+    "note": "",
+    "at": "Thu 24 Sep, 08:53"
+   },
+   "7": {
+    "status": "wfh",
+    "note": "",
+    "at": "Thu 24 Sep, 09:42"
+   },
+   "8": {
+    "status": "wfh",
+    "note": "",
+    "at": "Thu 24 Sep, 09:26"
+   },
+   "9": {
+    "status": "wfh",
+    "note": "",
+    "at": "Thu 24 Sep, 09:10"
+   },
+   "12": {
+    "status": "aff_ok",
+    "note": "Brownouts, using mobile data",
+    "at": "Thu 24 Sep, 09:46"
+   },
+   "13": {
+    "status": "wfh",
+    "note": "",
+    "at": "Thu 24 Sep, 08:15"
+   },
+   "14": {
+    "status": "office",
+    "note": "",
+    "at": "Thu 24 Sep, 08:48"
+   },
+   "15": {
+    "status": "wfh",
+    "note": "",
+    "at": "Thu 24 Sep, 08:34"
+   },
+   "16": {
+    "status": "aff_no",
+    "note": "Flooding in our area, no power",
+    "at": "Thu 24 Sep, 08:52"
+   },
+   "17": {
+    "status": "wfh",
+    "note": "",
+    "at": "Thu 24 Sep, 08:52"
+   },
+   "19": {
+    "status": "wfh",
+    "note": "",
+    "at": "Thu 24 Sep, 08:24"
+   },
+   "21": {
+    "status": "wfh",
+    "note": "",
+    "at": "Thu 24 Sep, 09:29"
+   },
+   "22": {
+    "status": "wfh",
+    "note": "",
+    "at": "Thu 24 Sep, 09:10"
+   },
+   "23": {
+    "status": "wfh",
+    "note": "",
+    "at": "Thu 24 Sep, 08:04"
+   },
+   "24": {
+    "status": "wfh",
+    "note": "",
+    "at": "Thu 24 Sep, 08:49"
+   },
+   "26": {
+    "status": "aff_ok",
+    "note": "Brownouts, using mobile data",
+    "at": "Thu 24 Sep, 09:25"
+   },
+   "27": {
+    "status": "wfh",
+    "note": "",
+    "at": "Thu 24 Sep, 09:36"
+   },
+   "29": {
+    "status": "wfh",
+    "note": "",
+    "at": "Thu 24 Sep, 09:51"
+   },
+   "30": {
+    "status": "wfh",
+    "note": "",
+    "at": "Thu 24 Sep, 08:38"
+   },
+   "31": {
+    "status": "wfh",
+    "note": "",
+    "at": "Thu 24 Sep, 09:51"
+   },
+   "33": {
+    "status": "aff_ok",
+    "note": "Brownouts, using mobile data",
+    "at": "Thu 24 Sep, 09:48"
+   },
+   "34": {
+    "status": "wfh",
+    "note": "",
+    "at": "Thu 24 Sep, 09:07"
+   },
+   "35": {
+    "status": "wfh",
+    "note": "",
+    "at": "Thu 24 Sep, 08:47"
+   },
+   "36": {
+    "status": "leave",
+    "note": "",
+    "at": "Thu 24 Sep, 09:01"
+   },
+   "37": {
+    "status": "wfh",
+    "note": "",
+    "at": "Thu 24 Sep, 08:12"
+   },
+   "38": {
+    "status": "wfh",
+    "note": "",
+    "at": "Thu 24 Sep, 08:31"
+   },
+   "39": {
+    "status": "aff_ok",
+    "note": "Brownouts, using mobile data",
+    "at": "Thu 24 Sep, 08:19"
+   },
+   "40": {
+    "status": "wfh",
+    "note": "",
+    "at": "Thu 24 Sep, 09:24"
+   },
+   "41": {
+    "status": "leave",
+    "note": "",
+    "at": "Thu 24 Sep, 08:00"
+   },
+   "42": {
+    "status": "wfh",
+    "note": "",
+    "at": "Thu 24 Sep, 09:49"
+   },
+   "45": {
+    "status": "aff_no",
+    "note": "Flooding in our area, no power",
+    "at": "Thu 24 Sep, 08:32"
+   },
+   "46": {
+    "status": "aff_ok",
+    "note": "Brownouts, using mobile data",
+    "at": "Thu 24 Sep, 09:00"
+   },
+   "47": {
+    "status": "wfh",
+    "note": "",
+    "at": "Thu 24 Sep, 09:50"
+   },
+   "48": {
+    "status": "aff_ok",
+    "note": "Brownouts, using mobile data",
+    "at": "Thu 24 Sep, 08:01"
+   },
+   "49": {
+    "status": "office",
+    "note": "",
+    "at": "Thu 24 Sep, 08:18"
+   },
+   "51": {
+    "status": "wfh",
+    "note": "",
+    "at": "Thu 24 Sep, 08:18"
+   },
+   "52": {
+    "status": "wfh",
+    "note": "",
+    "at": "Thu 24 Sep, 09:09"
+   },
+   "54": {
+    "status": "wfh",
+    "note": "",
+    "at": "Thu 24 Sep, 09:09"
+   },
+   "56": {
+    "status": "wfh",
+    "note": "",
+    "at": "Thu 24 Sep, 09:44"
+   },
+   "57": {
+    "status": "wfh",
+    "note": "",
+    "at": "Thu 24 Sep, 09:27"
+   }
+  },
+  "E1": {
+   "0": {
+    "status": "aff_ok",
+    "note": "",
+    "at": "Wed 12 Aug"
+   },
+   "1": {
+    "status": "wfh",
+    "note": "",
+    "at": "Wed 12 Aug"
+   },
+   "2": {
+    "status": "wfh",
+    "note": "",
+    "at": "Wed 12 Aug"
+   },
+   "3": {
+    "status": "wfh",
+    "note": "",
+    "at": "Wed 12 Aug"
+   },
+   "4": {
+    "status": "wfh",
+    "note": "",
+    "at": "Wed 12 Aug"
+   },
+   "5": {
+    "status": "wfh",
+    "note": "",
+    "at": "Wed 12 Aug"
+   },
+   "6": {
+    "status": "wfh",
+    "note": "",
+    "at": "Wed 12 Aug"
+   },
+   "7": {
+    "status": "wfh",
+    "note": "",
+    "at": "Wed 12 Aug"
+   },
+   "8": {
+    "status": "aff_ok",
+    "note": "",
+    "at": "Wed 12 Aug"
+   },
+   "9": {
+    "status": "wfh",
+    "note": "",
+    "at": "Wed 12 Aug"
+   },
+   "10": {
+    "status": "aff_ok",
+    "note": "",
+    "at": "Wed 12 Aug"
+   },
+   "11": {
+    "status": "wfh",
+    "note": "",
+    "at": "Wed 12 Aug"
+   },
+   "12": {
+    "status": "wfh",
+    "note": "",
+    "at": "Wed 12 Aug"
+   },
+   "13": {
+    "status": "wfh",
+    "note": "",
+    "at": "Wed 12 Aug"
+   },
+   "14": {
+    "status": "wfh",
+    "note": "",
+    "at": "Wed 12 Aug"
+   },
+   "15": {
+    "status": "wfh",
+    "note": "",
+    "at": "Wed 12 Aug"
+   },
+   "16": {
+    "status": "aff_ok",
+    "note": "",
+    "at": "Wed 12 Aug"
+   },
+   "17": {
+    "status": "wfh",
+    "note": "",
+    "at": "Wed 12 Aug"
+   },
+   "19": {
+    "status": "wfh",
+    "note": "",
+    "at": "Wed 12 Aug"
+   },
+   "20": {
+    "status": "wfh",
+    "note": "",
+    "at": "Wed 12 Aug"
+   },
+   "21": {
+    "status": "wfh",
+    "note": "",
+    "at": "Wed 12 Aug"
+   },
+   "22": {
+    "status": "wfh",
+    "note": "",
+    "at": "Wed 12 Aug"
+   },
+   "23": {
+    "status": "aff_ok",
+    "note": "",
+    "at": "Wed 12 Aug"
+   },
+   "24": {
+    "status": "wfh",
+    "note": "",
+    "at": "Wed 12 Aug"
+   },
+   "25": {
+    "status": "wfh",
+    "note": "",
+    "at": "Wed 12 Aug"
+   },
+   "26": {
+    "status": "wfh",
+    "note": "",
+    "at": "Wed 12 Aug"
+   },
+   "27": {
+    "status": "wfh",
+    "note": "",
+    "at": "Wed 12 Aug"
+   },
+   "29": {
+    "status": "wfh",
+    "note": "",
+    "at": "Wed 12 Aug"
+   },
+   "30": {
+    "status": "wfh",
+    "note": "",
+    "at": "Wed 12 Aug"
+   },
+   "31": {
+    "status": "wfh",
+    "note": "",
+    "at": "Wed 12 Aug"
+   },
+   "32": {
+    "status": "wfh",
+    "note": "",
+    "at": "Wed 12 Aug"
+   },
+   "33": {
+    "status": "wfh",
+    "note": "",
+    "at": "Wed 12 Aug"
+   },
+   "34": {
+    "status": "wfh",
+    "note": "",
+    "at": "Wed 12 Aug"
+   },
+   "35": {
+    "status": "wfh",
+    "note": "",
+    "at": "Wed 12 Aug"
+   },
+   "36": {
+    "status": "aff_ok",
+    "note": "",
+    "at": "Wed 12 Aug"
+   },
+   "37": {
+    "status": "wfh",
+    "note": "",
+    "at": "Wed 12 Aug"
+   },
+   "38": {
+    "status": "wfh",
+    "note": "",
+    "at": "Wed 12 Aug"
+   },
+   "39": {
+    "status": "wfh",
+    "note": "",
+    "at": "Wed 12 Aug"
+   },
+   "40": {
+    "status": "wfh",
+    "note": "",
+    "at": "Wed 12 Aug"
+   },
+   "41": {
+    "status": "wfh",
+    "note": "",
+    "at": "Wed 12 Aug"
+   },
+   "42": {
+    "status": "wfh",
+    "note": "",
+    "at": "Wed 12 Aug"
+   },
+   "43": {
+    "status": "wfh",
+    "note": "",
+    "at": "Wed 12 Aug"
+   },
+   "44": {
+    "status": "wfh",
+    "note": "",
+    "at": "Wed 12 Aug"
+   },
+   "45": {
+    "status": "wfh",
+    "note": "",
+    "at": "Wed 12 Aug"
+   },
+   "46": {
+    "status": "wfh",
+    "note": "",
+    "at": "Wed 12 Aug"
+   },
+   "47": {
+    "status": "wfh",
+    "note": "",
+    "at": "Wed 12 Aug"
+   },
+   "48": {
+    "status": "wfh",
+    "note": "",
+    "at": "Wed 12 Aug"
+   },
+   "49": {
+    "status": "wfh",
+    "note": "",
+    "at": "Wed 12 Aug"
+   },
+   "50": {
+    "status": "wfh",
+    "note": "",
+    "at": "Wed 12 Aug"
+   },
+   "51": {
+    "status": "aff_ok",
+    "note": "",
+    "at": "Wed 12 Aug"
+   },
+   "52": {
+    "status": "wfh",
+    "note": "",
+    "at": "Wed 12 Aug"
+   },
+   "53": {
+    "status": "wfh",
+    "note": "",
+    "at": "Wed 12 Aug"
+   },
+   "54": {
+    "status": "wfh",
+    "note": "",
+    "at": "Wed 12 Aug"
+   },
+   "55": {
+    "status": "aff_ok",
+    "note": "",
+    "at": "Wed 12 Aug"
+   },
+   "56": {
+    "status": "aff_ok",
+    "note": "",
+    "at": "Wed 12 Aug"
+   },
+   "57": {
+    "status": "wfh",
+    "note": "",
+    "at": "Wed 12 Aug"
+   }
+  }
+ },
+ "logs": [
+  {
+   "kind": "email",
+   "at": "Wed 23 Sep, 16:02",
+   "did": "rm",
+   "toIds": [
+    23
+   ],
+   "toLine": "Sam Delgado <sam.delgado@demobss.com>",
+   "toShort": "Sam Delgado",
+   "cta": true,
+   "subject": "Approval needed: Uriel Pascual · Half-day leave, Fri 25 Sep",
+   "lines": [
+    "Hi Sam,",
+    "Uriel Pascual requested half-day leave (afternoon) for Fri 25 Sep (0.5 working days).",
+    "Reason: Medical appointment",
+    "This request is for the Rate Desk team."
+   ],
+   "id": "N0"
+  },
+  {
+   "kind": "email",
+   "at": "Wed 23 Sep, 14:30",
+   "did": "rm",
+   "toIds": [
+    23
+   ],
+   "toLine": "Sam Delgado <sam.delgado@demobss.com>",
+   "toShort": "Sam Delgado",
+   "cta": true,
+   "subject": "Approval needed: Franco Dizon · Business trip, Thu 1 Oct – Fri 2 Oct",
+   "lines": [
+    "Hi Sam,",
+    "Franco Dizon requested business trip for Thu 1 Oct – Fri 2 Oct (2 working days).",
+    "Reason: Client visit",
+    "This request is for the Rate Desk team."
+   ],
+   "id": "N1"
+  },
+  {
+   "kind": "invite",
+   "at": "Mon 21 Sep, 09:14",
+   "did": "cs",
+   "toIds": [
+    26,
+    27,
+    31,
+    57
+   ],
+   "toLine": "Customer Care team (4 people)",
+   "toShort": "Customer Care (4)",
+   "subject": "Ana Reyes · Vacation leave (out of office)",
+   "when": "Mon 28 Sep – Wed 30 Sep, all day",
+   "att": [
+    "Diego Samonte",
+    "Erika Valdez",
+    "Gwen Salcedo",
+    "Ian Valenzuela"
+   ],
+   "lines": [
+    "Ana Reyes will be out on vacation leave, Mon 28 Sep – Wed 30 Sep.",
+    "Workforce Management added this reminder for the Customer Care team. It is set to Free so it won’t block your calendar."
+   ],
+   "id": "N2"
+  },
+  {
+   "kind": "email",
+   "at": "Mon 21 Sep, 09:14",
+   "did": "cs",
+   "toIds": [
+    0
+   ],
+   "toLine": "Ana Reyes <ana.reyes@demobss.com>",
+   "toShort": "Ana Reyes",
+   "subject": "Your vacation leave was approved · Customer Care",
+   "lines": [
+    "Hi Ana,",
+    "Your request for vacation leave on Mon 28 Sep – Wed 30 Sep was approved automatically for the Customer Care team.",
+    "It now shows on the Customer Care calendar."
+   ],
+   "id": "N3"
+  },
+  {
+   "kind": "email",
+   "at": "Mon 21 Sep, 09:14",
+   "did": "rm",
+   "toIds": [
+    23
+   ],
+   "toLine": "Sam Delgado <sam.delgado@demobss.com>",
+   "toShort": "Sam Delgado",
+   "cta": true,
+   "subject": "Approval needed: Ana Reyes · Vacation leave, Mon 28 Sep – Wed 30 Sep",
+   "lines": [
+    "Hi Sam,",
+    "Ana Reyes requested vacation leave for Mon 28 Sep – Wed 30 Sep (3 working days).",
+    "Reason: Family trip",
+    "This request is for the Rate Desk team. Other teams Ana belongs to approve it separately."
+   ],
+   "id": "N4"
+  },
+  {
+   "kind": "email",
+   "at": "Thu 3 Sep, 09:12",
+   "did": "rm",
+   "toIds": [
+    0
+   ],
+   "toLine": "Ana Reyes <ana.reyes@demobss.com>",
+   "toShort": "Ana Reyes",
+   "subject": "Your vacation leave was declined · Rate Desk",
+   "lines": [
+    "Hi Ana,",
+    "Your request for vacation leave on Fri 11 Sep was declined by Sam Delgado for the Rate Desk team.",
+    "If you have questions, contact Sam Delgado at sam.delgado@demobss.com."
+   ],
+   "id": "N5"
+  }
+ ],
+ "seq": 163,
+ "kpi": {
+  "cs|2026-W38": {
+   "util": 86.4,
+   "prod": 97.2,
+   "time": 95.1,
+   "acc": 99.2,
+   "reg": 12,
+   "rd": 4,
+   "hol": 0,
+   "remark": "Peak in booking amendments.",
+   "otRemark": "Approved for backlog clean-up.",
+   "by": 27,
+   "at": "2026-09-21"
+  },
+  "cs|2026-W39": {
+   "util": 88.9,
+   "prod": 101.5,
+   "time": 96.8,
+   "acc": 98.7,
+   "reg": 9.5,
+   "rd": 0,
+   "hol": 0,
+   "remark": "",
+   "by": 27,
+   "at": "2026-09-24"
+  },
+  "cs|2026-09": {
+   "util": 87.1,
+   "prod": 99,
+   "time": 95.6,
+   "acc": 98.9,
+   "reg": 31,
+   "rd": 8,
+   "hol": 0,
+   "by": 27,
+   "at": "2026-09-24"
+  },
+  "cs|2026-08": {
+   "util": 84,
+   "prod": 95.3,
+   "time": 93.8,
+   "acc": 99.4,
+   "reg": 26,
+   "rd": 6,
+   "hol": 8,
+   "remark": "Holiday duty on 31 Aug.",
+   "by": 27,
+   "at": "2026-09-01"
+  },
+  "rm|2026-W38": {
+   "remark": "Two new members still ramping up on Consolidation.",
+   "otRemark": "Rate season: overtime on Americas and Latin America.",
+   "by": 14,
+   "at": "2026-09-21"
+  },
+  "rm|2026-09": {
+   "remark": "Accuracy below target: see the Accuracy log.",
+   "by": 23,
+   "at": "2026-09-24"
+  },
+  "bk|2026-W38": {
+   "util": 82,
+   "prod": 92,
+   "time": 90,
+   "acc": 97,
+   "reg": 2,
+   "rd": 0,
+   "hol": 0,
+   "by": 54,
+   "at": "2026-09-24"
+  },
+  "bk|2026-W39": {
+   "util": 84,
+   "prod": 95,
+   "time": 91,
+   "acc": 98,
+   "reg": 4,
+   "rd": 0,
+   "hol": 0,
+   "by": 54,
+   "at": "2026-09-24"
+  },
+  "bk|2026-09": {
+   "util": 86,
+   "prod": 98,
+   "time": 92,
+   "acc": 99,
+   "reg": 10,
+   "rd": 0,
+   "hol": 0,
+   "by": 54,
+   "at": "2026-09-24"
+  },
+  "imp|2026-W38": {
+   "util": 85,
+   "prod": 97,
+   "time": 94,
+   "acc": 98,
+   "reg": 4,
+   "rd": 0,
+   "hol": 0,
+   "by": 34,
+   "at": "2026-09-24"
+  },
+  "imp|2026-W39": {
+   "util": 87,
+   "prod": 100,
+   "time": 95,
+   "acc": 99,
+   "reg": 6,
+   "rd": 0,
+   "hol": 0,
+   "by": 34,
+   "at": "2026-09-24"
+  },
+  "imp|2026-09": {
+   "util": 89,
+   "prod": 103,
+   "time": 96,
+   "acc": 97,
+   "reg": 14,
+   "rd": 0,
+   "hol": 0,
+   "by": 34,
+   "at": "2026-09-24"
+  },
+  "exp|2026-W38": {
+   "util": 88,
+   "prod": 102,
+   "time": 98,
+   "acc": 99,
+   "reg": 6,
+   "rd": 4,
+   "hol": 0,
+   "remark": "Peak export season.",
+   "otRemark": "Weekend cut-offs covered.",
+   "by": 39,
+   "at": "2026-09-24"
+  },
+  "exp|2026-W39": {
+   "util": 90,
+   "prod": 105,
+   "time": 90,
+   "acc": 97,
+   "reg": 8,
+   "rd": 4,
+   "hol": 0,
+   "by": 39,
+   "at": "2026-09-24"
+  },
+  "exp|2026-09": {
+   "util": 92,
+   "prod": 94,
+   "time": 91,
+   "acc": 98,
+   "reg": 18,
+   "rd": 4,
+   "hol": 0,
+   "by": 39,
+   "at": "2026-09-24"
+  },
+  "sales|2026-W38": {
+   "util": 91,
+   "prod": 93,
+   "time": 93,
+   "acc": 97,
+   "reg": 8,
+   "rd": 0,
+   "hol": 0,
+   "by": 44,
+   "at": "2026-09-24"
+  },
+  "sales|2026-W39": {
+   "util": 93,
+   "prod": 96,
+   "time": 94,
+   "acc": 98,
+   "reg": 2,
+   "rd": 0,
+   "hol": 0,
+   "by": 44,
+   "at": "2026-09-24"
+  },
+  "sales|2026-09": {
+   "util": 83,
+   "prod": 99,
+   "time": 95,
+   "acc": 99,
+   "reg": 22,
+   "rd": 0,
+   "hol": 0,
+   "by": 44,
+   "at": "2026-09-24"
+  },
+  "doc|2026-W38": {
+   "util": 82,
+   "prod": 98,
+   "time": 97,
+   "acc": 98,
+   "reg": 2,
+   "rd": 0,
+   "hol": 0,
+   "by": 49,
+   "at": "2026-09-24"
+  },
+  "doc|2026-W39": {
+   "util": 84,
+   "prod": 101,
+   "time": 98,
+   "acc": 99,
+   "reg": 4,
+   "rd": 0,
+   "hol": 0,
+   "by": 49,
+   "at": "2026-09-24"
+  },
+  "doc|2026-09": {
+   "util": 86,
+   "prod": 104,
+   "time": 90,
+   "acc": 97,
+   "reg": 26,
+   "rd": 0,
+   "hol": 0,
+   "by": 49,
+   "at": "2026-09-24"
+  }
+ },
+ "issues": [
+  {
+   "id": "I3",
+   "team": "rm",
+   "date": "2026-09-23",
+   "ticket": "RM-10482",
+   "desc": "Surcharge filed under the wrong validity window.",
+   "root": "Effective date read from the old tariff.",
+   "preventive": "Checklist step: confirm the validity against the carrier notice.",
+   "corrective": "Refiled with the correct dates; customer informed.",
+   "by": 14,
+   "at": "2026-09-23"
+  },
+  {
+   "id": "I2",
+   "team": "rm",
+   "date": "2026-09-15",
+   "ticket": "RM-10377",
+   "desc": "Rate sheet uploaded with a missing port pair.",
+   "root": "Template filter hid blank rows.",
+   "preventive": "Template updated; filter removed.",
+   "corrective": "Missing lane added and re-published.",
+   "by": 24,
+   "at": "2026-09-16"
+  },
+  {
+   "id": "I1",
+   "team": "rm",
+   "date": "2026-09-08",
+   "desc": "Wrong currency used on a spot quote (no ticket, e-mail request).",
+   "root": "Manual entry outside the tool.",
+   "preventive": "Spot quotes go through a ticket.",
+   "corrective": "Quote reissued in USD.",
+   "by": 14,
+   "at": "2026-09-08"
+  }
+ ],
+ "covers": [
+  {
+   "id": "C1",
+   "leader": 14,
+   "standIn": 24,
+   "from": "2026-10-05",
+   "to": "2026-10-06",
+   "by": 14,
+   "at": "2026-09-22"
+  }
+ ]
+}

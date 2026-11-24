@@ -1,0 +1,85 @@
+{% load static wfm %}<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block title %}Workforce Management{% endblock %}</title>
+  {# Barlow fonts. If the server has no internet access, copy the font files into static/ (see README). #}
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600;700&family=Barlow+Condensed:wght@400;600&display=swap">
+  <link rel="stylesheet" href="{% static 'core/industry.css' %}">
+  <link rel="stylesheet" href="{% static 'core/workload.css' %}">
+  <link rel="stylesheet" href="{% static 'core/theme.css' %}">
+  <link rel="stylesheet" href="{% static 'core/py.css' %}">
+</head>
+<body>
+<div class="app">
+  <div class="app-grid">
+    <aside class="side">
+      <div class="side-brand">
+        <img src="{% static 'core/dsv-logo.png' %}" alt="DSV">
+        <span>Workforce Management</span>
+      </div>
+      <div class="side-switch">
+        {% if module == "calendar" %}<span class="on">Calendar</span>{% else %}<a href="/calendar/">Calendar</a>{% endif %}
+        {% if module == "workload" %}<span class="on">Workload</span>{% else %}<a href="/workload/">Workload</a>{% endif %}
+        {% if show_admin %}{% if module == "admin" %}<span class="on">Admin</span>{% else %}<a href="/admin-area/">Admin</a>{% endif %}{% endif %}
+      </div>
+      {% block side_top %}{% endblock %}
+      <nav aria-label="Main" class="side-nav">
+        {% for n in nav %}
+        <a class="nav-item" href="{{ n.href }}"{% if n.current %} aria-current="page"{% endif %}>
+          {% icon n.icon %}<span>{{ n.label }}</span>{% if n.badge %}<span class="tag tag-accent">{{ n.badge }}</span>{% endif %}
+        </a>
+        {% endfor %}
+      </nav>
+      <div class="side-user">
+        <span class="avatar">{{ initials }}</span>
+        <span class="side-user-text"><span>{{ me.name }}</span><span>{{ role }}</span></span>
+      </div>
+      {% if demo %}
+      <form method="post" action="/view-as/">
+        {% csrf_token %}<input type="hidden" name="next" value="{{ request.get_full_path }}">
+        <label class="side-demo">Sample data · view as
+          <select class="input" name="v" onchange="this.form.submit()">
+            {% for key, pid, label in personas %}<option value="{{ key }}"{% if key == view_as %} selected{% endif %}>{{ label }}</option>{% endfor %}
+          </select>
+        </label>
+      </form>
+      {% else %}
+      <form method="post" action="/logout/" class="side-signout">{% csrf_token %}<button class="btn btn-ghost">Sign out</button></form>
+      {% endif %}
+    </aside>
+    <div class="content">
+      <header class="filterbar" aria-label="Filters">
+        {% block filters %}{% endblock %}
+        <span class="filterbar-now">
+          {% if demo %}<span class="tag tag-neutral" title="Fictional sample data in the draft database.">Sample data · Python draft</span>{% endif %}
+          {% if mode_label %}<span class="tag tag-outline">{{ mode_label }}</span>{% endif %}{{ now_text }}
+        </span>
+      </header>
+      <main class="page">
+        {% block main %}{% endblock %}
+      </main>
+    </div>
+  </div>
+  <div class="toasts" role="status" aria-live="polite">
+    {% for msg in messages %}
+    <div class="blueprint toast">{% corners %}{% icon "check" 18 "var(--color-accent-700)" %}<span>{{ msg }}</span></div>
+    {% endfor %}
+  </div>
+</div>
+<script>
+  // Toasts fade after 4 s, as in the original.
+  setTimeout(() => document.querySelectorAll(".toast").forEach((t) => t.remove()), 4000);
+  // Background refresh: reload an idle, visible page every 30 s so the queue and calendar stay current.
+  let lastInput = Date.now();
+  ["keydown", "mousedown", "input"].forEach((e) => addEventListener(e, () => (lastInput = Date.now())));
+  setInterval(() => {
+    if (document.visibilityState === "visible" && Date.now() - lastInput > 30000 && !document.querySelector("dialog[open]")) location.reload();
+  }, 30000);
+</script>
+{% block scripts %}{% endblock %}
+</body>
+</html>
