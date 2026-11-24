@@ -4,7 +4,7 @@ import { useState } from "react";
 import { Modal } from "@/components/Dialogs";
 import { Blueprint, Icon, PageHead } from "@/components/ui";
 import { dur, fmtT } from "@/lib/workload/clock";
-import { cxCheck, cxField, cxLevels, cxQuestions, cxText, cxTotal, personOf, ticketOf } from "@/lib/workload/engine";
+import { cxCheck, cxOver, fastPct, cxField, cxLevels, cxQuestions, cxText, cxTotal, personOf, ticketOf } from "@/lib/workload/engine";
 import { useWorkload } from "@/lib/workload/store";
 import type { Complexity, CxLevel, Task } from "@/lib/workload/types";
 
@@ -42,6 +42,7 @@ export default function ComplexityPage() {
   const name = (pid: number | null) => (pid === null ? "—" : (personOf(data, pid)?.name ?? "—"));
   const row = (t: Task) => {
     const chk = cxCheck(data, t);
+    const over = cxOver(data, t);
     return (
       <tr key={t.id}>
         <td className="nowrap">
@@ -68,9 +69,17 @@ export default function ComplexityPage() {
               {t.cxReview.verdict === "ok" ? "Confirmed" : `Corrected from ${cxText(s, t.cxReview.was)}`} by {name(t.cxReview.by)}
               {t.cxReview.note ? ` · ${t.cxReview.note}` : ""}
             </span>
-          ) : chk?.flag === "slow" ? (
-            <span className="tag tag-outline">Took longer · maybe tagged too simple</span>
-          ) : null}
+          ) : (
+            <div style={{ display: "flex", flexDirection: "column", gap: 4, alignItems: "flex-start" }}>
+              {over?.flag && (
+                <span className="tag tag-amber" title={over.text}>
+                  Over target · {over.pct}% of a day in one ticket · maybe not all that complex
+                </span>
+              )}
+              {over?.flag && <span className="small">{over.text}</span>}
+              {chk?.flag === "slow" && <span className="tag tag-outline">Took longer · maybe tagged too simple</span>}
+            </div>
+          )}
         </td>
         <td className="nowrap" style={{ textAlign: "right" }}>
           {!t.cxReview && (
@@ -80,6 +89,9 @@ export default function ComplexityPage() {
           )}
           <button className="btn btn-ghost" onClick={() => setFix(t)}>
             Correct
+          </button>
+          <button className="btn btn-ghost" onClick={() => setDialog({ kind: "editTicket", id: t.id })}>
+            Edit ticket
           </button>
         </td>
       </tr>
@@ -153,6 +165,33 @@ export default function ComplexityPage() {
               {dur(90 * 60000 * (1 + (cx.tol ?? 50) / 100))}.
             </span>
           </div>
+          <div className="field">
+            <label htmlFor="cx-fast">Flag over-productive tickets: one ticket’s contracts at or above this share of a day’s target</label>
+            <div className="row" style={{ gap: 6 }}>
+              <input
+                id="cx-fast"
+                key={fastPct(s)}
+                className="input"
+                type="number"
+                min={0}
+                max={1000}
+                step={10}
+                defaultValue={fastPct(s)}
+                style={{ width: 100 }}
+                onBlur={(e) => {
+                  const v = Math.min(1000, Math.max(0, Math.round(Number(e.target.value) || 0)));
+                  e.target.value = String(v);
+                  if (v !== fastPct(s)) set({ fast: v });
+                }}
+              />
+              <span>%</span>
+            </div>
+            <span className="small">
+              {fastPct(s) > 0
+                ? `Each level’s contracts ÷ its daily target (set below). At ${fastPct(s)}%: with Complex at 3 a day, a ticket tagged ${Math.ceil((3 * fastPct(s)) / 100)} Complex or more is flagged (16 Complex = ${Math.round((16 / 3) * 100)}%). 0 = off.`
+                : "Off. Enter a % to flag tickets tagged with more contracts than a day’s target allows."}
+            </span>
+          </div>
         </Blueprint>
         <Blueprint as="section" className="panel" style={{ gap: 10 }}>
           <div className="row" style={{ justifyContent: "space-between" }}>
@@ -171,7 +210,7 @@ export default function ComplexityPage() {
                 <th>Level</th>
                 <th>Target / day</th>
                 <th>Avg handling time (min)</th>
-                <th />
+                <th><span className="sr-only">Actions</span></th>
               </tr>
             </thead>
             <tbody>
@@ -237,7 +276,11 @@ export default function ComplexityPage() {
         <div className="row" style={{ justifyContent: "space-between" }}>
           <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
             <h2 className="h2">Questions · {qs.length}</h2>
-            <span className="small">Done tickets that took much longer (excluding breaks and time pending) than their complexity suggests. Confirm the tagging or correct it; productivity follows the correction.</span>
+            <span className="small">
+              Done tickets that took much longer (excluding breaks and time pending) than their complexity suggests, or that are over-productive: tagged with more
+              contracts than a day’s target in one ticket, so maybe not all of them are that complex. Confirm the tagging, correct it, or edit the ticket’s details;
+              productivity follows the correction.
+            </span>
           </div>
           <label className="row small" style={{ gap: 6, cursor: "pointer" }}>
             <input type="checkbox" className="check" checked={showChecked} onChange={() => setShowChecked(!showChecked)} />
@@ -247,7 +290,7 @@ export default function ComplexityPage() {
         {!on ? (
           <div className="banner">Complexity is off. Switch it on above to start tagging.</div>
         ) : qs.length || (showChecked && checked.length) ? (
-          <div className="boxed-scroll">
+          <div className="boxed-scroll" tabIndex={0}>
             <table className="table">
               <thead>
                 <tr>
@@ -257,14 +300,16 @@ export default function ComplexityPage() {
                   <th>Tagged</th>
                   <th>Time worked</th>
                   <th>Why</th>
-                  <th />
+                  <th><span className="sr-only">Actions</span></th>
                 </tr>
               </thead>
               <tbody>{(showChecked ? qs.concat(checked) : qs).map(row)}</tbody>
             </table>
           </div>
         ) : (
-          <div className="banner">No questions. No tagged ticket took more than {cx.tol ?? 50}% longer than expected.</div>
+          <div className="banner">
+            No questions. No tagged ticket took more than {cx.tol ?? 50}% longer than expected{(cx.fast ?? 200) > 0 ? ` or reached ${cx.fast ?? 200}% productivity` : ""}.
+          </div>
         )}
       </Blueprint>
       {fix && <FixDialog t={fix} onClose={() => setFix(null)} />}
@@ -288,6 +333,7 @@ function FixDialog({ t, onClose }: { t: Task; onClose: () => void }) {
         <span className="small">
           Tagged {cxText(data.settings, t.cx)}
           {chk ? ` · ${dur(chk.actMs)} worked, ${dur(chk.expMs)} expected` : ""}
+          {cxOver(data, t) ? ` · ${cxOver(data, t)!.pct}% of a day’s target (${cxOver(data, t)!.text})` : ""}
         </span>
         <div style={{ display: "grid", gridTemplateColumns: `repeat(${Math.min(levels.length, 4)}, 1fr)`, gap: 10 }}>
           {levels.map((l) => (
@@ -297,6 +343,14 @@ function FixDialog({ t, onClose }: { t: Task; onClose: () => void }) {
             </div>
           ))}
         </div>
+        {(() => {
+          const now = cxOver(data, { ...t, cx: counts });
+          return now ? (
+            <span className="small">
+              With these counts: {now.pct}% of a day’s target{now.flag ? " · still over the limit" : " · within the limit"}
+            </span>
+          ) : null;
+        })()}
         <div className="field">
           <label htmlFor="fx-n">Note (optional)</label>
           <input id="fx-n" className="input" maxLength={300} value={note} placeholder="e.g. 2 of the contracts were complex" onChange={(e) => setNote(e.target.value)} />

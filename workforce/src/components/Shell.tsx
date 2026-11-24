@@ -9,9 +9,11 @@ import { breakFlags } from "@/lib/workload/breaks";
 import { rangeMs, todayRange } from "@/lib/workload/period";
 import { useWorkload } from "@/lib/workload/store";
 import { useUnit } from "@/lib/workload/useUnit";
+import { adminSections, hasAdminArea, isAdminPath, type AdminFlags } from "./adminNav";
 import { AppFrame, type NavItem } from "./AppFrame";
 import { Dialogs, Toasts } from "./Dialogs";
-import { AwayPopup, StaleNotice } from "./WorkloadBits";
+import { AwayPopup, OtPrompt, StaleNotice } from "./WorkloadBits";
+import { canPrice } from "@/lib/workload/business";
 
 /** Admin-only routes; members are sent back to My work. */
 const isAdminRoute = (path: string) => path.startsWith("/workload/admin") || path.startsWith("/workload/dashboard");
@@ -34,40 +36,43 @@ export function Shell({ children }: { children: React.ReactNode }) {
   const towers = [...new Set(org.teams.map((t) => t.tower))];
   const path = usePathname();
   const router = useRouter();
-  const blocked = (!isAdmin && isAdminRoute(path)) || (!canUpload && path === "/workload/upload") || (!isApprover && (path === "/workload/overtime" || path === "/workload/breaks"));
+  // My work and Upload show only your own work, so they don't filter by system or trade.
+  const unitFilters = path !== "/workload" && path !== "/workload/upload";
+  // The Workload dashboard is also for approvers (leads, and stand-ins covering for them).
+  const blocked = (!isAdmin && isAdminRoute(path) && !(isApprover && path === "/workload/dashboard")) || (path === "/workload/admin/business" && !(isAdmin && canPrice(data, me.id))) || (!canUpload && path === "/workload/upload") || (!isApprover && (path === "/workload/overtime" || path === "/workload/breaks"));
 
   useEffect(() => {
     if (blocked) router.replace("/workload");
   }, [blocked, router]);
 
   const openQ = data.tasks.filter((t) => t.status === "new").length;
+  // Requests from teammates to take one of my tasks.
+  const myClaims = data.tasks.filter((t) => t.assignee === me.id && t.claim && t.status !== "done").length;
   const cxQs = isAdmin ? cxQuestions(data).length : 0;
+  // Everyday pages; admin and approver pages are in the Admin area.
   const nav: NavItem[] = [
-    { href: "/workload", icon: "my", label: "My work" },
+    { href: "/workload", icon: "my", label: "My work", badge: myClaims },
     { href: "/workload/queue", icon: "queue", label: "Queue", badge: openQ },
     { href: "/workload/history", icon: "reports", label: "Task history" },
-    ...(isAdmin ? [{ href: "/workload/dashboard", icon: "dash" as const, label: "Dashboard" }] : []),
     ...(!isAdmin && canUpload ? [{ href: "/workload/upload", icon: "intake" as const, label: "Upload tasks" }] : []),
-    ...(isApprover ? [{ href: "/workload/overtime", icon: "targets" as const, label: "Overtime", badge: otPending }] : []),
-    ...(isApprover ? [{ href: "/workload/breaks", icon: "check" as const, label: "Breaks", badge: brkFlags }] : []),
   ];
-  const adminNav: NavItem[] = isAdmin
-    ? [
-        { href: "/workload/admin/intake", icon: "intake", label: "Intake" },
-        { href: "/workload/admin/fields", icon: "fields", label: "Task fields" },
-        { href: "/workload/admin/allocation", icon: "rules", label: "Allocation" },
-        { href: "/workload/admin/sla", icon: "check", label: "SLA & task types" },
-        { href: "/workload/admin/complexity", icon: "fields", label: "Complexity", badge: cxQs },
-        { href: "/workload/admin/aht", icon: "dash", label: "Handling time" },
-        { href: "/workload/admin/targets", icon: "targets", label: "Targets" },
-      ]
-    : [];
+  // Calendar rights come from the same team admins and leaders.
+  const flags: AdminFlags = {
+    canApprove: isApprover,
+    teamAdmin: isAdmin,
+    anyAdmin: isAdmin,
+    leader: isApprover,
+    wlAdmin: isAdmin,
+    wlApprover: isApprover,
+    pricing: isAdmin && canPrice(data, me.id),
+    badges: { overtime: otPending, breaks: brkFlags, complexity: cxQs },
+  };
 
   return (
     <AppFrame
-      module="workload"
+      module={isAdminPath(path) ? "admin" : "workload"}
       nav={nav}
-      adminNav={adminNav}
+      admin={{ show: hasAdminArea(flags), sections: adminSections(flags) }}
       user={{
         name: me.name,
         role: (isAdmin ? `Admin · ${org.team.name}` : org.team.name) + // (a team that is its own single unit isn't repeated)
@@ -80,28 +85,37 @@ export function Shell({ children }: { children: React.ReactNode }) {
           <Dialogs />
           <Toasts />
           <AwayPopup />
+          <OtPrompt />
           <StaleNotice />
         </>
       }
       filterBar={
         <>
-          <div className="field">
-            <label htmlFor="f-team">Team</label>
-            <select id="f-team" className="input" style={{ minWidth: 220, fontWeight: 500 }} value={org.team.id} onChange={(e) => setTeam(e.target.value)} disabled={org.teams.length < 2}>
-              {towers.map((tw) => (
-                <optgroup key={tw} label={tw || "Teams"}>
-                  {org.teams
-                    .filter((t) => t.tower === tw)
-                    .map((t) => (
-                      <option key={t.id} value={t.id}>
-                        {t.name}
-                      </option>
-                    ))}
-                </optgroup>
-              ))}
-            </select>
-          </div>
-          {org.systems.length > 0 && (
+          {/* One team: its name as text. System and Trade only where a page lists the team's tasks. */}
+          {org.teams.length < 2 ? (
+            <div className="field field-static">
+              <span className="small">Team</span>
+              <strong>{org.team.name}</strong>
+            </div>
+          ) : (
+            <div className="field">
+              <label htmlFor="f-team">Team</label>
+              <select id="f-team" className="input" style={{ minWidth: 220, fontWeight: 500 }} value={org.team.id} onChange={(e) => setTeam(e.target.value)}>
+                {towers.map((tw) => (
+                  <optgroup key={tw} label={tw || "Teams"}>
+                    {org.teams
+                      .filter((t) => t.tower === tw)
+                      .map((t) => (
+                        <option key={t.id} value={t.id}>
+                          {t.name}
+                        </option>
+                      ))}
+                  </optgroup>
+                ))}
+              </select>
+            </div>
+          )}
+          {unitFilters && org.systems.length > 0 && (
             <div className="field">
               <label htmlFor="f-sys">System</label>
               <select id="f-sys" className="input" style={{ minWidth: 150 }} value={sys} onChange={(e) => setSys(e.target.value)}>
@@ -114,7 +128,7 @@ export function Shell({ children }: { children: React.ReactNode }) {
               </select>
             </div>
           )}
-          {trOpts.length > 1 && (
+          {unitFilters && trOpts.length > 1 && (
             <div className="field">
               <label htmlFor="f-tr">Trade</label>
               <select id="f-tr" className="input" style={{ minWidth: 150 }} value={tr} onChange={(e) => setTr(e.target.value)}>
@@ -133,7 +147,7 @@ export function Shell({ children }: { children: React.ReactNode }) {
                 Sample data · not saved
               </span>
             )}
-            <span className="tag tag-outline">{modeLabel(data.settings.mode)}</span>
+            {isAdmin && <span className="tag tag-outline">{modeLabel(data.settings.mode)}</span>}
             {fmtT(now)}
           </span>
         </>

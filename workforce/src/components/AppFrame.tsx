@@ -2,10 +2,12 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useEffect, useState, type ReactNode } from "react";
+import type { ReactNode } from "react";
 import { signOut } from "@/lib/session";
 import { BipoNotice, HolidayPrompt, PayrollNotice, QuickLinks } from "./AppExtras";
+import { PERSONAS } from "@/lib/workload/constants";
 import type { ViewAs } from "@/lib/workload/types";
+import { sectionOf, type NavSection } from "./adminNav";
 import { Blueprint, Icon, type IconName } from "./ui";
 
 export interface NavItem {
@@ -16,14 +18,15 @@ export interface NavItem {
 }
 
 /**
- * Shared shell for both modules: 248px sidebar (logo, "Workforce Management",
- * Calendar / Workload switch, nav, Admin group, user), sticky filter bar, main.
+ * Shared shell: 248px sidebar (logo, "Workforce Management", Calendar / Workload / Admin
+ * switch, nav, user), sticky filter bar, main. The Admin area shows the admin menu
+ * (sections) instead of the everyday pages.
  */
 export function AppFrame({
   module,
   top,
   nav,
-  adminNav,
+  admin,
   user,
   viewAs,
   setViewAs,
@@ -32,11 +35,12 @@ export function AppFrame({
   children,
   overlay,
 }: {
-  module: "calendar" | "workload";
+  module: "calendar" | "workload" | "admin";
   /** Above the nav, e.g. the Request leave button. */
   top?: ReactNode;
   nav: NavItem[];
-  adminNav: NavItem[];
+  /** The Admin area's menu; `show` = this person has it. */
+  admin: { show: boolean; sections: NavSection[] };
   user: { name: string; role: string };
   /** Sample data only: switch between the admin and employee views. Signed-in users get Sign out instead. */
   viewAs?: ViewAs;
@@ -48,29 +52,16 @@ export function AppFrame({
   overlay?: ReactNode;
 }) {
   const path = usePathname();
-  // The Admin group can be minimized; remembered per module on this device.
-  const adminKey = `wfm.adminNav.${module}`;
-  const [adminOpen, setAdminOpen] = useState(true);
-  useEffect(() => {
-    try {
-      if (localStorage.getItem(adminKey) === "closed") setAdminOpen(false);
-    } catch {}
-  }, [adminKey]);
-  const toggleAdmin = () => {
-    const next = !adminOpen;
-    setAdminOpen(next);
-    try {
-      localStorage.setItem(adminKey, next ? "open" : "closed");
-    } catch {}
-  };
-  const adminBadge = adminNav.reduce((a, n) => a + (n.badge ?? 0), 0);
+  // The admin section of this page: its pages show as tabs above it.
+  const here = module === "admin" ? sectionOf(admin.sections, path) : undefined;
+  const adminBadge = admin.sections.reduce((a, sec) => a + sec.items.reduce((b, n) => b + (n.badge ?? 0), 0), 0);
   const initials = user.name
     .split(" ")
     .map((w) => w[0])
     .slice(0, 2)
     .join("");
   const item = (n: NavItem) => {
-    const current = path === n.href || (n.href !== "/calendar" && n.href !== "/workload" && path.startsWith(n.href + "/"));
+    const current = path === n.href || (!["/calendar", "/workload", "/calendar/admin"].includes(n.href) && path.startsWith(n.href + "/"));
     return (
       <Link key={n.href} href={n.href} className="nav-item" aria-current={current ? "page" : undefined}>
         <Icon name={n.icon} />
@@ -91,21 +82,34 @@ export function AppFrame({
           <div className="side-switch">
             {module === "calendar" ? <span className="on">Calendar</span> : <Link href="/calendar">Calendar</Link>}
             {module === "workload" ? <span className="on">Workload</span> : <Link href="/workload">Workload</Link>}
+            {admin.show &&
+              (module === "admin" ? (
+                <span className="on">Admin</span>
+              ) : (
+                <Link href="/calendar/admin">
+                  Admin{adminBadge > 0 && <span className="side-switch-dot" aria-label={`${adminBadge} waiting`} />}
+                </Link>
+              ))}
           </div>
-          {top}
-          <nav aria-label="Main" className="side-nav">
-            {nav.map(item)}
-          </nav>
-          {adminNav.length > 0 && (
+          {module !== "admin" && top}
+          {module === "admin" ? (
             <nav aria-label="Admin" className="side-nav">
-              <button type="button" className="side-nav-label side-nav-toggle" aria-expanded={adminOpen} onClick={toggleAdmin}>
-                <span>Admin</span>
-                {!adminOpen && adminBadge > 0 && <span className="tag tag-accent">{adminBadge}</span>}
-                <span className="side-nav-chev" aria-hidden>
-                  {adminOpen ? "▾" : "▸"}
-                </span>
-              </button>
-              {adminOpen && adminNav.map(item)}
+              {item({ href: "/calendar/admin", icon: "dash", label: "Overview" })}
+              {admin.sections.map((sec) => {
+                const on = sec === here;
+                const badge = sec.items.reduce((a, n) => a + (n.badge ?? 0), 0);
+                return (
+                  <Link key={sec.title} href={sec.items[0].href} className="nav-item" aria-current={on ? "page" : undefined}>
+                    <Icon name={sec.icon ?? sec.items[0].icon} />
+                    <span>{sec.title}</span>
+                    {!!badge && <span className="tag tag-accent">{badge}</span>}
+                  </Link>
+                );
+              })}
+            </nav>
+          ) : (
+            <nav aria-label="Main" className="side-nav">
+              {nav.map(item)}
             </nav>
           )}
           <div className="side-user">
@@ -119,8 +123,11 @@ export function AppFrame({
             <label className="side-demo">
               Sample data · view as
               <select className="input" value={viewAs} onChange={(e) => setViewAs(e.target.value as ViewAs)}>
-                <option value="admin">Admin (Sam Delgado)</option>
-                <option value="employee">Employee (Ana Reyes)</option>
+                {PERSONAS.map((x) => (
+                  <option key={x.v} value={x.v}>
+                    {x.label}
+                  </option>
+                ))}
               </select>
             </label>
           ) : (
@@ -137,8 +144,24 @@ export function AppFrame({
         <div className="content">
           <QuickLinks />
           {banner}
-          {filterBar && <div className="filterbar">{filterBar}</div>}
-          <main className="page">{children}</main>
+          {filterBar && (
+            <header className="filterbar" aria-label="Filters">
+              {filterBar}
+            </header>
+          )}
+          <main className="page">
+            {here && here.items.length > 1 && (
+              <nav className="admin-tabs" aria-label={here.title}>
+                {here.items.map((n) => (
+                  <Link key={n.href} href={n.href} aria-current={n.href === path ? "page" : undefined}>
+                    {n.label}
+                    {!!n.badge && <span className="tag tag-accent">{n.badge}</span>}
+                  </Link>
+                ))}
+              </nav>
+            )}
+            {children}
+          </main>
         </div>
       </div>
       {overlay}

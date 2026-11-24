@@ -76,6 +76,29 @@ export default function AllocationPage() {
             </div>
           )}
           <div className="field">
+            <label htmlFor="help">Help other trades and systems when</label>
+            <select
+              id="help"
+              className="input"
+              value={String(s.helpBelow ?? 0)}
+              onChange={(e) => {
+                set({ helpBelow: Number(e.target.value) });
+                toast("Saved.");
+              }}
+            >
+              <option value="0">Their own trade (then system) has nothing waiting</option>
+              {[1, 2, 3, 4, 5, 6, 8, 10].map((n) => (
+                <option key={n} value={n}>
+                  {n} or fewer wait in their own, none due today or overdue
+                </option>
+              ))}
+            </select>
+            <span className="small">
+              Members go to another trade of their system first, and to another system once their whole system is that low too. If any of their own is due
+              today or overdue, they stay on their own.
+            </span>
+          </div>
+          <div className="field">
             <label htmlFor="order">Task order</label>
             <select id="order" className="input" value={s.order} onChange={(e) => set({ order: e.target.value as OrderRule })}>
               <option value="priority">Priority first, then due time, then oldest</option>

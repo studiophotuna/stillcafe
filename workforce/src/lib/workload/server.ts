@@ -7,11 +7,17 @@ import { WORKING } from "../calendar/constants";
 import { addDays } from "../calendar/dates";
 import type { Code } from "../calendar/types";
 import { dayKey } from "./clock";
-import { visibleTeams } from "../calendar/authz";
-import { holidaysFor, orgFor, peopleFromCalendar, workloadAdmins, workloadApprovers } from "./people";
+import { rightsOf, visibleTeams } from "../calendar/authz";
+import { isLeader } from "../calendar/constants";
+import { coveredLeaders } from "../calendar/covers";
+import type { WlStats } from "../calendar/trackers";
+import type { OrgNode } from "../calendar/types";
+import { trackerStats } from "./metrics";
+import { billedFor, workloadPricers, holidaysFor, orgFor, peopleFromCalendar, workloadAdmins, workloadApprovers } from "./people";
 import { applyAction, type Action } from "./actions";
-import type { WorkloadData } from "./engine";
+import type { BusyElsewhere, WorkloadData } from "./engine";
 import { initialData } from "./seed";
+import { forViewer } from "./business";
 import type { Activity, Task } from "./types";
 
 /** Supabase persistence for the Workload module (schema `workforce`, see supabase/migrations). */
@@ -32,9 +38,24 @@ type RawTask = Task & { version: number };
 interface RawSnapshot {
   team: Pick<WorkloadData, "settings" | "fields" | "seq" | "mailCount"> & { version: number };
   tasks: RawTask[];
+  /** First task's received time (migration 0025). */
+  first?: number | null;
 }
 
-type FromCal = Pick<WorkloadData, "people" | "admins" | "org" | "approvers" | "holidays">;
+/**
+ * Which finished tasks to load with a team: those finished from `from` (to `to`, if set), plus
+ * the tasks in `ids`. Open tasks always come. Default: the last DONE_DAYS days.
+ */
+interface Window {
+  from: number;
+  to?: number;
+  ids?: string[];
+}
+/** Finished tasks loaded with a team; older ones are fetched for the dates a page shows. */
+export const DONE_DAYS = 35;
+const recent = (): Window => ({ from: Date.now() - DONE_DAYS * 24 * 3600_000 });
+
+type FromCal = Pick<WorkloadData, "people" | "admins" | "org" | "approvers" | "holidays" | "hc" | "pricers">;
 type RawActivity = Activity & { version: number };
 /** Activity loaded with the team: recent days (reports) plus anything ongoing or pending. */
 const ACTIVITY_DAYS = 35;
@@ -50,23 +71,71 @@ async function teamContext(token: string, me: number, want?: string | null): Pro
   const mine = c.people.get(me) ? c.O.branchesOf(c.person(me)) : [];
   const team = want || teams.find((t) => mine.includes(t))?.id || teams[0]?.id;
   if (!team) throw new ForbiddenError("You aren’t in a team yet. Ask your admin to allocate you in Calendar › Members.");
+  return { team, c, ctx: ctxOf(c, team, teams) };
+}
+
+/** A team's people, admins and org from the Calendar. */
+function ctxOf(c: Cal, team: string, teams: OrgNode[]): FromCal {
   return {
-    team,
-    c,
-    ctx: {
-      people: peopleFromCalendar(c, Date.now(), team),
-      admins: workloadAdmins(c, team),
-      approvers: workloadApprovers(c, team),
-      org: orgFor(c, team, teams),
-      holidays: holidaysFor(c, team),
-    },
+    people: peopleFromCalendar(c, Date.now(), team),
+    admins: workloadAdmins(c, team),
+    approvers: workloadApprovers(c, team),
+    org: orgFor(c, team, teams),
+    holidays: holidaysFor(c, team),
+    hc: billedFor(c, team),
+    pricers: workloadPricers(c, team),
   };
 }
 
-async function load(token: string, team: string, ctx: FromCal): Promise<Snapshot | null> {
+/** The days each person was scheduled to work in a period (Calendar: in office, from home or holiday duty). */
+function workDaysOf(c: Cal, people: { id: number }[], team: string, from: number, to: number) {
+  const today = dayKey(Date.now());
+  const last = [dayKey(to - 1), today].sort()[0];
+  const workDays: Record<number, string[]> = {};
+  for (const p of people) {
+    const cp = c.people.get(p.id);
+    if (!cp) continue;
+    const days: string[] = [];
+    for (let k = dayKey(from), g = 0; k <= last && g < 400; k = addDays(k, 1), g++) {
+      if (cp.hire && k < cp.hire) continue;
+      const x = c.raw(cp, k, team);
+      if (WORKING.includes(x.code as Code) && !x.pending) days.push(k);
+    }
+    workDays[p.id] = days;
+  }
+  return workDays;
+}
+
+/**
+ * OT / KPI trackers: Workload figures for a period for every team the person can open that
+ * uses Workload (teams that never opened it are left out). Leads, managers, directors and admins.
+ */
+export async function trackerStatsAll(token: string, me: number, from: number, to: number): Promise<Record<string, WlStats>> {
+  const c = new Cal(await getCalendar(token), dayKey(Date.now()));
+  const p = c.people.get(me);
+  const r = rightsOf(c, me);
+  const covering = coveredLeaders(c.d, me, c.today).length > 0;
+  if (!p || !(isLeader(p.level) || r.anyAdmin || covering)) throw new ForbiddenError("Only leads, managers, directors and admins can see the trackers.");
+  const teams = visibleTeams(c, me);
+  const out: Record<string, WlStats> = {};
+  await Promise.all(
+    teams.map(async (t) => {
+      const ctx = ctxOf(c, t.id, teams);
+      const s = await load(token, t.id, ctx, { from, to });
+      if (!s) return;
+      const { data, error } = await db().rpc("workforce_activities", { p_token: token, p_team: t.id, p_since: from });
+      if (error) throw new Error(error.message);
+      const activities = ((data ?? []) as RawActivity[]).filter((a) => a.start < to).map(({ version: _v, ...a }) => a);
+      out[t.id] = trackerStats(s.data, { from, to, now: Date.now(), workDays: workDaysOf(c, ctx.people, t.id, from, to), activities });
+    }),
+  );
+  return out;
+}
+
+async function load(token: string, team: string, ctx: FromCal, win: Window = recent()): Promise<Snapshot | null> {
   const since = Date.now() - ACTIVITY_DAYS * 24 * 3600_000;
   const [{ data, error }, acts] = await Promise.all([
-    db().rpc("workforce_snapshot", { p_token: token, p_team: team }),
+    db().rpc("workforce_snapshot_window", { p_token: token, p_team: team, p_from: win.from, p_to: win.to ?? null, p_ids: win.ids ?? [] }),
     db().rpc("workforce_activities", { p_token: token, p_team: team, p_since: since }),
   ]);
   if (acts.error) throw new Error(acts.error.message);
@@ -90,6 +159,8 @@ async function load(token: string, team: string, ctx: FromCal): Promise<Snapshot
         return a;
       }),
       ...ctx,
+      doneSince: win.from,
+      firstAt: raw.first ?? undefined,
     },
     versions: { team: raw.team.version, tasks, activities },
   };
@@ -134,21 +205,49 @@ async function save(token: string, team: string, before: Snapshot | null, after:
   }
 }
 
-async function loadOrCreate(token: string, team: string, ctx: FromCal): Promise<Snapshot> {
-  const s = await load(token, team, ctx);
+async function loadOrCreate(token: string, team: string, ctx: FromCal, win: Window = recent()): Promise<Snapshot> {
+  const s = await load(token, team, ctx, win);
   if (s) return s;
   try {
     await save(token, team, null, { ...initialData(Date.now(), true), ...ctx });
   } catch (e) {
     if (!(e instanceof ConflictError)) throw e; // someone else created it first
   }
-  return (await load(token, team, ctx))!;
+  return (await load(token, team, ctx, win))!;
+}
+
+/**
+ * A team's change stamp (one cheap read: calendar version plus the team's latest task and
+ * activity changes), or null if it can't be checked. Same stamp = nothing to reload.
+ */
+export async function wlStamp(token: string, team: string): Promise<string | null> {
+  const { data, error } = await db().rpc("workforce_wl_stamp", { p_token: token, p_team: team });
+  return error ? null : (data as string);
+}
+
+/** The person's tasks in progress in their other teams (one task at a time counts across teams). */
+async function busyElsewhere(token: string, team: string, c: Cal): Promise<BusyElsewhere[]> {
+  const { data, error } = await db().rpc("workforce_my_busy", { p_token: token, p_team: team });
+  if (error) throw new Error(error.message);
+  return ((data ?? []) as Omit<BusyElsewhere, "teamName">[]).map((b) => ({ ...b, teamName: c.O.by[b.team]?.name ?? "another team" }));
 }
 
 /** Current data for a team person `me` can open; creates the team's Workload (no tasks) the first time. */
 export async function getData(token: string, me: number, want?: string | null): Promise<WorkloadData> {
+  const { team, ctx, c } = await teamContext(token, me, want);
+  const [s, busy] = await Promise.all([loadOrCreate(token, team, ctx), busyElsewhere(token, team, c)]);
+  return forViewer({ ...s.data, busyElsewhere: busy }, me);
+}
+
+/**
+ * Finished tasks of a team for a period (older than what loads with the team): for task
+ * history, the dashboard, the business case and other pages that look further back.
+ */
+export async function getDone(token: string, me: number, want: string | null, from: number, to: number): Promise<Task[]> {
   const { team, ctx } = await teamContext(token, me, want);
-  return (await loadOrCreate(token, team, ctx)).data;
+  const s = await load(token, team, ctx, { from, to });
+  if (!s) return [];
+  return forViewer(s.data, me).tasks.filter((t) => t.status === "done");
 }
 
 /**
@@ -158,15 +257,18 @@ export async function getData(token: string, me: number, want?: string | null): 
  */
 export async function runAction(token: string, me: number, action: Action, want?: string | null): Promise<{ data: WorkloadData; message?: string }> {
   if (action.type === "checkMail") throw new ForbiddenError("The Outlook mailbox isn’t connected yet.");
-  const { team, ctx } = await teamContext(token, me, want);
+  const { team, ctx, c } = await teamContext(token, me, want);
+  const busy = await busyElsewhere(token, team, c);
+  // An action on one task (e.g. editing an older resolved ticket) loads that task too.
+  const win = { ...recent(), ids: "id" in action ? [action.id] : [] };
   for (let attempt = 0; attempt < 3; attempt++) {
-    const s = await loadOrCreate(token, team, ctx);
+    const s = await loadOrCreate(token, team, ctx, win);
     const auth = authorizeWl(action, s.data, me);
     if ("error" in auth) throw new ForbiddenError(auth.error);
-    const out = applyAction(s.data, auth.action, Date.now());
+    const out = applyAction({ ...s.data, busyElsewhere: busy }, auth.action, Date.now());
     try {
       await save(token, team, s, out.data);
-      return { data: out.data, message: out.message };
+      return { data: forViewer(out.data, me), message: out.message };
     } catch (e) {
       if (!(e instanceof ConflictError)) throw e;
     }
@@ -196,20 +298,7 @@ export async function getOvertime(token: string, me: number, want: string | null
 export async function getPeriod(token: string, me: number, want: string | null, from: number, to: number) {
   const { team, ctx, c } = await teamContext(token, me, want);
   if (!ctx.admins.includes(me) && !ctx.approvers.includes(me)) throw new ForbiddenError("Only Workload admins and leads can see the dashboard.");
-  const today = dayKey(Date.now());
-  const last = [dayKey(to - 1), today].sort()[0];
-  const workDays: Record<number, string[]> = {};
-  for (const p of ctx.people) {
-    const cp = c.people.get(p.id);
-    if (!cp) continue;
-    const days: string[] = [];
-    for (let k = dayKey(from), g = 0; k <= last && g < 400; k = addDays(k, 1), g++) {
-      if (cp.hire && k < cp.hire) continue;
-      const x = c.raw(cp, k, team);
-      if (WORKING.includes(x.code as Code) && !x.pending) days.push(k);
-    }
-    workDays[p.id] = days;
-  }
+  const workDays = workDaysOf(c, ctx.people, team, from, to);
   const { data, error } = await db().rpc("workforce_activities", { p_token: token, p_team: team, p_since: from });
   if (error) throw new Error(error.message);
   const activities = ((data ?? []) as RawActivity[]).filter((a) => a.start < to).map(({ version: _v, ...a }) => a);

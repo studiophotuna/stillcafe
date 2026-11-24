@@ -9,6 +9,7 @@ import { lc, trPathOf } from "@/lib/workload/constants";
 import { due, holdPeriods, typeScope, personOf, slaOf, taskWorkMs, ticketField, ticketOf } from "@/lib/workload/engine";
 import { rangeLabel, rangeMs, type DateRange } from "@/lib/workload/period";
 import { useWorkload } from "@/lib/workload/store";
+import { useTasksIn } from "@/lib/workload/useTasksIn";
 import { taskRow, typeNameOf } from "@/lib/workload/view";
 
 /**
@@ -32,7 +33,9 @@ export default function HistoryPage() {
   const [from, to] = rangeMs(p);
   const s = data.settings;
   const tf = ticketField(data);
-  const list = data.tasks
+  // Finished tasks for the period, fetching older dates when needed.
+  const { data: withDone } = useTasksIn(from, to);
+  const list = withDone.tasks
     .filter(
       (t) =>
         t.status === "done" &&
@@ -48,7 +51,7 @@ export default function HistoryPage() {
     .sort((a, b) => b.doneAt! - a.doneAt!);
   const worked = list.reduce((a, t) => a + taskWorkMs(data, t, now), 0);
   const late = list.filter((t) => t.doneAt! > due(t, data)).length;
-  const people = [...new Set(data.tasks.filter((t) => t.status === "done" && t.assignee !== null).map((t) => t.assignee!))]
+  const people = [...new Set(withDone.tasks.filter((t) => t.status === "done" && t.assignee !== null).map((t) => t.assignee!))]
     .map((id) => ({ id, name: personOf(data, id)?.name ?? `#${id}` }))
     .sort((a, b) => a.name.localeCompare(b.name));
 
@@ -91,7 +94,7 @@ export default function HistoryPage() {
     <>
       <PageHead
         title={`Task history · ${scope === "team" && lead ? data.org.team.name : "My tasks"}`}
-        sub="Completed tasks with when they were started and finished, the time worked (time pending, breaks and other time away excluded) and time pending. Open a task for its pending dates and reasons."
+        sub="Finished tasks and how long each took (breaks and pending time not counted). Click a task for its details."
       />
       <div className="row" style={{ justifyContent: "space-between", alignItems: "flex-end" }}>
         <DateRangePicker value={p} onChange={setP} today={dayKey(now)} id="hist" />

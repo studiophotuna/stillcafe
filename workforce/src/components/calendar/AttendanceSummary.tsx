@@ -94,12 +94,14 @@ export function AttendanceSummary({ scope, date0 }: { scope: string; date0: stri
       ) : (
         <span className="small">{by === "lead" ? "No team leads with members in this scope." : "No one in this scope."}</span>
       )}
-      <span className="small">
+      {/* The counting rules, folded away: most people only need the numbers. */}
+      <details className="howto small">
+        <summary>What do these numbers mean?</summary>
         {by === "lead"
           ? "By lead: each team lead and their members (assigned approver, else the lead allocated above them), named after the lead’s allocations; “incl TL” marks the lead’s own status. "
           : ""}
         Present / headcount: people working that day (RTO, WFH, holiday duty, rest day OT) out of everyone in the group; leave is deducted but still listed. Midshift and GY in brackets are among those counts.
-      </span>
+      </details>
     </Blueprint>
   );
 }

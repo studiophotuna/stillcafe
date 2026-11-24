@@ -14,10 +14,13 @@ import {
   checkRows,
   completeTask,
   reviewCx,
+  editDone,
+  type TicketEdit,
   distribute,
   holdTask,
   setDelay,
   importRows,
+  addOneTask,
   resumeTask,
   setPriority,
   setTaskType,
@@ -25,24 +28,36 @@ import {
   setTrade,
   startTask,
   pickTask,
+  pauseTask,
+  planOt,
+  claimTask,
+  answerClaim,
+  cancelClaim,
   startWork,
   type Outcome,
   type UploadRow,
   type WorkloadData,
 } from "./engine";
-import type { ActivityKind, OtPart, Priority, Settings, Task, TaskField } from "./types";
+import type { ActivityKind, Billing, OtPart, Priority, Settings, Task, TaskField } from "./types";
+import { cleanBilling } from "./business";
 
 export type Action =
-  | { type: "startWork"; pid: number; assist?: boolean }
+  | { type: "startWork"; pid: number; assist?: boolean | "own" }
   | { type: "startTask"; id: string; pid: number }
   | { type: "pickTask"; id: string; pid: number }
+  | { type: "pauseTask"; id: string; pid: number }
+  | { type: "claimTask"; id: string; pid: number }
+  | { type: "answerClaim"; id: string; ok: boolean; pid: number }
+  | { type: "cancelClaim"; id: string; pid: number }
   | { type: "hold"; id: string; reason: string }
   | { type: "setDelay"; id: string; delay: string }
   | { type: "resume"; id: string; pid: number }
   | { type: "complete"; id: string; vals: Task["fields"]; pid: number; cx?: Record<string, number> | null; delay?: string | null }
   | { type: "reviewCx"; id: string; cx?: Record<string, number> | null; note?: string; by: number }
+  | { type: "editDone"; id: string; vals: Task["fields"]; by: number; edit?: TicketEdit }
   | { type: "away"; kind: ActivityKind; pid: number }
   | { type: "back"; pid: number }
+  | { type: "planOt"; pid: number; yes: boolean; note: string }
   | { type: "endWork"; otMin: number; pid: number; split?: OtPart[] | null }
   | { type: "undoEnd"; pid: number }
   | { type: "decideOt"; id: string; st: "approved" | "declined"; by: number }
@@ -54,25 +69,32 @@ export type Action =
   | { type: "assign"; id: string; pid: number | null }
   | { type: "checkMail" }
   | { type: "importRows"; rows: UploadRow[] }
+  | { type: "addTask"; row: UploadRow; by: number }
   | { type: "setSettings"; patch: Partial<Settings> }
   | { type: "setFields"; fields: TaskField[] };
 
 const SETTING_KEYS: (keyof Settings)[] = [
-  "mode", "order", "skipUnavail", "autoFeed", "multiPick", "sla", "mailbox", "mailTrade", "work", "targets", "memberTargets", "prodBasis", "uploaders", "staleDays", "ticketField", "slaWeekends", "slaHolidays", "taskTypes", "complexity",
+  "mode", "order", "skipUnavail", "autoFeed", "multiPick", "helpBelow", "sla", "mailbox", "mailTrade", "work", "targets", "memberTargets", "prodBasis", "uploaders", "staleDays", "ticketField", "slaWeekends", "slaHolidays", "taskTypes", "complexity", "billing", "otPrompt",
 ];
 
 export function applyAction(d: WorkloadData, a: Action, now: number): Outcome {
   switch (a.type) {
-    case "startWork": return startWork(d, a.pid, now, !!a.assist);
+    case "startWork": return startWork(d, a.pid, now, a.assist === "own" ? "own" : !!a.assist);
     case "startTask": return startTask(d, a.id, a.pid, now);
+    case "pauseTask": return pauseTask(d, a.id, a.pid, now);
     case "pickTask": return pickTask(d, a.id, a.pid, now);
+    case "claimTask": return claimTask(d, a.id, a.pid, now);
+    case "answerClaim": return answerClaim(d, a.id, a.ok, a.pid, now);
+    case "cancelClaim": return cancelClaim(d, a.id, a.pid, now);
     case "hold": return holdTask(d, a.id, a.reason, now);
     case "setDelay": return setDelay(d, a.id, a.delay, now);
     case "resume": return resumeTask(d, a.id, a.pid, now);
     case "complete": return completeTask(d, a.id, a.vals, a.pid, now, a.cx, a.delay);
     case "reviewCx": return reviewCx(d, a.id, a.by, now, a.cx, a.note);
+    case "editDone": return editDone(d, a.id, a.vals, a.by, now, a.edit);
     case "away": return startAway(d, a.pid, a.kind, now);
     case "back": return backToWork(d, a.pid, now);
+    case "planOt": return planOt(d, a.pid, a.yes, a.note, now);
     case "endWork": return endWork(d, a.pid, a.otMin, now, a.split);
     case "undoEnd": return undoEndWork(d, a.pid, now);
     case "decideOt": return decideOt(d, a.id, a.st, a.by, now);
@@ -85,8 +107,10 @@ export function applyAction(d: WorkloadData, a: Action, now: number): Outcome {
     case "checkMail": return checkMail(d, now);
     // Rows are re-validated against the stored task fields, not trusted from the client.
     case "importRows": return importRows(d, checkRows(a.rows, d.fields, d.org, now, d.settings.taskTypes), now);
+    case "addTask": return addOneTask(d, a.row, a.by, now);
     case "setSettings": {
       const patch = Object.fromEntries(Object.entries(a.patch).filter(([k]) => SETTING_KEYS.includes(k as keyof Settings)));
+      if (patch.billing) patch.billing = cleanBilling(patch.billing as Billing);
       return { data: { ...d, settings: { ...d.settings, ...patch } } };
     }
     case "setFields": return { data: { ...d, fields: a.fields } };

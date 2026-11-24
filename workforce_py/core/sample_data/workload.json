@@ -1,0 +1,2509 @@
+{
+ "now": 1790217000000,
+ "tasks": [
+  {
+   "id": "T-1040",
+   "title": "Rate sheet review – BLHR Far East",
+   "trade": "fewb",
+   "pr": "high",
+   "received": 1790131150246,
+   "source": "upload",
+   "status": "new",
+   "assignee": null,
+   "startedAt": null,
+   "doneAt": null,
+   "ot": false,
+   "otMin": 0,
+   "hold": "",
+   "fields": {
+    "ticket": "RM-21441",
+    "carrier": "BLHR",
+    "contract": "BLHR-1987",
+    "contracts": "",
+    "amendments": "",
+    "remarks": ""
+   },
+   "email": null,
+   "history": [
+    {
+     "at": 1790131150246,
+     "text": "Imported from upload"
+    }
+   ]
+  },
+  {
+   "id": "T-1041",
+   "title": "New contract upload – CRLN Far East",
+   "trade": "fewb",
+   "pr": "normal",
+   "received": 1790183395909,
+   "source": "outlook",
+   "status": "new",
+   "assignee": null,
+   "startedAt": null,
+   "doneAt": null,
+   "ot": false,
+   "otMin": 0,
+   "hold": "",
+   "fields": {
+    "ticket": "RM-21442",
+    "carrier": "CRLN",
+    "contract": "",
+    "contracts": "",
+    "amendments": "",
+    "remarks": ""
+   },
+   "email": {
+    "from": "pricing.eu@demobss.com",
+    "cc": "rm.team@demobss.com",
+    "subject": "New contract upload – CRLN Far East",
+    "body": "Hi team,\n\nPlease process the attached new contract upload for CRLN. Effective date is next Monday.\n\nThank you.",
+    "attachments": [
+     "CRLN_rates.xlsx",
+     "contract_CRLN.pdf"
+    ]
+   },
+   "history": [
+    {
+     "at": 1790183395909,
+     "text": "Received from Outlook"
+    }
+   ]
+  },
+  {
+   "id": "T-1042",
+   "title": "Surcharge update – EVRS Europe",
+   "trade": "eu",
+   "pr": "high",
+   "received": 1790184514704,
+   "source": "outlook",
+   "status": "new",
+   "assignee": null,
+   "startedAt": null,
+   "doneAt": null,
+   "ot": false,
+   "otMin": 0,
+   "hold": "",
+   "fields": {
+    "ticket": "RM-21443",
+    "carrier": "EVRS",
+    "contract": "",
+    "contracts": "",
+    "amendments": "",
+    "remarks": ""
+   },
+   "email": {
+    "from": "pricing.us@demobss.com",
+    "cc": "rm.team@demobss.com",
+    "subject": "URGENT: Surcharge update – EVRS Europe",
+    "body": "Hi team,\n\nPlease process the attached surcharge update for EVRS. Effective date is next Monday.\n\nThank you.",
+    "attachments": [
+     "EVRS_rates.xlsx"
+    ]
+   },
+   "history": [
+    {
+     "at": 1790184514704,
+     "text": "Received from Outlook"
+    }
+   ]
+  },
+  {
+   "id": "T-1043",
+   "title": "Contract amendment – FJRD Consolidation",
+   "trade": "lcl",
+   "pr": "high",
+   "received": 1790124143506,
+   "source": "outlook",
+   "status": "new",
+   "assignee": null,
+   "startedAt": null,
+   "doneAt": null,
+   "ot": false,
+   "otMin": 0,
+   "hold": "",
+   "fields": {
+    "ticket": "RM-21444",
+    "carrier": "FJRD",
+    "contract": "FJRD-6622",
+    "contracts": "",
+    "amendments": "",
+    "remarks": ""
+   },
+   "email": {
+    "from": "kam.inas@demobss.com",
+    "cc": "rm.team@demobss.com",
+    "subject": "URGENT: Contract amendment – FJRD Consolidation",
+    "body": "Hi team,\n\nPlease process the attached contract amendment for FJRD. Effective date is next Monday.\n\nThank you.",
+    "attachments": [
+     "FJRD_rates.xlsx"
+    ]
+   },
+   "history": [
+    {
+     "at": 1790124143506,
+     "text": "Received from Outlook"
+    }
+   ]
+  },
+  {
+   "id": "T-1044",
+   "title": "Contract amendment – GLWY Latin America",
+   "trade": "asla",
+   "pr": "low",
+   "received": 1790162574091,
+   "source": "upload",
+   "status": "new",
+   "assignee": null,
+   "startedAt": null,
+   "doneAt": null,
+   "ot": false,
+   "otMin": 0,
+   "hold": "",
+   "fields": {
+    "ticket": "RM-21445",
+    "carrier": "GLWY",
+    "contract": "",
+    "contracts": "",
+    "amendments": "",
+    "remarks": ""
+   },
+   "email": null,
+   "history": [
+    {
+     "at": 1790162574091,
+     "text": "Imported from upload"
+    }
+   ]
+  },
+  {
+   "id": "T-1045",
+   "title": "Rate sheet review – EVRS Americas",
+   "trade": "us",
+   "pr": "low",
+   "received": 1790119967076,
+   "source": "outlook",
+   "status": "new",
+   "assignee": null,
+   "startedAt": null,
+   "doneAt": null,
+   "ot": false,
+   "otMin": 0,
+   "hold": "",
+   "fields": {
+    "ticket": "RM-21446",
+    "carrier": "EVRS",
+    "contract": "EVRS-5266",
+    "contracts": "",
+    "amendments": "",
+    "remarks": ""
+   },
+   "email": {
+    "from": "sales.lcl@demobss.com",
+    "cc": "rm.team@demobss.com",
+    "subject": "Rate sheet review – EVRS Americas",
+    "body": "Hi team,\n\nPlease process the attached rate sheet review for EVRS. Effective date is next Monday.\n\nThank you.",
+    "attachments": [
+     "EVRS_rates.xlsx"
+    ]
+   },
+   "history": [
+    {
+     "at": 1790119967076,
+     "text": "Received from Outlook"
+    }
+   ]
+  },
+  {
+   "id": "T-1046",
+   "title": "Rate filing – ATLS Europe",
+   "trade": "eu",
+   "pr": "normal",
+   "received": 1790158603747,
+   "source": "outlook",
+   "status": "new",
+   "assignee": null,
+   "startedAt": null,
+   "doneAt": null,
+   "ot": false,
+   "otMin": 0,
+   "hold": "",
+   "fields": {
+    "ticket": "RM-21447",
+    "carrier": "ATLS",
+    "contract": "",
+    "contracts": "",
+    "amendments": "",
+    "remarks": ""
+   },
+   "email": {
+    "from": "kam.inas@demobss.com",
+    "cc": "rm.team@demobss.com",
+    "subject": "Rate filing – ATLS Europe",
+    "body": "Hi team,\n\nPlease process the attached rate filing for ATLS. Effective date is next Monday.\n\nThank you.",
+    "attachments": [
+     "ATLS_rates.xlsx"
+    ]
+   },
+   "history": [
+    {
+     "at": 1790158603747,
+     "text": "Received from Outlook"
+    }
+   ]
+  },
+  {
+   "id": "T-1047",
+   "title": "New contract upload – FJRD Europe",
+   "trade": "eu",
+   "pr": "normal",
+   "received": 1790167613833,
+   "source": "outlook",
+   "status": "new",
+   "assignee": null,
+   "startedAt": null,
+   "doneAt": null,
+   "ot": false,
+   "otMin": 0,
+   "hold": "",
+   "fields": {
+    "ticket": "RM-21448",
+    "carrier": "FJRD",
+    "contract": "FJRD-7908",
+    "contracts": "",
+    "amendments": "",
+    "remarks": ""
+   },
+   "email": {
+    "from": "sales.lcl@demobss.com",
+    "cc": "rm.team@demobss.com",
+    "subject": "New contract upload – FJRD Europe",
+    "body": "Hi team,\n\nPlease process the attached new contract upload for FJRD. Effective date is next Monday.\n\nThank you.",
+    "attachments": [
+     "FJRD_rates.xlsx"
+    ]
+   },
+   "history": [
+    {
+     "at": 1790167613833,
+     "text": "Received from Outlook"
+    }
+   ]
+  },
+  {
+   "id": "T-1048",
+   "title": "Rate sheet review – FJRD Europe",
+   "trade": "eu",
+   "pr": "normal",
+   "received": 1790201576595,
+   "source": "outlook",
+   "status": "new",
+   "assignee": null,
+   "startedAt": null,
+   "doneAt": null,
+   "ot": false,
+   "otMin": 0,
+   "hold": "",
+   "fields": {
+    "ticket": "RM-21449",
+    "carrier": "FJRD",
+    "contract": "",
+    "contracts": "",
+    "amendments": "",
+    "remarks": ""
+   },
+   "email": {
+    "from": "procurement.asla@demobss.com",
+    "cc": "rm.team@demobss.com",
+    "subject": "Rate sheet review – FJRD Europe",
+    "body": "Hi team,\n\nPlease process the attached rate sheet review for FJRD. Effective date is next Monday.\n\nThank you.",
+    "attachments": [
+     "FJRD_rates.xlsx"
+    ]
+   },
+   "history": [
+    {
+     "at": 1790201576595,
+     "text": "Received from Outlook"
+    }
+   ]
+  },
+  {
+   "id": "T-1049",
+   "title": "Rate sheet review – GLWY Americas",
+   "trade": "us",
+   "pr": "high",
+   "received": 1790135255181,
+   "source": "outlook",
+   "status": "new",
+   "assignee": null,
+   "startedAt": null,
+   "doneAt": null,
+   "ot": false,
+   "otMin": 0,
+   "hold": "",
+   "fields": {
+    "ticket": "RM-21450",
+    "carrier": "GLWY",
+    "contract": "",
+    "contracts": "",
+    "amendments": "",
+    "remarks": ""
+   },
+   "email": {
+    "from": "sales.lcl@demobss.com",
+    "cc": "rm.team@demobss.com",
+    "subject": "URGENT: Rate sheet review – GLWY Americas",
+    "body": "Hi team,\n\nPlease process the attached rate sheet review for GLWY. Effective date is next Monday.\n\nThank you.",
+    "attachments": [
+     "GLWY_rates.xlsx"
+    ]
+   },
+   "history": [
+    {
+     "at": 1790135255181,
+     "text": "Received from Outlook"
+    }
+   ]
+  },
+  {
+   "id": "T-1050",
+   "title": "New contract upload – EVRS Latin America",
+   "trade": "asla",
+   "pr": "low",
+   "received": 1790194184318,
+   "source": "outlook",
+   "status": "new",
+   "assignee": null,
+   "startedAt": null,
+   "doneAt": null,
+   "ot": false,
+   "otMin": 0,
+   "hold": "",
+   "fields": {
+    "ticket": "RM-21451",
+    "carrier": "EVRS",
+    "contract": "",
+    "contracts": "",
+    "amendments": "",
+    "remarks": ""
+   },
+   "email": {
+    "from": "tlm.fewb@demobss.com",
+    "cc": "rm.team@demobss.com",
+    "subject": "New contract upload – EVRS Latin America",
+    "body": "Hi team,\n\nPlease process the attached new contract upload for EVRS. Effective date is next Monday.\n\nThank you.",
+    "attachments": [
+     "EVRS_rates.xlsx",
+     "contract_EVRS.pdf"
+    ]
+   },
+   "history": [
+    {
+     "at": 1790194184318,
+     "text": "Received from Outlook"
+    }
+   ]
+  },
+  {
+   "id": "T-1051",
+   "title": "Rate sheet review – CRLN Indian Ocean",
+   "trade": "inas",
+   "pr": "normal",
+   "received": 1790137659544,
+   "source": "upload",
+   "status": "new",
+   "assignee": null,
+   "startedAt": null,
+   "doneAt": null,
+   "ot": false,
+   "otMin": 0,
+   "hold": "",
+   "fields": {
+    "ticket": "RM-21452",
+    "carrier": "CRLN",
+    "contract": "CRLN-6612",
+    "contracts": "",
+    "amendments": "",
+    "remarks": ""
+   },
+   "email": null,
+   "history": [
+    {
+     "at": 1790137659544,
+     "text": "Imported from upload"
+    }
+   ]
+  },
+  {
+   "id": "T-1052",
+   "title": "Rate sheet review – DLTM Americas",
+   "trade": "us",
+   "pr": "normal",
+   "received": 1790128557393,
+   "source": "outlook",
+   "status": "new",
+   "assignee": null,
+   "startedAt": null,
+   "doneAt": null,
+   "ot": false,
+   "otMin": 0,
+   "hold": "",
+   "fields": {
+    "ticket": "RM-21453",
+    "carrier": "DLTM",
+    "contract": "DLTM-7557",
+    "contracts": "",
+    "amendments": "",
+    "remarks": ""
+   },
+   "email": {
+    "from": "sales.lcl@demobss.com",
+    "cc": "rm.team@demobss.com",
+    "subject": "Rate sheet review – DLTM Americas",
+    "body": "Hi team,\n\nPlease process the attached rate sheet review for DLTM. Effective date is next Monday.\n\nThank you.",
+    "attachments": [
+     "DLTM_rates.xlsx",
+     "contract_DLTM.pdf"
+    ]
+   },
+   "history": [
+    {
+     "at": 1790128557393,
+     "text": "Received from Outlook"
+    }
+   ]
+  },
+  {
+   "id": "T-1053",
+   "title": "Surcharge update – BLHR Europe",
+   "trade": "eu",
+   "pr": "low",
+   "received": 1790123198958,
+   "source": "outlook",
+   "status": "new",
+   "assignee": null,
+   "startedAt": null,
+   "doneAt": null,
+   "ot": false,
+   "otMin": 0,
+   "hold": "",
+   "fields": {
+    "ticket": "RM-21454",
+    "carrier": "BLHR",
+    "contract": "BLHR-5250",
+    "contracts": "",
+    "amendments": "",
+    "remarks": ""
+   },
+   "email": {
+    "from": "tlm.fewb@demobss.com",
+    "cc": "rm.team@demobss.com",
+    "subject": "Surcharge update – BLHR Europe",
+    "body": "Hi team,\n\nPlease process the attached surcharge update for BLHR. Effective date is next Monday.\n\nThank you.",
+    "attachments": [
+     "BLHR_rates.xlsx"
+    ]
+   },
+   "history": [
+    {
+     "at": 1790123198958,
+     "text": "Received from Outlook"
+    }
+   ]
+  },
+  {
+   "id": "T-1054",
+   "title": "Surcharge update – BLHR Indian Ocean",
+   "trade": "inas",
+   "pr": "normal",
+   "received": 1790216425954,
+   "source": "outlook",
+   "status": "new",
+   "assignee": null,
+   "startedAt": null,
+   "doneAt": null,
+   "ot": false,
+   "otMin": 0,
+   "hold": "",
+   "fields": {
+    "ticket": "RM-21455",
+    "carrier": "BLHR",
+    "contract": "",
+    "contracts": "",
+    "amendments": "",
+    "remarks": ""
+   },
+   "email": {
+    "from": "pricing.us@demobss.com",
+    "cc": "rm.team@demobss.com",
+    "subject": "Surcharge update – BLHR Indian Ocean",
+    "body": "Hi team,\n\nPlease process the attached surcharge update for BLHR. Effective date is next Monday.\n\nThank you.",
+    "attachments": [
+     "BLHR_rates.xlsx",
+     "contract_BLHR.pdf"
+    ]
+   },
+   "history": [
+    {
+     "at": 1790216425954,
+     "text": "Received from Outlook"
+    }
+   ]
+  },
+  {
+   "id": "T-1055",
+   "title": "Contract amendment – BLHR Far East",
+   "trade": "fewb",
+   "pr": "high",
+   "received": 1790146815524,
+   "source": "outlook",
+   "status": "new",
+   "assignee": null,
+   "startedAt": null,
+   "doneAt": null,
+   "ot": false,
+   "otMin": 0,
+   "hold": "",
+   "fields": {
+    "ticket": "RM-21456",
+    "carrier": "BLHR",
+    "contract": "",
+    "contracts": "",
+    "amendments": "",
+    "remarks": ""
+   },
+   "email": {
+    "from": "kam.inas@demobss.com",
+    "cc": "rm.team@demobss.com",
+    "subject": "URGENT: Contract amendment – BLHR Far East",
+    "body": "Hi team,\n\nPlease process the attached contract amendment for BLHR. Effective date is next Monday.\n\nThank you.",
+    "attachments": [
+     "BLHR_rates.xlsx"
+    ]
+   },
+   "history": [
+    {
+     "at": 1790146815524,
+     "text": "Received from Outlook"
+    }
+   ]
+  },
+  {
+   "id": "T-1056",
+   "title": "New contract upload – GLWY Far East",
+   "trade": "fewb",
+   "pr": "normal",
+   "received": 1790185908288,
+   "source": "outlook",
+   "status": "new",
+   "assignee": null,
+   "startedAt": null,
+   "doneAt": null,
+   "ot": false,
+   "otMin": 0,
+   "hold": "",
+   "fields": {
+    "ticket": "RM-21457",
+    "carrier": "GLWY",
+    "contract": "",
+    "contracts": "",
+    "amendments": "",
+    "remarks": ""
+   },
+   "email": {
+    "from": "sales.lcl@demobss.com",
+    "cc": "rm.team@demobss.com",
+    "subject": "New contract upload – GLWY Far East",
+    "body": "Hi team,\n\nPlease process the attached new contract upload for GLWY. Effective date is next Monday.\n\nThank you.",
+    "attachments": [
+     "GLWY_rates.xlsx",
+     "contract_GLWY.pdf"
+    ]
+   },
+   "history": [
+    {
+     "at": 1790185908288,
+     "text": "Received from Outlook"
+    }
+   ]
+  },
+  {
+   "id": "T-1057",
+   "title": "New contract upload – BLHR Consolidation",
+   "trade": "lcl",
+   "pr": "normal",
+   "received": 1790112149784,
+   "source": "upload",
+   "status": "new",
+   "assignee": null,
+   "startedAt": null,
+   "doneAt": null,
+   "ot": false,
+   "otMin": 0,
+   "hold": "",
+   "fields": {
+    "ticket": "RM-21458",
+    "carrier": "BLHR",
+    "contract": "BLHR-6755",
+    "contracts": "",
+    "amendments": "",
+    "remarks": ""
+   },
+   "email": null,
+   "history": [
+    {
+     "at": 1790112149784,
+     "text": "Imported from upload"
+    }
+   ]
+  },
+  {
+   "id": "T-1058",
+   "title": "Contract amendment – BLHR Indian Ocean",
+   "trade": "inas",
+   "pr": "high",
+   "received": 1790206441320,
+   "source": "outlook",
+   "status": "new",
+   "assignee": null,
+   "startedAt": null,
+   "doneAt": null,
+   "ot": false,
+   "otMin": 0,
+   "hold": "",
+   "fields": {
+    "ticket": "RM-21459",
+    "carrier": "BLHR",
+    "contract": "BLHR-3524",
+    "contracts": "",
+    "amendments": "",
+    "remarks": ""
+   },
+   "email": {
+    "from": "tlm.fewb@demobss.com",
+    "cc": "rm.team@demobss.com",
+    "subject": "URGENT: Contract amendment – BLHR Indian Ocean",
+    "body": "Hi team,\n\nPlease process the attached contract amendment for BLHR. Effective date is next Monday.\n\nThank you.",
+    "attachments": [
+     "BLHR_rates.xlsx"
+    ]
+   },
+   "history": [
+    {
+     "at": 1790206441320,
+     "text": "Received from Outlook"
+    }
+   ]
+  },
+  {
+   "id": "T-1059",
+   "title": "Rate filing – ATLS Consolidation",
+   "trade": "lcl",
+   "pr": "normal",
+   "received": 1790190933017,
+   "source": "outlook",
+   "status": "new",
+   "assignee": null,
+   "startedAt": null,
+   "doneAt": null,
+   "ot": false,
+   "otMin": 0,
+   "hold": "",
+   "fields": {
+    "ticket": "RM-21460",
+    "carrier": "ATLS",
+    "contract": "ATLS-4222",
+    "contracts": "",
+    "amendments": "",
+    "remarks": ""
+   },
+   "email": {
+    "from": "pricing.us@demobss.com",
+    "cc": "rm.team@demobss.com",
+    "subject": "Rate filing – ATLS Consolidation",
+    "body": "Hi team,\n\nPlease process the attached rate filing for ATLS. Effective date is next Monday.\n\nThank you.",
+    "attachments": [
+     "ATLS_rates.xlsx",
+     "contract_ATLS.pdf"
+    ]
+   },
+   "history": [
+    {
+     "at": 1790190933017,
+     "text": "Received from Outlook"
+    }
+   ]
+  },
+  {
+   "id": "T-1060",
+   "title": "Surcharge update – DLTM",
+   "trade": "",
+   "pr": "normal",
+   "received": 1790214600000,
+   "source": "upload",
+   "status": "new",
+   "assignee": null,
+   "startedAt": null,
+   "doneAt": null,
+   "ot": false,
+   "otMin": 0,
+   "hold": "",
+   "fields": {
+    "ticket": "RM-21461",
+    "carrier": "DLTM",
+    "contract": "DLTM-2807",
+    "contracts": "",
+    "amendments": "",
+    "remarks": ""
+   },
+   "email": null,
+   "history": [
+    {
+     "at": 1790214600000,
+     "text": "Imported from upload"
+    }
+   ]
+  },
+  {
+   "id": "T-1061",
+   "title": "Rate sheet review – CRLN Indian Ocean",
+   "trade": "inas",
+   "pr": "normal",
+   "received": 1790206200000,
+   "source": "outlook",
+   "status": "in_progress",
+   "assignee": 1,
+   "startedAt": 1790216100000,
+   "doneAt": null,
+   "ot": false,
+   "otMin": 0,
+   "hold": "",
+   "fields": {
+    "ticket": "RM-21462",
+    "carrier": "CRLN",
+    "contract": "",
+    "contracts": "",
+    "amendments": "",
+    "remarks": ""
+   },
+   "email": {
+    "from": "procurement.asla@demobss.com",
+    "cc": "rm.team@demobss.com",
+    "subject": "Rate sheet review – CRLN Indian Ocean",
+    "body": "Hi team,\n\nPlease process the attached rate sheet review for CRLN. Effective date is next Monday.\n\nThank you.",
+    "attachments": [
+     "CRLN_rates.xlsx"
+    ]
+   },
+   "history": [
+    {
+     "at": 1790206200000,
+     "text": "Received from Outlook"
+    },
+    {
+     "at": 1790216100000,
+     "text": "Started by Bea Santos"
+    }
+   ]
+  },
+  {
+   "id": "T-1062",
+   "title": "Rate filing – FJRD Europe",
+   "trade": "eu",
+   "pr": "low",
+   "received": 1790202600000,
+   "source": "outlook",
+   "status": "in_progress",
+   "assignee": 3,
+   "startedAt": 1790215560000,
+   "doneAt": null,
+   "ot": false,
+   "otMin": 0,
+   "hold": "",
+   "fields": {
+    "ticket": "RM-21463",
+    "carrier": "FJRD",
+    "contract": "",
+    "contracts": "",
+    "amendments": "",
+    "remarks": ""
+   },
+   "email": {
+    "from": "tlm.fewb@demobss.com",
+    "cc": "rm.team@demobss.com",
+    "subject": "Rate filing – FJRD Europe",
+    "body": "Hi team,\n\nPlease process the attached rate filing for FJRD. Effective date is next Monday.\n\nThank you.",
+    "attachments": [
+     "FJRD_rates.xlsx",
+     "contract_FJRD.pdf"
+    ]
+   },
+   "history": [
+    {
+     "at": 1790202600000,
+     "text": "Received from Outlook"
+    },
+    {
+     "at": 1790215560000,
+     "text": "Started by Dan Villanueva"
+    }
+   ]
+  },
+  {
+   "id": "T-1063",
+   "title": "Surcharge update – CRLN Far East",
+   "trade": "fewb",
+   "pr": "high",
+   "received": 1790199000000,
+   "source": "upload",
+   "status": "in_progress",
+   "assignee": 5,
+   "startedAt": 1790215020000,
+   "doneAt": null,
+   "ot": false,
+   "otMin": 0,
+   "hold": "",
+   "fields": {
+    "ticket": "RM-21464",
+    "carrier": "CRLN",
+    "contract": "",
+    "contracts": "",
+    "amendments": "",
+    "remarks": ""
+   },
+   "email": null,
+   "history": [
+    {
+     "at": 1790199000000,
+     "text": "Imported from upload"
+    },
+    {
+     "at": 1790215020000,
+     "text": "Started by Franco Dizon"
+    }
+   ]
+  },
+  {
+   "id": "T-1064",
+   "title": "New contract upload – BLHR Far East",
+   "trade": "fewb",
+   "pr": "normal",
+   "received": 1790195400000,
+   "source": "outlook",
+   "status": "in_progress",
+   "assignee": 9,
+   "startedAt": 1790214480000,
+   "doneAt": null,
+   "ot": false,
+   "otMin": 0,
+   "hold": "",
+   "fields": {
+    "ticket": "RM-21465",
+    "carrier": "BLHR",
+    "contract": "BLHR-8163",
+    "contracts": "",
+    "amendments": "",
+    "remarks": ""
+   },
+   "email": {
+    "from": "sales.lcl@demobss.com",
+    "cc": "rm.team@demobss.com",
+    "subject": "New contract upload – BLHR Far East",
+    "body": "Hi team,\n\nPlease process the attached new contract upload for BLHR. Effective date is next Monday.\n\nThank you.",
+    "attachments": [
+     "BLHR_rates.xlsx"
+    ]
+   },
+   "history": [
+    {
+     "at": 1790195400000,
+     "text": "Received from Outlook"
+    },
+    {
+     "at": 1790214480000,
+     "text": "Started by Hana Cruz"
+    }
+   ]
+  },
+  {
+   "id": "T-1065",
+   "title": "Rate sheet review – ATLS Consolidation",
+   "trade": "lcl",
+   "pr": "normal",
+   "received": 1790191800000,
+   "source": "upload",
+   "status": "in_progress",
+   "assignee": 15,
+   "startedAt": 1790213940000,
+   "doneAt": null,
+   "ot": false,
+   "otMin": 0,
+   "hold": "",
+   "fields": {
+    "ticket": "RM-21466",
+    "carrier": "ATLS",
+    "contract": "",
+    "contracts": "",
+    "amendments": "",
+    "remarks": ""
+   },
+   "email": null,
+   "history": [
+    {
+     "at": 1790191800000,
+     "text": "Imported from upload"
+    },
+    {
+     "at": 1790213940000,
+     "text": "Started by Leo Aquino"
+    }
+   ]
+  },
+  {
+   "id": "T-1066",
+   "title": "Rate sheet review – ATLS Americas",
+   "trade": "us",
+   "pr": "low",
+   "received": 1790188200000,
+   "source": "upload",
+   "status": "in_progress",
+   "assignee": 25,
+   "startedAt": 1790213400000,
+   "doneAt": null,
+   "ot": false,
+   "otMin": 0,
+   "hold": "",
+   "fields": {
+    "ticket": "RM-21467",
+    "carrier": "ATLS",
+    "contract": "ATLS-3338",
+    "contracts": "",
+    "amendments": "",
+    "remarks": ""
+   },
+   "email": null,
+   "history": [
+    {
+     "at": 1790188200000,
+     "text": "Imported from upload"
+    },
+    {
+     "at": 1790213400000,
+     "text": "Started by Olive Tan"
+    }
+   ]
+  },
+  {
+   "id": "T-1067",
+   "title": "Rate sheet review – CRLN Consolidation",
+   "trade": "lcl",
+   "pr": "normal",
+   "received": 1790199000000,
+   "source": "upload",
+   "status": "assigned",
+   "assignee": 16,
+   "startedAt": null,
+   "doneAt": null,
+   "ot": false,
+   "otMin": 0,
+   "hold": "",
+   "fields": {
+    "ticket": "RM-21468",
+    "carrier": "CRLN",
+    "contract": "CRLN-1048",
+    "contracts": "",
+    "amendments": "",
+    "remarks": ""
+   },
+   "email": null,
+   "history": [
+    {
+     "at": 1790199000000,
+     "text": "Imported from upload"
+    },
+    {
+     "at": 1790200200000,
+     "text": "Assigned to Mia Castillo"
+    }
+   ]
+  },
+  {
+   "id": "T-1068",
+   "title": "Rate sheet review – ATLS Latin America",
+   "trade": "asla",
+   "pr": "low",
+   "received": 1790199000000,
+   "source": "upload",
+   "status": "assigned",
+   "assignee": 30,
+   "startedAt": null,
+   "doneAt": null,
+   "ot": false,
+   "otMin": 0,
+   "hold": "",
+   "fields": {
+    "ticket": "RM-21469",
+    "carrier": "ATLS",
+    "contract": "ATLS-2125",
+    "contracts": "",
+    "amendments": "",
+    "remarks": ""
+   },
+   "email": null,
+   "history": [
+    {
+     "at": 1790199000000,
+     "text": "Imported from upload"
+    },
+    {
+     "at": 1790200200000,
+     "text": "Assigned to Rhea Soriano"
+    }
+   ]
+  },
+  {
+   "id": "T-1069",
+   "title": "New contract upload – FJRD Indian Ocean",
+   "trade": "inas",
+   "pr": "normal",
+   "received": 1790184600000,
+   "source": "upload",
+   "status": "on_hold",
+   "assignee": 2,
+   "startedAt": 1790195400000,
+   "doneAt": null,
+   "ot": false,
+   "otMin": 0,
+   "hold": "Waiting for rate sheet from carrier",
+   "fields": {
+    "ticket": "RM-21470",
+    "carrier": "FJRD",
+    "contract": "",
+    "contracts": "",
+    "amendments": "",
+    "remarks": ""
+   },
+   "email": null,
+   "history": [
+    {
+     "at": 1790184600000,
+     "text": "Imported from upload"
+    },
+    {
+     "at": 1790195400000,
+     "text": "Started by Carla Mendoza"
+    },
+    {
+     "at": 1790191800000,
+     "text": "On hold: Waiting for rate sheet from carrier"
+    }
+   ]
+  },
+  {
+   "id": "T-1070",
+   "title": "Surcharge update – GLWY Far East",
+   "trade": "fewb",
+   "pr": "low",
+   "received": 1790184600000,
+   "source": "upload",
+   "status": "on_hold",
+   "assignee": 11,
+   "startedAt": 1790195400000,
+   "doneAt": null,
+   "ot": false,
+   "otMin": 0,
+   "hold": "Clarifying effective date with sales",
+   "fields": {
+    "ticket": "RM-21471",
+    "carrier": "GLWY",
+    "contract": "GLWY-6124",
+    "contracts": "",
+    "amendments": "",
+    "remarks": ""
+   },
+   "email": null,
+   "history": [
+    {
+     "at": 1790184600000,
+     "text": "Imported from upload"
+    },
+    {
+     "at": 1790195400000,
+     "text": "Started by Jessa Flores"
+    },
+    {
+     "at": 1790191800000,
+     "text": "On hold: Clarifying effective date with sales"
+    }
+   ]
+  },
+  {
+   "id": "T-1071",
+   "title": "Contract amendment – CRLN Indian Ocean",
+   "trade": "inas",
+   "pr": "low",
+   "received": 1790194800000,
+   "source": "outlook",
+   "status": "done",
+   "assignee": 1,
+   "startedAt": 1790202000000,
+   "doneAt": 1790205480000,
+   "ot": false,
+   "otMin": 0,
+   "hold": "",
+   "fields": {
+    "ticket": "RM-21472",
+    "carrier": "CRLN",
+    "contract": "",
+    "contracts": 5,
+    "amendments": 8,
+    "remarks": ""
+   },
+   "email": {
+    "from": "pricing.eu@demobss.com",
+    "cc": "rm.team@demobss.com",
+    "subject": "Contract amendment – CRLN Indian Ocean",
+    "body": "Hi team,\n\nPlease process the attached contract amendment for CRLN. Effective date is next Monday.\n\nThank you.",
+    "attachments": [
+     "CRLN_rates.xlsx"
+    ]
+   },
+   "history": [
+    {
+     "at": 1790194800000,
+     "text": "Received from Outlook"
+    },
+    {
+     "at": 1790202000000,
+     "text": "Started by Bea Santos"
+    },
+    {
+     "at": 1790205480000,
+     "text": "Done"
+    }
+   ],
+   "cx": {
+    "simple": 2,
+    "medium": 1
+   }
+  },
+  {
+   "id": "T-1072",
+   "title": "Contract amendment – CRLN Europe",
+   "trade": "eu",
+   "pr": "normal",
+   "received": 1790195280000,
+   "source": "outlook",
+   "status": "done",
+   "assignee": 3,
+   "startedAt": 1790202480000,
+   "doneAt": 1790204700000,
+   "ot": false,
+   "otMin": 0,
+   "hold": "",
+   "fields": {
+    "ticket": "RM-21473",
+    "carrier": "CRLN",
+    "contract": "CRLN-4775",
+    "contracts": 8,
+    "amendments": 3,
+    "remarks": ""
+   },
+   "email": {
+    "from": "pricing.eu@demobss.com",
+    "cc": "rm.team@demobss.com",
+    "subject": "Contract amendment – CRLN Europe",
+    "body": "Hi team,\n\nPlease process the attached contract amendment for CRLN. Effective date is next Monday.\n\nThank you.",
+    "attachments": [
+     "CRLN_rates.xlsx"
+    ]
+   },
+   "history": [
+    {
+     "at": 1790195280000,
+     "text": "Received from Outlook"
+    },
+    {
+     "at": 1790202480000,
+     "text": "Started by Dan Villanueva"
+    },
+    {
+     "at": 1790204700000,
+     "text": "Done"
+    }
+   ],
+   "cx": {
+    "medium": 1
+   }
+  },
+  {
+   "id": "T-1073",
+   "title": "Rate filing – BLHR Far East",
+   "trade": "fewb",
+   "pr": "normal",
+   "received": 1790195940000,
+   "source": "outlook",
+   "status": "done",
+   "assignee": 5,
+   "startedAt": 1790203140000,
+   "doneAt": 1790207400000,
+   "ot": true,
+   "otMin": 60,
+   "hold": "",
+   "fields": {
+    "ticket": "RM-21474",
+    "carrier": "BLHR",
+    "contract": "",
+    "contracts": 5,
+    "amendments": 4,
+    "remarks": ""
+   },
+   "email": {
+    "from": "pricing.eu@demobss.com",
+    "cc": "rm.team@demobss.com",
+    "subject": "Rate filing – BLHR Far East",
+    "body": "Hi team,\n\nPlease process the attached rate filing for BLHR. Effective date is next Monday.\n\nThank you.",
+    "attachments": [
+     "BLHR_rates.xlsx"
+    ]
+   },
+   "history": [
+    {
+     "at": 1790195940000,
+     "text": "Received from Outlook"
+    },
+    {
+     "at": 1790203140000,
+     "text": "Started by Franco Dizon"
+    },
+    {
+     "at": 1790207400000,
+     "text": "Done (overtime 60 min)"
+    }
+   ],
+   "cx": {
+    "simple": 1,
+    "complex": 1
+   }
+  },
+  {
+   "id": "T-1074",
+   "title": "Surcharge update – GLWY Far East",
+   "trade": "fewb",
+   "pr": "normal",
+   "received": 1790197620000,
+   "source": "upload",
+   "status": "done",
+   "assignee": 5,
+   "startedAt": 1790204820000,
+   "doneAt": 1790206500000,
+   "ot": false,
+   "otMin": 0,
+   "hold": "",
+   "fields": {
+    "ticket": "RM-21475",
+    "carrier": "GLWY",
+    "contract": "GLWY-3586",
+    "contracts": 4,
+    "amendments": 4,
+    "remarks": ""
+   },
+   "email": null,
+   "history": [
+    {
+     "at": 1790197620000,
+     "text": "Imported from upload"
+    },
+    {
+     "at": 1790204820000,
+     "text": "Started by Franco Dizon"
+    },
+    {
+     "at": 1790206500000,
+     "text": "Done"
+    }
+   ],
+   "cx": {
+    "simple": 2,
+    "medium": 1
+   }
+  },
+  {
+   "id": "T-1075",
+   "title": "Surcharge update – ATLS Far East",
+   "trade": "fewb",
+   "pr": "normal",
+   "received": 1790197920000,
+   "source": "upload",
+   "status": "done",
+   "assignee": 9,
+   "startedAt": 1790205120000,
+   "doneAt": 1790207820000,
+   "ot": false,
+   "otMin": 0,
+   "hold": "",
+   "fields": {
+    "ticket": "RM-21476",
+    "carrier": "ATLS",
+    "contract": "",
+    "contracts": 3,
+    "amendments": 7,
+    "remarks": ""
+   },
+   "email": null,
+   "history": [
+    {
+     "at": 1790197920000,
+     "text": "Imported from upload"
+    },
+    {
+     "at": 1790205120000,
+     "text": "Started by Hana Cruz"
+    },
+    {
+     "at": 1790207820000,
+     "text": "Done"
+    }
+   ],
+   "cx": {
+    "medium": 1
+   }
+  },
+  {
+   "id": "T-1076",
+   "title": "New contract upload – CRLN Consolidation",
+   "trade": "lcl",
+   "pr": "high",
+   "received": 1790198580000,
+   "source": "outlook",
+   "status": "done",
+   "assignee": 15,
+   "startedAt": 1790205780000,
+   "doneAt": 1790208540000,
+   "ot": false,
+   "otMin": 0,
+   "hold": "",
+   "fields": {
+    "ticket": "RM-21477",
+    "carrier": "CRLN",
+    "contract": "CRLN-5622",
+    "contracts": 6,
+    "amendments": 3,
+    "remarks": ""
+   },
+   "email": {
+    "from": "sales.lcl@demobss.com",
+    "cc": "rm.team@demobss.com",
+    "subject": "URGENT: New contract upload – CRLN Consolidation",
+    "body": "Hi team,\n\nPlease process the attached new contract upload for CRLN. Effective date is next Monday.\n\nThank you.",
+    "attachments": [
+     "CRLN_rates.xlsx",
+     "contract_CRLN.pdf"
+    ]
+   },
+   "history": [
+    {
+     "at": 1790198580000,
+     "text": "Received from Outlook"
+    },
+    {
+     "at": 1790205780000,
+     "text": "Started by Leo Aquino"
+    },
+    {
+     "at": 1790208540000,
+     "text": "Done"
+    }
+   ],
+   "cx": {
+    "complex": 16
+   }
+  },
+  {
+   "id": "T-1077",
+   "title": "New contract upload – DLTM Consolidation",
+   "trade": "lcl",
+   "pr": "normal",
+   "received": 1790200380000,
+   "source": "outlook",
+   "status": "done",
+   "assignee": 16,
+   "startedAt": 1790207580000,
+   "doneAt": 1790211480000,
+   "ot": false,
+   "otMin": 0,
+   "hold": "",
+   "fields": {
+    "ticket": "RM-21478",
+    "carrier": "DLTM",
+    "contract": "",
+    "contracts": 2,
+    "amendments": 7,
+    "remarks": ""
+   },
+   "email": {
+    "from": "kam.inas@demobss.com",
+    "cc": "rm.team@demobss.com",
+    "subject": "New contract upload – DLTM Consolidation",
+    "body": "Hi team,\n\nPlease process the attached new contract upload for DLTM. Effective date is next Monday.\n\nThank you.",
+    "attachments": [
+     "DLTM_rates.xlsx"
+    ]
+   },
+   "history": [
+    {
+     "at": 1790200380000,
+     "text": "Received from Outlook"
+    },
+    {
+     "at": 1790207580000,
+     "text": "Started by Mia Castillo"
+    },
+    {
+     "at": 1790211480000,
+     "text": "Done"
+    }
+   ],
+   "cx": {
+    "simple": 2,
+    "medium": 1
+   }
+  },
+  {
+   "id": "T-1078",
+   "title": "Rate filing – CRLN Americas",
+   "trade": "us",
+   "pr": "high",
+   "received": 1790200740000,
+   "source": "upload",
+   "status": "done",
+   "assignee": 25,
+   "startedAt": 1790207940000,
+   "doneAt": 1790212860000,
+   "ot": true,
+   "otMin": 45,
+   "hold": "",
+   "fields": {
+    "ticket": "RM-21479",
+    "carrier": "CRLN",
+    "contract": "",
+    "contracts": 4,
+    "amendments": 1,
+    "remarks": ""
+   },
+   "email": null,
+   "history": [
+    {
+     "at": 1790200740000,
+     "text": "Imported from upload"
+    },
+    {
+     "at": 1790207940000,
+     "text": "Started by Olive Tan"
+    },
+    {
+     "at": 1790212860000,
+     "text": "Done (overtime 45 min)"
+    }
+   ],
+   "cx": {
+    "medium": 1
+   }
+  },
+  {
+   "id": "T-1079",
+   "title": "Contract amendment – GLWY Latin America",
+   "trade": "asla",
+   "pr": "normal",
+   "received": 1790201580000,
+   "source": "outlook",
+   "status": "done",
+   "assignee": 29,
+   "startedAt": 1790208780000,
+   "doneAt": 1790213340000,
+   "ot": false,
+   "otMin": 0,
+   "hold": "",
+   "fields": {
+    "ticket": "RM-21480",
+    "carrier": "GLWY",
+    "contract": "GLWY-3215",
+    "contracts": 1,
+    "amendments": 4,
+    "remarks": ""
+   },
+   "email": {
+    "from": "sales.lcl@demobss.com",
+    "cc": "rm.team@demobss.com",
+    "subject": "Contract amendment – GLWY Latin America",
+    "body": "Hi team,\n\nPlease process the attached contract amendment for GLWY. Effective date is next Monday.\n\nThank you.",
+    "attachments": [
+     "GLWY_rates.xlsx"
+    ]
+   },
+   "history": [
+    {
+     "at": 1790201580000,
+     "text": "Received from Outlook"
+    },
+    {
+     "at": 1790208780000,
+     "text": "Started by Paolo Lim"
+    },
+    {
+     "at": 1790213340000,
+     "text": "Done"
+    }
+   ],
+   "cx": {
+    "simple": 1,
+    "complex": 1
+   }
+  },
+  {
+   "id": "T-1080",
+   "title": "Contract amendment – GLWY Latin America",
+   "trade": "asla",
+   "pr": "low",
+   "received": 1790202540000,
+   "source": "outlook",
+   "status": "done",
+   "assignee": 30,
+   "startedAt": 1790209740000,
+   "doneAt": 1790212680000,
+   "ot": false,
+   "otMin": 0,
+   "hold": "",
+   "fields": {
+    "ticket": "RM-21481",
+    "carrier": "GLWY",
+    "contract": "GLWY-8062",
+    "contracts": 5,
+    "amendments": 0,
+    "remarks": ""
+   },
+   "email": {
+    "from": "tlm.fewb@demobss.com",
+    "cc": "rm.team@demobss.com",
+    "subject": "Contract amendment – GLWY Latin America",
+    "body": "Hi team,\n\nPlease process the attached contract amendment for GLWY. Effective date is next Monday.\n\nThank you.",
+    "attachments": [
+     "GLWY_rates.xlsx"
+    ]
+   },
+   "history": [
+    {
+     "at": 1790202540000,
+     "text": "Received from Outlook"
+    },
+    {
+     "at": 1790209740000,
+     "text": "Started by Rhea Soriano"
+    },
+    {
+     "at": 1790212680000,
+     "text": "Done"
+    }
+   ],
+   "cx": {
+    "simple": 2,
+    "medium": 1
+   }
+  },
+  {
+   "id": "T-1081",
+   "title": "Surcharge update – ATLS Americas",
+   "trade": "us",
+   "pr": "normal",
+   "received": 1790203260000,
+   "source": "outlook",
+   "status": "done",
+   "assignee": 14,
+   "startedAt": 1790210460000,
+   "doneAt": 1790212440000,
+   "ot": false,
+   "otMin": 0,
+   "hold": "",
+   "fields": {
+    "ticket": "RM-21482",
+    "carrier": "ATLS",
+    "contract": "",
+    "contracts": 5,
+    "amendments": 10,
+    "remarks": ""
+   },
+   "email": {
+    "from": "procurement.asla@demobss.com",
+    "cc": "rm.team@demobss.com",
+    "subject": "Surcharge update – ATLS Americas",
+    "body": "Hi team,\n\nPlease process the attached surcharge update for ATLS. Effective date is next Monday.\n\nThank you.",
+    "attachments": [
+     "ATLS_rates.xlsx"
+    ]
+   },
+   "history": [
+    {
+     "at": 1790203260000,
+     "text": "Received from Outlook"
+    },
+    {
+     "at": 1790210460000,
+     "text": "Started by Kim Bautista"
+    },
+    {
+     "at": 1790212440000,
+     "text": "Done"
+    }
+   ],
+   "cx": {
+    "medium": 1
+   }
+  },
+  {
+   "id": "T-1082",
+   "title": "Contract amendment – GLWY Europe",
+   "trade": "eu",
+   "pr": "normal",
+   "received": 1790204100000,
+   "source": "outlook",
+   "status": "done",
+   "assignee": 6,
+   "startedAt": 1790211300000,
+   "doneAt": 1790215260000,
+   "ot": false,
+   "otMin": 0,
+   "hold": "",
+   "fields": {
+    "ticket": "RM-21483",
+    "carrier": "GLWY",
+    "contract": "GLWY-2574",
+    "contracts": 7,
+    "amendments": 1,
+    "remarks": ""
+   },
+   "email": {
+    "from": "kam.inas@demobss.com",
+    "cc": "rm.team@demobss.com",
+    "subject": "Contract amendment – GLWY Europe",
+    "body": "Hi team,\n\nPlease process the attached contract amendment for GLWY. Effective date is next Monday.\n\nThank you.",
+    "attachments": [
+     "GLWY_rates.xlsx"
+    ]
+   },
+   "history": [
+    {
+     "at": 1790204100000,
+     "text": "Received from Outlook"
+    },
+    {
+     "at": 1790211300000,
+     "text": "Started by Gio Ramos"
+    },
+    {
+     "at": 1790215260000,
+     "text": "Done"
+    }
+   ],
+   "cx": {
+    "simple": 1,
+    "complex": 1
+   }
+  },
+  {
+   "id": "T-1083",
+   "title": "Surcharge update – DLTM Consolidation",
+   "trade": "lcl",
+   "pr": "normal",
+   "received": 1790204340000,
+   "source": "upload",
+   "status": "done",
+   "assignee": 0,
+   "startedAt": 1790211540000,
+   "doneAt": 1790216880000,
+   "ot": false,
+   "otMin": 0,
+   "hold": "",
+   "fields": {
+    "ticket": "RM-21484",
+    "carrier": "DLTM",
+    "contract": "DLTM-3701",
+    "contracts": 1,
+    "amendments": 8,
+    "remarks": ""
+   },
+   "email": null,
+   "history": [
+    {
+     "at": 1790204340000,
+     "text": "Imported from upload"
+    },
+    {
+     "at": 1790211540000,
+     "text": "Started by Ana Reyes"
+    },
+    {
+     "at": 1790216880000,
+     "text": "Done"
+    }
+   ],
+   "cx": {
+    "simple": 2,
+    "medium": 1
+   }
+  },
+  {
+   "id": "T-1084",
+   "title": "Contract amendment – ATLS Far East",
+   "trade": "fewb",
+   "pr": "normal",
+   "received": 1790195400000,
+   "source": "outlook",
+   "status": "done",
+   "assignee": 9,
+   "startedAt": 1790201880000,
+   "doneAt": 1790204760000,
+   "ot": true,
+   "otMin": 75,
+   "hold": "",
+   "fields": {
+    "ticket": "RM-21485",
+    "carrier": "ATLS",
+    "contract": "ATLS-2174",
+    "contracts": 8,
+    "amendments": 6,
+    "remarks": ""
+   },
+   "email": {
+    "from": "kam.inas@demobss.com",
+    "cc": "rm.team@demobss.com",
+    "subject": "Contract amendment – ATLS Far East",
+    "body": "Hi team,\n\nPlease process the attached contract amendment for ATLS. Effective date is next Monday.\n\nThank you.",
+    "attachments": [
+     "ATLS_rates.xlsx"
+    ]
+   },
+   "history": [
+    {
+     "at": 1790195400000,
+     "text": "Received from Outlook"
+    },
+    {
+     "at": 1790201880000,
+     "text": "Started by Hana Cruz"
+    },
+    {
+     "at": 1790204760000,
+     "text": "Done (overtime 75 min)"
+    }
+   ]
+  }
+ ],
+ "people": [
+  {
+   "id": 0,
+   "name": "Ana Reyes",
+   "trades": [
+    "lcl"
+   ],
+   "avail": "available",
+   "shift": "Day 08:00–17:00",
+   "shiftStart": 8
+  },
+  {
+   "id": 1,
+   "name": "Bea Santos",
+   "trades": [
+    "inas"
+   ],
+   "avail": "available",
+   "shift": "Day 08:00–17:00",
+   "shiftStart": 8
+  },
+  {
+   "id": 2,
+   "name": "Carla Mendoza",
+   "trades": [
+    "inas"
+   ],
+   "avail": "available",
+   "shift": "Day 08:00–17:00",
+   "shiftStart": 8
+  },
+  {
+   "id": 3,
+   "name": "Dan Villanueva",
+   "trades": [
+    "eu"
+   ],
+   "avail": "available",
+   "shift": "Day 08:00–17:00",
+   "shiftStart": 8
+  },
+  {
+   "id": 4,
+   "name": "Eli Navarro",
+   "trades": [
+    "eu"
+   ],
+   "avail": "leave",
+   "shift": "Day 08:00–17:00",
+   "shiftStart": 8
+  },
+  {
+   "id": 5,
+   "name": "Franco Dizon",
+   "trades": [
+    "fewb"
+   ],
+   "avail": "available",
+   "shift": "Day 08:00–17:00",
+   "shiftStart": 8
+  },
+  {
+   "id": 6,
+   "name": "Gio Ramos",
+   "trades": [
+    "eu"
+   ],
+   "avail": "available",
+   "shift": "Day 08:00–17:00",
+   "shiftStart": 8
+  },
+  {
+   "id": 9,
+   "name": "Hana Cruz",
+   "trades": [
+    "fewb"
+   ],
+   "avail": "available",
+   "shift": "Day 08:00–17:00",
+   "shiftStart": 8
+  },
+  {
+   "id": 10,
+   "name": "Ivan Torres",
+   "trades": [
+    "fewb"
+   ],
+   "avail": "offshift",
+   "shift": "GY 22:00–07:00",
+   "shiftStart": 22
+  },
+  {
+   "id": 11,
+   "name": "Jessa Flores",
+   "trades": [
+    "fewb"
+   ],
+   "avail": "available",
+   "shift": "Day 08:00–17:00",
+   "shiftStart": 8
+  },
+  {
+   "id": 14,
+   "name": "Kim Bautista",
+   "trades": [
+    "lcl",
+    "us",
+    "asla"
+   ],
+   "avail": "available",
+   "shift": "Day 08:00–17:00",
+   "shiftStart": 8
+  },
+  {
+   "id": 15,
+   "name": "Leo Aquino",
+   "trades": [
+    "lcl"
+   ],
+   "avail": "available",
+   "shift": "Day 08:00–17:00",
+   "shiftStart": 8
+  },
+  {
+   "id": 16,
+   "name": "Mia Castillo",
+   "trades": [
+    "lcl"
+   ],
+   "avail": "available",
+   "shift": "Day 08:00–17:00",
+   "shiftStart": 8
+  },
+  {
+   "id": 19,
+   "name": "Nico Salazar",
+   "trades": [
+    "lcl"
+   ],
+   "avail": "leave",
+   "shift": "Day 08:00–17:00",
+   "shiftStart": 8
+  },
+  {
+   "id": 25,
+   "name": "Olive Tan",
+   "trades": [
+    "us"
+   ],
+   "avail": "available",
+   "shift": "Day 08:00–17:00",
+   "shiftStart": 8
+  },
+  {
+   "id": 29,
+   "name": "Paolo Lim",
+   "trades": [
+    "asla"
+   ],
+   "avail": "available",
+   "shift": "Day 08:00–17:00",
+   "shiftStart": 8
+  },
+  {
+   "id": 30,
+   "name": "Rhea Soriano",
+   "trades": [
+    "asla"
+   ],
+   "avail": "available",
+   "shift": "Day 08:00–17:00",
+   "shiftStart": 8
+  },
+  {
+   "id": 23,
+   "name": "Sam Delgado",
+   "trades": [],
+   "avail": "available",
+   "shift": "Day 08:00–17:00",
+   "shiftStart": 8
+  }
+ ],
+ "admins": [
+  23
+ ],
+ "org": {
+  "team": {
+   "id": "rm",
+   "name": "Rate Desk"
+  },
+  "systems": [
+   {
+    "id": "gpm",
+    "name": "RateHub"
+   },
+   {
+    "id": "rcm",
+    "name": "TariffPro"
+   }
+  ],
+  "trades": [
+   {
+    "id": "fewb",
+    "name": "Far East",
+    "sys": "gpm"
+   },
+   {
+    "id": "inas",
+    "name": "Indian Ocean",
+    "sys": "gpm"
+   },
+   {
+    "id": "eu",
+    "name": "Europe",
+    "sys": "gpm"
+   },
+   {
+    "id": "us",
+    "name": "Americas",
+    "sys": "rcm"
+   },
+   {
+    "id": "asla",
+    "name": "Latin America",
+    "sys": "rcm"
+   },
+   {
+    "id": "lcl",
+    "name": "Consolidation",
+    "sys": "rcm"
+   }
+  ],
+  "teams": [
+   {
+    "id": "rm",
+    "name": "Rate Desk",
+    "tower": "Pricing & Rates"
+   }
+  ]
+ },
+ "holidays": [],
+ "activities": [],
+ "approvers": [
+  23
+ ],
+ "fields": [
+  {
+   "key": "ticket",
+   "label": "Ticket no.",
+   "type": "text",
+   "required": true
+  },
+  {
+   "key": "carrier",
+   "label": "Carrier",
+   "type": "select",
+   "options": "ATLS, BLHR, CRLN, DLTM, EVRS, FJRD, GLWY",
+   "required": true
+  },
+  {
+   "key": "contract",
+   "label": "Contract no.",
+   "type": "text",
+   "required": false
+  },
+  {
+   "key": "contracts",
+   "label": "No. of contracts",
+   "type": "number",
+   "required": true,
+   "metric": true
+  },
+  {
+   "key": "amendments",
+   "label": "No. of amendments",
+   "type": "number",
+   "required": false,
+   "metric": true
+  },
+  {
+   "key": "remarks",
+   "label": "Remarks",
+   "type": "text",
+   "required": false
+  }
+ ],
+ "settings": {
+  "mode": "fifo",
+  "order": "priority",
+  "skipUnavail": true,
+  "autoFeed": true,
+  "sla": {
+   "high": 4,
+   "normal": 24,
+   "low": 72
+  },
+  "mailbox": "rm.requests@demobss.com",
+  "mailTrade": "",
+  "work": {
+   "shift": 9,
+   "b1": 60,
+   "b2": 30,
+   "prod": 6.8
+  },
+  "targets": {
+   "fewb": 8,
+   "inas": 6,
+   "eu": 7,
+   "us": 6,
+   "asla": 6,
+   "lcl": 8
+  },
+  "memberTargets": {},
+  "uploaders": [
+   0
+  ],
+  "billing": {
+   "mode": "fixed",
+   "currency": "USD",
+   "roleRates": {
+    "member": 2400
+   },
+   "unitRates": {
+    "": 9
+   },
+   "unit": "tasks",
+   "when": "resolved"
+  },
+  "complexity": {
+   "on": true,
+   "levels": [
+    {
+     "id": "simple",
+     "name": "Simple",
+     "target": 12,
+     "aht": 20
+    },
+    {
+     "id": "medium",
+     "name": "Medium",
+     "target": 6,
+     "aht": 45
+    },
+    {
+     "id": "complex",
+     "name": "Complex",
+     "target": 3,
+     "aht": 90
+    }
+   ],
+   "tol": 50,
+   "fast": 100
+  }
+ },
+ "hc": {
+  "year": 2026,
+  "rows": [
+   {
+    "pid": 0,
+    "name": "Ana Reyes",
+    "level": "member",
+    "billed": [
+     1,
+     1,
+     1,
+     1,
+     1,
+     1,
+     1,
+     1,
+     1,
+     1,
+     1,
+     1
+    ]
+   },
+   {
+    "pid": 1,
+    "name": "Bea Santos",
+    "level": "member",
+    "billed": [
+     1,
+     1,
+     1,
+     1,
+     1,
+     1,
+     1,
+     1,
+     1,
+     1,
+     1,
+     1
+    ]
+   },
+   {
+    "pid": 2,
+    "name": "Carla Mendoza",
+    "level": "member",
+    "billed": [
+     1,
+     1,
+     1,
+     1,
+     1,
+     1,
+     1,
+     1,
+     1,
+     1,
+     1,
+     1
+    ]
+   },
+   {
+    "pid": 3,
+    "name": "Dan Villanueva",
+    "level": "member",
+    "billed": [
+     1,
+     1,
+     1,
+     1,
+     1,
+     1,
+     1,
+     1,
+     1,
+     1,
+     1,
+     1
+    ]
+   },
+   {
+    "pid": 4,
+    "name": "Eli Navarro",
+    "level": "member",
+    "billed": [
+     1,
+     1,
+     1,
+     1,
+     1,
+     1,
+     1,
+     1,
+     1,
+     1,
+     1,
+     1
+    ]
+   },
+   {
+    "pid": 5,
+    "name": "Franco Dizon",
+    "level": "member",
+    "billed": [
+     1,
+     1,
+     1,
+     1,
+     1,
+     1,
+     1,
+     1,
+     1,
+     1,
+     1,
+     1
+    ]
+   },
+   {
+    "pid": 6,
+    "name": "Gio Ramos",
+    "level": "member",
+    "billed": [
+     1,
+     1,
+     1,
+     1,
+     1,
+     1,
+     1,
+     1,
+     1,
+     1,
+     1,
+     1
+    ]
+   },
+   {
+    "pid": 9,
+    "name": "Hana Cruz",
+    "level": "member",
+    "billed": [
+     1,
+     1,
+     1,
+     1,
+     1,
+     1,
+     1,
+     1,
+     1,
+     1,
+     1,
+     1
+    ]
+   },
+   {
+    "pid": 10,
+    "name": "Ivan Torres",
+    "level": "member",
+    "billed": [
+     1,
+     1,
+     1,
+     1,
+     1,
+     1,
+     1,
+     1,
+     1,
+     1,
+     1,
+     1
+    ]
+   },
+   {
+    "pid": 11,
+    "name": "Jessa Flores",
+    "level": "member",
+    "billed": [
+     1,
+     1,
+     1,
+     1,
+     1,
+     1,
+     1,
+     1,
+     1,
+     1,
+     1,
+     1
+    ]
+   },
+   {
+    "pid": 14,
+    "name": "Kim Bautista",
+    "level": "member",
+    "billed": [
+     1,
+     1,
+     1,
+     1,
+     1,
+     1,
+     1,
+     1,
+     1,
+     1,
+     1,
+     1
+    ]
+   },
+   {
+    "pid": 15,
+    "name": "Leo Aquino",
+    "level": "member",
+    "billed": [
+     1,
+     1,
+     1,
+     1,
+     1,
+     1,
+     1,
+     1,
+     1,
+     1,
+     1,
+     1
+    ]
+   },
+   {
+    "pid": 16,
+    "name": "Mia Castillo",
+    "level": "member",
+    "billed": [
+     1,
+     1,
+     1,
+     1,
+     1,
+     1,
+     1,
+     1,
+     1,
+     1,
+     1,
+     1
+    ]
+   },
+   {
+    "pid": 19,
+    "name": "Nico Salazar",
+    "level": "member",
+    "billed": [
+     1,
+     1,
+     1,
+     1,
+     1,
+     1,
+     1,
+     1,
+     1,
+     1,
+     1,
+     1
+    ]
+   },
+   {
+    "pid": 25,
+    "name": "Olive Tan",
+    "level": "member",
+    "billed": [
+     1,
+     1,
+     1,
+     1,
+     1,
+     1,
+     1,
+     1,
+     1,
+     1,
+     1,
+     1
+    ]
+   },
+   {
+    "pid": 29,
+    "name": "Paolo Lim",
+    "level": "member",
+    "billed": [
+     1,
+     1,
+     1,
+     1,
+     1,
+     1,
+     1,
+     1,
+     1,
+     1,
+     1,
+     1
+    ]
+   },
+   {
+    "pid": 30,
+    "name": "Rhea Soriano",
+    "level": "member",
+    "billed": [
+     1,
+     1,
+     1,
+     1,
+     1,
+     1,
+     1,
+     1,
+     1,
+     1,
+     1,
+     1
+    ]
+   },
+   {
+    "pid": 23,
+    "name": "Sam Delgado",
+    "level": "manager",
+    "billed": [
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0
+    ]
+   }
+  ]
+ },
+ "pricers": [
+  23,
+  26
+ ],
+ "seq": 2000,
+ "mailCount": 0
+}

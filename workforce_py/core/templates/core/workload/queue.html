@@ -1,0 +1,78 @@
+{% extends "core/base.html" %}{% load wfm %}
+{% block title %}Queue · Workforce Management{% endblock %}
+{% block filters %}
+<form method="get" class="row" style="gap:16px;align-items:flex-end" id="qf">
+  <input type="hidden" name="tab" value="{{ tab }}">
+  <div class="field">
+    <label for="f-team">Team</label>
+    <select id="f-team" name="team" class="input" style="min-width:180px;font-weight:400" onchange="this.form.submit()">
+      {% for t in teams %}<option value="{{ t.id }}"{% if t.id == team.id %} selected{% endif %}>{{ t.name }}</option>{% endfor %}
+    </select>
+  </div>
+  <div class="field">
+    <label for="f-sys">System</label>
+    <select id="f-sys" name="sys" class="input" style="min-width:150px;font-weight:400" onchange="this.form.tr.value='all';this.form.submit()">
+      <option value="all">All systems</option>
+      {% for id, name in systems %}<option value="{{ id }}"{% if id == sys_f %} selected{% endif %}>{{ name }}</option>{% endfor %}
+    </select>
+  </div>
+  <div class="field">
+    <label for="f-tr">Trade</label>
+    <select id="f-tr" name="tr" class="input" style="min-width:150px;font-weight:400" onchange="this.form.submit()">
+      <option value="all">All trades</option>
+      {% for t in trades %}<option value="{{ t.id }}"{% if t.id == tr_f %} selected{% endif %}>{{ t.name }}</option>{% endfor %}
+    </select>
+  </div>
+</form>
+{% endblock %}
+{% block main %}
+<div class="page-head-row">
+  <div class="page-head">
+    <h1>Queue · {{ team.name }}</h1>
+    <span>{{ overdue }} overdue (red) · due within 2 hours (amber) · oldest first</span>
+  </div>
+  <div class="row" style="align-items:flex-end">
+    <input class="input" form="qf" name="q" aria-label="Search tasks" placeholder="Search title, ID or ticket no." type="search" value="{{ q }}" style="width:260px">
+  </div>
+</div>
+
+<div class="tabs" role="tablist">
+  <a role="tab" href="?tab=active&sys={{ sys_f }}&tr={{ tr_f }}" aria-selected="{% if tab != 'done' %}true{% else %}false{% endif %}" class="tab-link">Active · {{ active_n }}</a>
+  <a role="tab" href="?tab=done&sys={{ sys_f }}&tr={{ tr_f }}" aria-selected="{% if tab == 'done' %}true{% else %}false{% endif %}" class="tab-link">Completed</a>
+</div>
+
+{% if tab != "done" %}
+<div class="row" style="justify-content:flex-end;align-items:flex-end">
+  <div class="field">
+    <label for="q-st">Status</label>
+    <select id="q-st" name="status" form="qf" class="input" style="width:auto;min-width:170px" onchange="this.form.submit()">
+      {% for v, l in statuses %}<option value="{{ v }}"{% if v == status %} selected{% endif %}>{{ l }}</option>{% endfor %}
+    </select>
+  </div>
+</div>
+{% endif %}
+
+<div class="blueprint scroll-x">{% corners %}
+  <table class="table" style="min-width:1100px">
+    <thead><tr><th>Ticket no.</th><th>Task</th><th>System › Trade</th><th>Priority</th><th>Received</th><th>Waiting</th><th>Due</th><th>Status</th><th>Assignee</th></tr></thead>
+    <tbody>
+    {% for r in rows %}
+    <tr{% if r.due_state %} class="row-{{ r.due_state }}"{% endif %}>
+      <td class="nowrap" style="font-weight:500">{{ r.ticket }}</td>
+      <td style="min-width:260px"><span class="task-link" style="cursor:default"><span>{{ r.t.title }}</span><span>{{ r.t.id }} · {{ r.source }}</span></span></td>
+      <td class="nowrap">{{ r.path }}</td>
+      <td><span class="tag {{ r.pr.1 }}">{{ r.pr.0 }}</span></td>
+      <td class="nowrap" style="color:var(--color-neutral-800)">{{ r.received }}</td>
+      <td class="nowrap">{{ r.age }}</td>
+      <td class="nowrap" style="color:{{ r.due_color }};{% if r.due_state == 'overdue' %}font-weight:600{% endif %}">
+        {% if r.due_state == "overdue" %}<span class="due-flag">Overdue</span>{% elif r.due_state == "soon" %}<span class="due-flag soon">Due soon</span>{% endif %}{{ r.due }}</td>
+      <td class="nowrap"><span class="tag {{ r.st.1 }}">{{ r.st.0 }}</span></td>
+      <td class="nowrap">{{ r.assignee }}</td>
+    </tr>
+    {% empty %}
+    <tr><td colspan="9" class="muted" style="padding:24px">Nothing here.</td></tr>
+    {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endblock %}

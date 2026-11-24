@@ -7,8 +7,11 @@
 import type { Cal } from "../calendar/engine";
 import type { OrgNode } from "../calendar/types";
 import { isLeader } from "../calendar/constants";
+import { approversOf } from "../calendar/org";
+import { teamHeadcount } from "../calendar/headcount";
+import { activeCovers } from "../calendar/covers";
 import { dayKey, localHour } from "./clock";
-import type { Availability, Person, Trade, WlOrg } from "./types";
+import type { Availability, BillRow, Person, Trade, WlOrg } from "./types";
 
 const workingOn = (o: string | undefined) => (o === "WFH" ? "WFH" : o && o !== "HOL" ? "RTO" : null);
 
@@ -96,9 +99,17 @@ export function holidaysFor(c: Cal, teamId: string): string[] {
 }
 
 /** Team admins of the team plus system admins. */
+/** Pricing (business case) is for managers and above: the team's Workload admins who are managers or directors, and system admins. */
+export function workloadPricers(c: Cal, teamId: string): number[] {
+  return workloadAdmins(c, teamId).filter((id) => {
+    const p = c.people.get(id);
+    return !!p && (p.sysAdmin || p.level === "manager" || p.level === "director");
+  });
+}
+
 export function workloadAdmins(c: Cal, teamId: string): number[] {
   // The team's admins and the admins of its tower and department.
-  const ids = new Set<number>(c.O.anc(teamId).flatMap((n) => c.O.by[n]?.admins ?? []));
+  const ids = new Set<number>(approversOf(c.O, teamId)); // listed admins and admins by role
   c.d.people.forEach((p) => p.sysAdmin && ids.add(p.id));
   return [...ids];
 }
@@ -114,5 +125,16 @@ export function workloadApprovers(c: Cal, teamId: string): number[] {
     if (!isLeader(p.level) || !c.alive(p, c.today)) return;
     if (c.O.inN(p, teamId) || p.assign.some((a) => above.has(a))) ids.add(p.id);
   });
+  // Stand-ins covering for one of them (leave cover).
+  for (const x of activeCovers(c.d, c.today)) if (ids.has(x.leader) && c.people.has(x.standIn)) ids.add(x.standIn);
   return [...ids];
+}
+
+/** The team's billed FTE this year by person and month (Calendar › Headcount, with overrides), for the business case. */
+export function billedFor(c: Cal, teamId: string): { year: number; rows: BillRow[] } | undefined {
+  const team = c.O.by[teamId];
+  if (!team) return undefined;
+  const year = Number(c.today.slice(0, 4));
+  const hc = teamHeadcount(c, team, year);
+  return { year, rows: hc.rows.map((r) => ({ pid: r.pid, name: r.name, level: r.level, billed: r.months.map((m) => m.billed) })) };
 }

@@ -4,9 +4,9 @@
  * the same rules. See ../../../README.md › Workload rules.
  */
 import { H, M, TZ_OFFSET_H, addHours, dayKey, fmtT, localHour, spanMs, weekend } from "./clock";
-import { CARRIERS, PR, fieldOptions, lc, sysName, trPathOf } from "./constants";
+import { CARRIERS, DEMO_CARRIERS, PR, fieldOptions, lc, sysName, trPathOf } from "./constants";
 import { SAMPLE_MAIL } from "./seed";
-import type { Activity, ActivityKind, CxLevel, OtPart, Person, Priority, Settings, Task, TaskField, TaskType, WlOrg } from "./types";
+import type { Activity, ActivityKind, BillRow, CxLevel, OtPart, Person, Priority, Settings, Task, TaskField, TaskType, WlOrg } from "./types";
 
 export interface WorkloadData {
   tasks: Task[];
@@ -31,6 +31,22 @@ export interface WorkloadData {
   approvers: number[];
   /** Calendar holidays for this team (yyyy-mm-dd), skipped in SLA time unless the team counts them. */
   holidays: string[];
+  /**
+   * Saved data only: finished tasks are loaded from this time (ms) on; older ones are fetched
+   * for the dates a page shows (useTasksIn). Unset (sample data): every task is here.
+   */
+  doneSince?: number;
+  /** Saved data only: when the team's first task came in (the team started using Workload). */
+  firstAt?: number;
+  /**
+   * Tasks the viewer has in progress in their other teams. One task at a time counts across
+   * teams, so these stop them starting one here.
+   */
+  busyElsewhere?: BusyElsewhere[];
+  /** Business case: the team's billed FTE this year by person and month (Workload admins only). */
+  hc?: { year: number; rows: BillRow[] };
+  /** Who may see and set the business case (pricing): Workload admins who are managers or directors, and system admins. */
+  pricers?: number[];
 }
 
 export const personOf = (d: Pick<WorkloadData, "people">, id: number | null) =>
@@ -43,6 +59,8 @@ export interface AssistOffer {
   systemNames: string[];
   /** Waiting elsewhere in the team. */
   team: number;
+  /** Still waiting in the member's own trades (few and none due: they may help or carry on). */
+  own?: number;
 }
 
 /** Result of an action: the new data plus an optional message for a toast. */
@@ -121,6 +139,17 @@ export function sortTasks(list: Task[], c: SlaCtx): Task[] {
 export const canWork = (p: Person, s: Settings) => !s.skipUnavail || p.avail === "available" || (p.avail === "offshift" && !!p.onToday);
 export const isBusy = (tasks: Task[], pid: number) => tasks.some((t) => t.assignee === pid && t.status === "in_progress");
 
+export interface BusyElsewhere {
+  pid: number;
+  team: string;
+  teamName: string;
+  id: string;
+  title: string;
+}
+/** A task the person has in progress in another team, if any. */
+export const busyOther = (d: WorkloadData, pid: number) => d.busyElsewhere?.find((b) => b.pid === pid);
+const otherMsg = (b: BusyElsewhere) => `You already have ${b.id} in progress in ${b.teamName}. Resolve it, pause it or set it to pending there first.`;
+
 const hist = (t: Task, at: number, text: string) => [...t.history, { at, text }];
 const patch = (d: WorkloadData, id: string, fn: (t: Task) => Task): WorkloadData => ({
   ...d,
@@ -171,11 +200,36 @@ export function assistOffer(d: WorkloadData, me: Person): AssistOffer | undefine
   return { system: h.filter((x) => x.sameSystem).length, systemNames: names, team: h.filter((x) => !x.sameSystem).length };
 }
 
-/** Whether a member may take this waiting task: their own trade, or helping out when their trades are empty. */
-export function canTake(d: WorkloadData, me: Person, t: Task) {
+/**
+ * Whether a member may take this waiting task, trade first, then system: their own trades
+ * always; another trade in their system once their trades are clear; another system once
+ * their whole system is clear.
+ */
+export function canTake(d: WorkloadData, me: Person, t: Task, now?: number) {
   if (t.status !== "new" || !canWork(me, d.settings)) return false;
   if (me.trades.includes(t.trade)) return true;
-  return !!t.trade && me.trades.length > 0 && ownQueue(d, me).length === 0;
+  if (!t.trade || !me.trades.length) return false;
+  const h = helpQueue(d, me);
+  const mine = h.find((x) => x.t.id === t.id);
+  if (!mine) return false;
+  const at = now ?? Date.now();
+  // Another trade of their system: once their own trades are clear (or low, with none due).
+  if (!clearEnough(d, ownQueue(d, me), at)) return false;
+  if (mine.sameSystem) return true;
+  // Another system: once their system is clear too (or low, with none due).
+  return clearEnough(d, ownQueue(d, me).concat(h.filter((x) => x.sameSystem).map((x) => x.t)), at);
+}
+
+/** Due today (team time) or already overdue. */
+const dueNow = (d: WorkloadData, t: Task, now: number) => dayKey(due(t, d)) <= dayKey(now);
+/**
+ * Whether what still waits is low enough to help elsewhere: nothing, or (when the admin set
+ * Settings.helpBelow) that many tickets or fewer with none due today or overdue.
+ */
+export function clearEnough(d: WorkloadData, waiting: Task[], now: number) {
+  if (!waiting.length) return true;
+  const n = d.settings.helpBelow ?? 0;
+  return n > 0 && waiting.length <= n && !waiting.some((t) => dueNow(d, t, now));
 }
 
 const helping = (d: WorkloadData, me: Person, t: Task) =>
@@ -187,17 +241,26 @@ const helping = (d: WorkloadData, me: Person, t: Task) =>
  * (same system first, then the team) and takes it only once they agree (`assist`).
  * One task in progress at a time.
  */
-export function startWork(d: WorkloadData, pid: number, now: number, assist = false): Outcome {
+export function startWork(d: WorkloadData, pid: number, now: number, assist: boolean | "own" = false): Outcome {
   const me = personOf(d, pid);
   if (!me || isBusy(d.tasks, pid)) return { data: d };
+  const other = busyOther(d, pid);
+  if (other) return { data: d, message: otherMsg(other) };
   const stop = notWorking(d, pid, now);
   if (stop) return { data: d, message: stop };
   if (!canWork(me, d.settings)) return { data: d, message: "You’re marked unavailable, so tasks aren’t given to you." };
   const s = d.settings;
-  const next = sortTasks(d.tasks.filter((t) => t.assignee === pid && t.status === "assigned"), d)[0] ?? (s.mode === "fifo" ? ownQueue(d, me)[0] : undefined);
-  if (next) return { data: begin(d, next.id, me, now), message: `Started ${next.id}.` };
+  const assigned = sortTasks(d.tasks.filter((t) => t.assignee === pid && t.status === "assigned"), d)[0];
+  if (assigned) return { data: begin(d, assigned.id, me, now), message: `Started ${assigned.id}.` };
+  const own = s.mode === "fifo" ? ownQueue(d, me) : [];
+  // A few left in their trades and none due: they may help elsewhere instead (asked first).
+  const mayHelp = own.length > 0 && assist !== "own" && clearEnough(d, own, now) && helpQueue(d, me).some((x) => canTake(d, me, x.t, now));
+  if (own.length && !(mayHelp && assist === true)) {
+    if (mayHelp) return { data: d, ask: { ...assistOffer(d, me)!, own: own.length } };
+    return { data: begin(d, own[0].id, me, now), message: `Started ${own[0].id}.` };
+  }
   if (s.mode !== "fifo" || !me.trades.length) return { data: d, message: "Done. No more tasks waiting in your trades right now." };
-  const help = helpQueue(d, me)[0];
+  const help = helpQueue(d, me).find((x) => canTake(d, me, x.t, now));
   if (!help) return { data: d, message: "Done. Nothing is waiting in the team right now." };
   if (!assist) return { data: d, ask: assistOffer(d, me) };
   const note = helping(d, me, help.t);
@@ -209,11 +272,15 @@ export function startTask(d: WorkloadData, id: string, pid: number, now: number)
   const me = personOf(d, pid);
   const t = d.tasks.find((x) => x.id === id);
   if (!me || !t || isBusy(d.tasks, pid)) return { data: d };
+  const other = busyOther(d, pid);
+  if (other) return { data: d, message: otherMsg(other) };
   const stop = notWorking(d, pid, now);
   if (stop) return { data: d, message: stop };
-  const take = d.settings.mode === "self" && canTake(d, me, t);
+  const take = d.settings.mode === "self" && canTake(d, me, t, now);
   const mine = t.status === "assigned" && t.assignee === pid;
   if (!take && !mine) return { data: d };
+  // A task the member paused carries on where it stopped (its start time and worked time stay).
+  if (mine && isPaused(t)) return { data: patch(d, id, (x) => ({ ...x, status: "in_progress", history: hist(x, now, "Resumed") })), message: `${id} resumed.` };
   const note = take ? helping(d, me, t) : "";
   return { data: begin(d, id, me, now, note), message: take ? `Started ${id}${note}.` : undefined };
 }
@@ -225,7 +292,7 @@ export function startTask(d: WorkloadData, id: string, pid: number, now: number)
 export function pickTask(d: WorkloadData, id: string, pid: number, now: number): Outcome {
   const me = personOf(d, pid);
   const t = d.tasks.find((x) => x.id === id);
-  if (!me || !t || d.settings.mode !== "self" || !d.settings.multiPick || !canTake(d, me, t)) return { data: d };
+  if (!me || !t || d.settings.mode !== "self" || !d.settings.multiPick || !canTake(d, me, t, now)) return { data: d };
   const stop = notWorking(d, pid, now);
   if (stop) return { data: d, message: stop };
   const note = helping(d, me, t);
@@ -233,6 +300,101 @@ export function pickTask(d: WorkloadData, id: string, pid: number, now: number):
     data: patch(d, id, (x) => ({ ...x, status: "assigned", assignee: pid, history: hist(x, now, "Picked by " + me.name + note) })),
     message: `${id} is on your list${note}. Start it from My work.`,
   };
+}
+
+/**
+ * Pause: in Members pick with several picks allowed, a member can stop the task in progress
+ * (it goes back to their list, its timer stopped) and start another one from their list.
+ */
+export const canPause = (s: Settings) => s.mode === "self" && !!s.multiPick;
+/** Paused by its assignee and not started again since (it's back on their list). */
+/** History entries that end a pause: started or resumed again, done, or moved to someone / the queue. */
+const UNPAUSE = /^(Started|Resumed|Done|Assigned|Returned)|take this task$/;
+export const isPaused = (t: Task) => {
+  if (t.status !== "assigned" || !t.startedAt) return false;
+  const i = t.history.map((h) => h.text).findLastIndex((x) => x.startsWith("Paused"));
+  return i >= 0 && !t.history.slice(i + 1).some((h) => UNPAUSE.test(h.text));
+};
+/** When a task was paused: each "Paused" entry until it's resumed (or moved, or now while still paused). */
+export function pausePeriods(t: Task, now: number): [number, number][] {
+  const out: [number, number][] = [];
+  t.history.forEach((h, i) => {
+    if (!h.text.startsWith("Paused")) return;
+    const next = t.history.slice(i + 1).find((x) => x.at >= h.at && UNPAUSE.test(x.text));
+    out.push([h.at, next ? next.at : (t.doneAt ?? now)]);
+  });
+  return out;
+}
+
+export function pauseTask(d: WorkloadData, id: string, pid: number, now: number): Outcome {
+  const t = d.tasks.find((x) => x.id === id);
+  if (!t || t.assignee !== pid || t.status !== "in_progress") return { data: d };
+  if (!canPause(d.settings)) return { data: d, message: "Pause is for teams where members pick several tasks. Use Pending instead." };
+  return {
+    data: patch(d, id, (x) => ({ ...x, status: "assigned", history: hist(x, now, "Paused") })),
+    message: `${id} paused. Start another task from your list, or resume this one when you’re ready.`,
+  };
+}
+
+/**
+ * Taking a task someone else has (e.g. picked by mistake): members can't hand tasks over,
+ * but another member of the trade can ask for it; the assignee then lets them take it or
+ * keeps it. Admins can still reassign directly.
+ */
+export const canClaim = (d: WorkloadData, me: Person, t: Task) =>
+  t.assignee !== null &&
+  t.assignee !== me.id &&
+  (t.status === "assigned" || t.status === "in_progress" || t.status === "on_hold") &&
+  (me.trades.includes(t.trade) || sameSystem(d, me, t.trade));
+/** The trade is in one of the systems the member works in. */
+const sameSystem = (d: WorkloadData, me: Person, trade: string) => {
+  const sys = (id: string) => d.org.trades.find((x) => x.id === id)?.sys ?? "";
+  const s0 = sys(trade);
+  return !!s0 && me.trades.some((x) => sys(x) === s0);
+};
+
+export function claimTask(d: WorkloadData, id: string, pid: number, now: number): Outcome {
+  const me = personOf(d, pid);
+  const t = d.tasks.find((x) => x.id === id);
+  if (!me || !t || !canClaim(d, me, t)) return { data: d, message: "You can ask only for open tasks in your trades or system that someone else has." };
+  if (t.claim && t.claim.by !== pid) return { data: d, message: `${personOf(d, t.claim.by)?.name ?? "Someone"} has already asked for ${id}.` };
+  if (t.claim) return { data: d };
+  const who = personOf(d, t.assignee)?.name ?? "the assignee";
+  return {
+    data: patch(d, id, (x) => ({ ...x, claim: { by: pid, at: now }, history: hist(x, now, `${me.name} asked to take this from ${who}`) })),
+    message: `Asked ${who}. ${id} moves to you if they agree.`,
+  };
+}
+
+export function answerClaim(d: WorkloadData, id: string, ok: boolean, pid: number, now: number): Outcome {
+  const t = d.tasks.find((x) => x.id === id);
+  if (!t?.claim || t.assignee !== pid || t.status === "done") return { data: d };
+  const to = personOf(d, t.claim.by);
+  const me = personOf(d, pid);
+  if (!ok || !to)
+    return {
+      data: patch(d, id, (x) => ({ ...x, claim: null, history: hist(x, now, `${me?.name ?? "The assignee"} kept this task`) })),
+      message: `You kept ${id}.`,
+    };
+  // Moves to them, waiting for them to start it (time already worked stays in the history).
+  return {
+    data: patch(d, id, (x) => ({
+      ...x,
+      assignee: to.id,
+      status: "assigned",
+      startedAt: null,
+      hold: "",
+      claim: null,
+      history: hist(x, now, `${me?.name ?? "The assignee"} let ${to.name} take this task`),
+    })),
+    message: `${id} moved to ${to.name}.`,
+  };
+}
+
+export function cancelClaim(d: WorkloadData, id: string, pid: number, now: number): Outcome {
+  const t = d.tasks.find((x) => x.id === id);
+  if (!t?.claim || t.claim.by !== pid) return { data: d };
+  return { data: patch(d, id, (x) => ({ ...x, claim: null, history: hist(x, now, "Request to take withdrawn") })), message: "Request withdrawn." };
 }
 
 /** Delay remarks on an open overdue ticket (shown in the queue; kept when it's resolved). */
@@ -264,6 +426,8 @@ export function resumeTask(d: WorkloadData, id: string, pid: number, now: number
   if (stop) return { data: d, message: stop };
   const t = d.tasks.find((x) => x.id === id);
   if (!t || t.assignee !== pid || t.status !== "on_hold" || isBusy(d.tasks, pid)) return { data: d };
+  const other = busyOther(d, pid);
+  if (other) return { data: d, message: otherMsg(other) };
   return { data: patch(d, id, (x) => ({ ...x, status: "in_progress", history: hist(x, now, "Resumed") })) };
 }
 
@@ -422,7 +586,7 @@ export function setTaskType(d: WorkloadData, id: string, ttype: string, now: num
 export function assignTask(d: WorkloadData, id: string, pid: number | null, now: number): Outcome {
   if (pid === null)
     return {
-      data: patch(d, id, (x) => ({ ...x, assignee: null, status: "new", history: hist(x, now, "Returned to queue") })),
+      data: patch(d, id, (x) => ({ ...x, assignee: null, status: "new", claim: null, history: hist(x, now, "Returned to queue") })),
     };
   const p = personOf(d, pid);
   if (!p) return { data: d };
@@ -430,6 +594,7 @@ export function assignTask(d: WorkloadData, id: string, pid: number | null, now:
     data: patch(d, id, (x) => ({
       ...x,
       assignee: p.id,
+      claim: null, // an admin's reassignment settles any request to take it
       // An in-progress task moves to the new person as "assigned" so they never hold two at once.
       status: x.status === "on_hold" ? "on_hold" : "assigned",
       history: hist(x, now, "Assigned to " + p.name),
@@ -465,8 +630,8 @@ export function checkMail(d: WorkloadData, now: number): Outcome {
       ttype: detectType(d.settings, subject, tr),
       pr: /urgent/i.test(subject) ? ("high" as const) : ("normal" as const),
       source: "outlook" as const,
-      fields: { carrier: CARRIERS.find((c) => subject.includes(c)) ?? "" },
-      email: { from, cc: "rm.team@dsv.com", subject, body, attachments },
+      fields: { carrier: [...CARRIERS, ...DEMO_CARRIERS].find((c) => subject.includes(c)) ?? "" },
+      email: { from, cc: "rm.team@demobss.com", subject, body, attachments },
       history: [{ at: rec, text: "Received from Outlook" + (tr ? "" : " · waiting for an admin to set the trade") }],
     };
   }).map((t) => withSla(t, d.settings));
@@ -625,6 +790,31 @@ export function importRows(d: WorkloadData, checked: CheckedRow[], now: number):
   return addTasks({ ...d, seq }, nt, " from upload", now);
 }
 
+/**
+ * One task typed in by hand (Add task). Checked like an upload row, but every required
+ * field must be filled in now: the form is meant to carry the task's full details.
+ */
+export function addOneTask(d: WorkloadData, row: UploadRow, by: number, now: number): Outcome {
+  const [c] = checkRows([row], d.fields, d.org, now, d.settings.taskTypes);
+  if (!c?.ok || !c.task) return { data: d, message: c?.msg ?? "Nothing to add." };
+  const miss = missingRequired(d.fields, c.task.fields);
+  if (miss.length) return { data: d, message: `Fill in ${miss.join(", ")}.` };
+  const { received, ...task } = c.task;
+  const name = d.people.find((p) => p.id === by)?.name ?? "an admin";
+  const t = withSla(
+    {
+      ...blankTask("T-" + d.seq, now),
+      ...task,
+      received: received ?? now,
+      source: "upload" as const,
+      email: null,
+      history: [{ at: now, text: `Added by hand by ${name}` + (received ? ` (received ${fmtT(received)})` : "") }],
+    },
+    d.settings,
+  );
+  return { ...addTasks({ ...d, seq: d.seq + 1 }, [t], "", now), message: `${t.id} added to the queue.` };
+}
+
 // ── metrics ──
 
 /** Fraction of the person's shift that has passed (0–1). Metrics are pro-rated by this. */
@@ -726,6 +916,8 @@ export interface PersonMetrics {
   tgt: number;
   /** Productive time so far, ms. */
   avail: number;
+  /** Idle so far today, ms: shift time with no task running and not away. */
+  idle: number;
   /** Handle time today, ms (done tasks start→done, plus the current task). */
   handle: number;
   onTime: number;
@@ -776,6 +968,7 @@ export function personMetrics(d: WorkloadData, p: Person, now: number): PersonMe
     prod: exp ? Math.round((share / exp) * 100) : null,
     util: avail ? Math.round((handle / avail) * 100) : null,
     time: done.length ? Math.round((onTime / done.length) * 100) : null,
+    idle: idleToday(d, p, now) + (act.away.idle ?? 0) * M,
   };
 }
 
@@ -793,12 +986,64 @@ export const AWAY: [Exclude<ActivityKind, "end" | "idle">, string][] = [
   ["adhoc", "Ad hoc"],
   ["training", "Training"],
 ];
-export const awayLabel = (k: ActivityKind) => (k === "idle" ? "Idle (paused)" : (AWAY.find(([x]) => x === k)?.[1] ?? "End of day"));
+export const awayLabel = (k: ActivityKind) => (k === "idle" ? "Idle" : (AWAY.find(([x]) => x === k)?.[1] ?? "End of day"));
 /**
- * Pausing a task logs "idle": the task timer stops like any time away, but idle time is not
- * deducted from the time available, so it lowers utilization and shows as idle.
+ * "idle" entries were logged by an earlier Pause button (kept for those records): like idle
+ * time, they aren't deducted from the time available. Idle is now worked out (idleMs).
  */
 export const IDLE: ActivityKind = "idle";
+
+/** Merge intervals and total the part inside [from, to). */
+function coveredMs(iv: [number, number][], from: number, to: number) {
+  const xs = iv.map(([a, b]): [number, number] => [Math.max(a, from), Math.min(b, to)]).filter(([a, b]) => b > a).sort((a, b) => a[0] - b[0]);
+  let tot = 0;
+  let cur = -Infinity;
+  for (const [a, b] of xs) {
+    const s0 = Math.max(a, cur);
+    if (b > s0) tot += b - s0;
+    cur = Math.max(cur, b);
+  }
+  return tot;
+}
+
+/**
+ * Idle: time in [from, to) with no task running for the member (not on hold or paused)
+ * and not logged away (break, lunch, meeting, …). Callers pass the shift window.
+ */
+export function idleMs(d: Pick<WorkloadData, "tasks" | "activities">, pid: number, from: number, to: number, now: number) {
+  to = Math.min(to, now);
+  if (to <= from) return 0;
+  const busy: [number, number][] = [];
+  for (const t of d.tasks) {
+    if (t.assignee !== pid || !t.startedAt || t.startedAt >= to) continue;
+    const end = t.status === "done" ? (t.doneAt ?? now) : t.status === "in_progress" ? now : Math.max(t.startedAt, t.history.at(-1)?.at ?? t.startedAt);
+    // Running = started → done (or now / the last change), minus time on hold or paused.
+    const off: [number, number][] = holdPeriods(t, now).map((p): [number, number] => [p.from, p.to ?? now]).concat(pausePeriods(t, now));
+    let s0 = t.startedAt;
+    for (const [a, b] of off.sort((x, y) => x[0] - y[0])) {
+      if (a > s0) busy.push([s0, Math.min(a, end)]);
+      s0 = Math.max(s0, b);
+    }
+    if (end > s0) busy.push([s0, end]);
+  }
+  for (const a of d.activities) if (a.pid === pid && a.kind !== "end" && a.kind !== IDLE) busy.push([a.start, a.end ?? now]);
+  return Math.max(0, to - from - coveredMs(busy, from, to));
+}
+
+/** Today's shift window for a member: [start, end) around `now`. */
+export function shiftWindow(p: Person, s: Settings, now: number): [number, number] {
+  const e = (localHour(now) - p.shiftStart + 24) % 24;
+  const start = Math.round((now - e * H) / M) * M;
+  return [start, start + s.work.shift * H];
+}
+
+/** Idle so far today: in the shift, until End work; not on leave, holiday duty or a rest day. */
+export function idleToday(d: WorkloadData, p: Person, now: number) {
+  if (p.avail === "leave" || p.otDay || p.onToday === false) return 0;
+  const [a, b] = shiftWindow(p, d.settings, now);
+  const end = endedToday(d, p.id, now);
+  return idleMs(d, p.id, a, end ? Math.min(b, end.start) : b, now);
+}
 
 const sameDay = (a: number, b: number) => dayKey(a) === dayKey(b);
 /** The member's ongoing away entry, if any. */
@@ -823,8 +1068,8 @@ const newActivity = (pid: number, kind: ActivityKind, now: number, extra: Partia
 
 /** Go on a break / lunch / meeting / ad hoc / training (ends any other one). A task in progress keeps running but the time away isn't counted on it. */
 export function startAway(d: WorkloadData, pid: number, kind: ActivityKind, now: number): Outcome {
-  if (kind === "end" || (kind !== IDLE && !AWAY.some(([k]) => k === kind)) || !personOf(d, pid)) return { data: d };
-  if (kind === IDLE && !isBusy(d.tasks, pid)) return { data: d, message: "There’s no task in progress to pause." };
+  // Idle isn't logged by hand: it's the shift time with no task running (see idleMs).
+  if (kind === "end" || !AWAY.some(([k]) => k === kind) || !personOf(d, pid)) return { data: d };
   if (endedToday(d, pid, now)) return { data: d, message: "You’ve ended work for today." };
   const cur = currentAway(d, pid);
   if (cur?.kind === kind) return { data: d };
@@ -854,7 +1099,7 @@ export function otAvailMin(d: Pick<WorkloadData, "tasks" | "activities" | "setti
   const starts = d.tasks
     .filter((t) => t.assignee === p.id && t.startedAt && dayKey(t.startedAt) === today)
     .map((t) => t.startedAt!)
-    .concat(d.activities.filter((a) => a.pid === p.id && a.kind !== "end" && dayKey(a.start) === today).map((a) => a.start));
+    .concat(d.activities.filter((a) => a.pid === p.id && !notAway(a) && dayKey(a.start) === today).map((a) => a.start));
   if (!starts.length) return 0;
   return Math.max(0, Math.min(16 * 60, Math.round((now - Math.min(...starts)) / M)));
 }
@@ -872,11 +1117,62 @@ export function pastShiftMin(p: Person, s: Settings, now: number) {
  * End the working day. The member reports overtime only when they end after their
  * shift (at most the time past it); it waits for approval by an admin or lead.
  */
+// ── overtime pre-approval ──
+
+/** Activity that isn't time away: end of work and the overtime pre-approval answer. */
+export const notAway = (a: Pick<Activity, "kind">) => a.kind === "end" || a.kind === "otplan";
+
+/** The member's answer to today's overtime pre-approval prompt, if any. */
+export const otPlanToday = (d: Pick<WorkloadData, "activities">, pid: number, now: number) =>
+  d.activities.find((a) => a.pid === pid && a.kind === "otplan" && sameDay(a.start, now));
+
+/**
+ * Whether the member may report overtime at End work: always, unless the team uses the
+ * pre-approval prompt; then on holiday duty / rest days, or after answering Yes today.
+ */
+export function otAllowed(d: WorkloadData, p: Person, now: number) {
+  if (!d.settings.otPrompt?.on || p.otDay) return true;
+  return otPlanToday(d, p.id, now)?.plan === "yes";
+}
+
+/**
+ * Whether to ask the member now: the team uses the prompt, it's within `before` hours of the
+ * end of their shift (still on shift, not ended work, not asked yet today), and the queue is
+ * still busy in their trades. Returns what's waiting, for the message.
+ */
+export function otPromptNow(d: WorkloadData, p: Person, now: number): { waiting: number; due: number; shiftEnd: number } | null {
+  const o = d.settings.otPrompt;
+  if (!o?.on || p.otDay || p.avail === "leave" || p.onToday === false || !p.trades.length) return null;
+  if (endedToday(d, p.id, now) || otPlanToday(d, p.id, now)) return null;
+  const [, end] = shiftWindow(p, d.settings, now);
+  if (now >= end || now < end - Math.max(0, o.before) * H) return null;
+  const mine = d.tasks.filter((t) => t.status !== "done" && p.trades.includes(t.trade) && (t.assignee === null || t.assignee === p.id));
+  const waiting = mine.filter((t) => t.status === "new").length;
+  const dueN = mine.filter((t) => due(t, d) <= end).length;
+  if (waiting < Math.max(1, o.queue) && dueN < Math.max(1, o.due)) return null;
+  return { waiting, due: dueN, shiftEnd: end };
+}
+
+/** Answer the overtime pre-approval prompt (once a day; answering again replaces it). Yes needs remarks. */
+export function planOt(d: WorkloadData, pid: number, yes: boolean, note: string, now: number): Outcome {
+  const me = personOf(d, pid);
+  if (!me || endedToday(d, pid, now)) return { data: d };
+  const n = String(note ?? "").trim().slice(0, 500);
+  if (yes && !n) return { data: d, message: "Add remarks: what you'll work on in overtime." };
+  const old = otPlanToday(d, pid, now);
+  const a = newActivity(pid, "otplan", now, { end: now, plan: yes ? "yes" : "no", note: n || null });
+  return {
+    data: { ...d, activities: old ? d.activities.map((x) => (x.id === old.id ? { ...old, plan: a.plan, note: a.note } : x)) : d.activities.concat(a) },
+    message: yes ? "Noted: overtime expected. Report it at End work; your lead approves it." : "Noted: no overtime today.",
+  };
+}
+
 export function endWork(d: WorkloadData, pid: number, otMin: number, now: number, split?: OtPart[] | null): Outcome {
   const me = personOf(d, pid);
   if (!me || endedToday(d, pid, now)) return { data: d };
   if (isBusy(d.tasks, pid)) return { data: d, message: "Resolve your ticket or set it to pending before you end work." };
-  const avail = otAvailMin(d, me, now);
+  // With the pre-approval prompt, overtime only after answering Yes (or on holiday duty / rest days).
+  const avail = otAllowed(d, me, now) ? otAvailMin(d, me, now) : 0;
   const ot = Math.max(0, Math.min(Math.round(Number(otMin) || 0), avail));
   // The breakdown must use this team's processes and task types and add up to the overtime.
   let parts: OtPart[] | null = null;
@@ -1008,7 +1304,7 @@ export function dayActivity(d: WorkloadData, pid: number, now: number) {
   const away: Record<string, number> = {};
   let awayMs = 0;
   for (const a of mine) {
-    if (a.kind === "end") continue;
+    if (notAway(a)) continue;
     const ms = (a.end ?? now) - a.start;
     away[a.kind] = (away[a.kind] ?? 0) + Math.round(ms / 60000);
     // Idle (paused) time stays in the time available, so it lowers utilization.
@@ -1095,9 +1391,153 @@ export function cxCheck(d: WorkloadData, t: Task): CxCheck | null {
   return { expMs: exp, actMs: act, flag: act > exp * (1 + tol) ? "slow" : null };
 }
 
-/** Done tickets whose handling time doesn't match their complexity and that no admin has checked yet. */
+/** The over-productivity threshold: % of a day's target in one ticket (0 = off). Default 100. */
+export const fastPct = (s: Settings) => Math.max(0, s.complexity?.fast ?? 100);
+
+export interface CxOver {
+  /** The ticket's contracts as a share of a day's target, %: each level's count ÷ its daily target. */
+  pct: number;
+  /** Per level, e.g. "16 Complex of 3 a day". */
+  text: string;
+  /** At or above the threshold: maybe not all of them are that complex. */
+  flag: boolean;
+}
+
+/**
+ * Over-productive: one ticket's tagged contracts against the levels' daily targets, e.g.
+ * 16 Complex when the target is 3 Complex a day = 533% of a day in one ticket. Levels
+ * without a target aren't counted.
+ */
+export function cxOver(d: Pick<WorkloadData, "settings">, t: Task): CxOver | null {
+  const levels = cxLevels(d.settings);
+  if (!levels.length || !t.cx || t.status !== "done") return null;
+  let share = 0;
+  const parts: string[] = [];
+  for (const l of levels) {
+    const n = t.cx[l.id] ?? 0;
+    if (!n || !((l.target ?? 0) > 0)) continue;
+    share += n / l.target!;
+    parts.push(`${n} ${l.name} of ${l.target} a day`);
+  }
+  if (!parts.length) return null;
+  const pct = Math.round(share * 100);
+  const lim = fastPct(d.settings);
+  return { pct, text: parts.join(" · "), flag: lim > 0 && pct >= lim };
+}
+
+/** Done tickets whose handling time doesn't match their complexity, or over-productive ones, that no admin has checked yet. */
 export const cxQuestions = (d: WorkloadData) =>
-  d.tasks.filter((t) => t.status === "done" && !t.cxReview && cxCheck(d, t)?.flag).sort((a, b) => (b.doneAt ?? 0) - (a.doneAt ?? 0));
+  d.tasks.filter((t) => t.status === "done" && !t.cxReview && (cxCheck(d, t)?.flag || cxOver(d, t)?.flag)).sort((a, b) => (b.doneAt ?? 0) - (a.doneAt ?? 0));
+
+/** What an admin can change on a resolved ticket (Edit ticket); fields go in `vals`. */
+export interface TicketEdit {
+  title?: string;
+  trade?: string;
+  pr?: Priority;
+  /** Task type id, "" = standard request. */
+  ttype?: string;
+  received?: number;
+  startedAt?: number;
+  doneAt?: number;
+  /** Who resolved it. */
+  assignee?: number;
+  otMin?: number;
+  delay?: string;
+  /** Contracts by complexity level. */
+  cx?: Record<string, number> | null;
+}
+
+/**
+ * Admin correction of a resolved ticket (e.g. one flagged as over-productive): its title,
+ * trade, priority, task type, times, who resolved it, overtime, delay remarks, complexity
+ * and field values. Every change is recorded in the history; the SLA follows priority and
+ * task type, and the contracts field follows the complexity counts.
+ */
+export function editDone(d: WorkloadData, id: string, vals: Task["fields"], by: number, now: number, e: TicketEdit = {}): Outcome {
+  const t = d.tasks.find((x) => x.id === id);
+  if (!t || t.status !== "done") return { data: d };
+  const changes: string[] = [];
+  const no = (message: string): Outcome => ({ data: d, message });
+  let x: Task = { ...t };
+  const set = <K extends keyof Task>(k: K, v: Task[K], label: string, show: (v: Task[K]) => string) => {
+    if (v === t[k] || (v ?? "") === (t[k] ?? "")) return;
+    changes.push(`${label}: ${show(t[k])} → ${show(v)}`);
+    x = { ...x, [k]: v };
+  };
+  if (e.title !== undefined) {
+    const v = e.title.trim().slice(0, 300);
+    if (!v) return no("The title can’t be empty.");
+    set("title", v, "Title", (a) => String(a ?? "—"));
+  }
+  if (e.trade !== undefined) {
+    if (!d.org.trades.some((o) => o.id === e.trade)) return no("Choose a trade.");
+    set("trade", e.trade, "Trade", (a) => (a ? trPathOf(d.org, String(a)) : "—"));
+  }
+  if (e.pr !== undefined) {
+    if (!PR[e.pr]) return no("Choose a priority.");
+    set("pr", e.pr, "Priority", (a) => PR[a as Priority]?.[0] ?? "—");
+  }
+  if (e.ttype !== undefined) set("ttype", e.ttype, "Task type", (a) => (a ? ((d.settings.taskTypes ?? []).find((y) => y.id === a)?.name ?? "Removed type") : "Standard request"));
+  if (x.ttype && x.ttype !== t.ttype && !typesFor(d.settings, x.trade).some((y) => y.id === x.ttype)) return no("That task type isn’t used in this trade.");
+  if (x.ttype && x.trade !== t.trade && !typesFor(d.settings, x.trade).some((y) => y.id === x.ttype)) return no("The task type isn’t used in the new trade. Choose another one.");
+  const time = (a: unknown) => (typeof a === "number" ? fmtT(a) : "—");
+  for (const [k, label] of [["received", "Received"], ["startedAt", "Started"], ["doneAt", "Resolved"]] as const) {
+    const v = e[k];
+    if (v === undefined) continue;
+    if (!Number.isFinite(v)) return no(`${label}: enter a date and time.`);
+    set(k, v, label, time);
+  }
+  // Times are checked when one of them changes.
+  if (x.received !== t.received || x.startedAt !== t.startedAt || x.doneAt !== t.doneAt) {
+    if (x.doneAt! > now + 5 * M) return no("Resolved can’t be in the future.");
+    if (x.startedAt !== null && (x.startedAt < x.received || x.startedAt > x.doneAt!)) return no("Started must be between Received and Resolved.");
+    if (x.received > x.doneAt!) return no("Received must be before Resolved.");
+  }
+  if (e.assignee !== undefined) {
+    const p = personOf(d, e.assignee);
+    if (!p) return no("Choose who resolved it.");
+    set("assignee", e.assignee, "Resolved by", (a) => (a === null ? "—" : (personOf(d, a as number)?.name ?? "Former member")));
+  }
+  if (e.otMin !== undefined) {
+    const v = Math.round(e.otMin);
+    if (!(v >= 0 && v <= 16 * 60)) return no("Overtime must be 0 to 960 minutes.");
+    set("otMin", v, "Overtime", (a) => fmtMin(Number(a ?? 0)));
+    x = { ...x, ot: v > 0 };
+  }
+  if (e.delay !== undefined) {
+    const v = e.delay.trim().slice(0, 500);
+    set("delay", v || null, "Delay remarks", (a) => (a ? String(a) : "—"));
+  }
+  // The SLA follows priority and task type.
+  if (x.pr !== t.pr || (x.ttype ?? "") !== (t.ttype ?? "")) x = withSla(x, d.settings);
+  // Complexity: the counts, with the contracts field following them.
+  const cf = cxField(d);
+  if (e.cx !== undefined && cxOn(d.settings)) {
+    const next = e.cx ? cleanCx(d.settings, e.cx) : null;
+    if (cxText(d.settings, next) !== cxText(d.settings, t.cx)) {
+      changes.push(`Complexity: ${cxText(d.settings, t.cx) || "—"} → ${cxText(d.settings, next) || "—"}`);
+      x = { ...x, cx: next, cxReview: { by, at: now, verdict: "corrected", ...(t.cx ? { was: t.cx } : {}) } };
+      if (cf?.type === "number" && next) x = { ...x, fields: { ...x.fields, [cf.key]: cxTotal(next) } };
+    }
+  }
+  const fromCx = x.cx && cxTotal(x.cx) > 0 ? cf?.key : undefined;
+  const fields: Task["fields"] = { ...x.fields };
+  for (const f of d.fields) {
+    if (!(f.key in vals) || f.key === fromCx) continue;
+    const v = f.type === "number" ? (String(vals[f.key]).trim() === "" ? "" : Number(vals[f.key])) : String(vals[f.key] ?? "").trim();
+    if (f.type === "number" && v !== "" && !Number.isFinite(v as number)) return no(`${f.label} must be a number.`);
+    if (String(t.fields[f.key] ?? "") === String(v)) continue;
+    changes.push(`${f.label}: ${t.fields[f.key] ?? "—"} → ${v === "" ? "—" : v}`);
+    fields[f.key] = v;
+  }
+  x = { ...x, fields };
+  if (!changes.length) return no("Nothing changed.");
+  const who = personOf(d, by)?.name ?? "An admin";
+  return {
+    data: patch(d, id, () => ({ ...x, history: hist(t, now, `Details corrected by ${who} · ${changes.join("; ")}`) })),
+    message: `${id} updated.`,
+  };
+}
 
 /** Admin check of a ticket's complexity: confirm it, or correct the counts (the productivity field follows). */
 export function reviewCx(d: WorkloadData, id: string, by: number, now: number, cx?: Record<string, number> | null, note = ""): Outcome {
@@ -1126,7 +1566,7 @@ export function taskWorkMs(d: WorkloadData, t: Task, now: number) {
   const from = t.startedAt;
   const to = t.doneAt ?? now;
   // Excluded time: hold periods plus the assignee's breaks etc., merged so overlaps count once.
-  const ex: [number, number][] = holdPeriods(t, now).map((p) => [p.from, p.to ?? now]);
+  const ex: [number, number][] = holdPeriods(t, now).map((p): [number, number] => [p.from, p.to ?? now]).concat(pausePeriods(t, now));
   for (const a of d.activities) if (a.pid === t.assignee && a.kind !== "end") ex.push([a.start, a.end ?? now]);
   ex.sort((a, b) => a[0] - b[0]);
   let off = 0;

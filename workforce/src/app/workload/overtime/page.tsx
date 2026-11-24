@@ -37,6 +37,10 @@ export default function OvertimePage() {
   /** Minutes of the entry in the filter. */
   const minOf = (a: Activity) => partsOf(a).reduce((n, x) => n + x.min, 0);
   const pending = ends.filter((a) => a.otStatus === "pending" && minOf(a) > 0).sort((a, b) => a.start - b.start);
+  // Overtime pre-approval answers: today's Yes, and the remarks behind a reported entry.
+  const plans = data.activities.filter((a) => a.kind === "otplan");
+  const planFor = (a: Activity) => plans.find((x) => x.pid === a.pid && dayKey(x.start) === dayKey(a.start));
+  const expected = plans.filter((x) => x.plan === "yes" && dayKey(x.start) === today0 && (!filtered || inPeople.has(x.pid))).sort((a, b) => a.start - b.start);
 
   // Report period (inclusive dates).
   const [from, to] = rangeMs(range);
@@ -124,6 +128,27 @@ export default function OvertimePage() {
         title={`Overtime · ${filtered ? unitLabel : data.org.team.name}`}
         sub="Members report overtime when they end work after their shift, and on holiday duty or a rest day they work (all of that day counts). It counts in the dashboard and reports only once an admin or lead approves it. You can’t approve your own."
       />
+      {data.settings.otPrompt?.on && (
+        <Blueprint as="section" className="panel tight">
+          <h2 className="h2">Expected overtime today · {expected.length}</h2>
+          <span className="small">Members who answered Yes to the overtime pre-approval near the end of their shift. They report the actual time at End work.</span>
+          {expected.length ? (
+            <table className="table">
+              <tbody>
+                {expected.map((x) => (
+                  <tr key={x.id}>
+                    <td style={{ fontWeight: 500 }}>{name(x.pid)}</td>
+                    <td className="nowrap">{fmtT(x.start)}</td>
+                    <td>{x.note}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          ) : (
+            <span className="small">No one yet.</span>
+          )}
+        </Blueprint>
+      )}
       <Blueprint as="section" className="panel tight">
         <h2 className="h2">Waiting for approval · {pending.length}</h2>
         {pending.length ? (
@@ -154,6 +179,7 @@ export default function OvertimePage() {
                     {a.otSplit?.length ? (
                       <div className="small">{a.otSplit.map((x) => `${partName(x)} ${fmtMin(x.min)}`).join(" · ")}</div>
                     ) : null}
+                    {planFor(a)?.note && <div className="small">Pre-approval: {planFor(a)!.note}</div>}
                   </td>
                   <td>
                     <div style={{ display: "flex", gap: 6, justifyContent: "flex-end" }}>

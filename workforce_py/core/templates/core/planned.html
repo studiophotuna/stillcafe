@@ -1,0 +1,8 @@
+{% extends "core/base.html" %}{% load wfm %}
+{% block title %}{{ title }} · Workforce Management{% endblock %}
+{% block main %}
+<div class="page-head"><h1>{{ title }}</h1><span>Planned for the next phase of the Python edition.</span></div>
+<section class="blueprint idle">{% corners %}
+  <div><h2>Coming next</h2><span>{{ text }} It works today in the current app; this draft shows the main screens first.</span></div>
+</section>
+{% endblock %}

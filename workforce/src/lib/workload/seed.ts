@@ -1,16 +1,16 @@
-import { H, M } from "./clock";
-import { CARRIERS, DEMO_ORG, FIELDS0, PEOPLE, person, tradeOf } from "./constants";
+import { H, M, dayKey } from "./clock";
+import { ADMIN_ID, DEMO_CARRIERS, DEMO_ORG, FIELDS0, PEOPLE, person, tradeOf } from "./constants";
 import type { WorkloadData } from "./engine";
 import type { Priority, Task, TaskStatus } from "./types";
 
 const KINDS = ["Rate filing", "Contract amendment", "New contract upload", "Surcharge update", "Rate sheet review"];
 const SENDERS = [
-  "pricing.eu@dsv.com",
-  "sales.lcl@dsv.com",
-  "tlm.fewb@dsv.com",
-  "procurement.asla@dsv.com",
-  "pricing.us@dsv.com",
-  "kam.inas@dsv.com",
+  "pricing.eu@demobss.com",
+  "sales.lcl@demobss.com",
+  "tlm.fewb@demobss.com",
+  "procurement.asla@demobss.com",
+  "pricing.us@demobss.com",
+  "kam.inas@demobss.com",
 ];
 
 interface Opts {
@@ -41,7 +41,7 @@ export function seedTasks(now: number): Task[] {
 
   const mk = (o: Opts): Task => {
     const tr = o.trade !== undefined ? o.trade : pick(DEMO_ORG.trades).id;
-    const car = pick(CARRIERS);
+    const car = pick(DEMO_CARRIERS);
     const kind = pick(KINDS);
     const pr: Priority = o.pr || (r() < 0.2 ? "high" : r() < 0.8 ? "normal" : "low");
     const rec = o.rec || now - Math.floor(r() * 30 * H);
@@ -76,7 +76,7 @@ export function seedTasks(now: number): Task[] {
       const attachments = [car + "_rates.xlsx"].concat(r() < 0.4 ? ["contract_" + car + ".pdf"] : []);
       t.email = {
         from,
-        cc: "rm.team@dsv.com",
+        cc: "rm.team@demobss.com",
         subject: (pr === "high" ? "URGENT: " : "") + kind + " – " + car + trName,
         body: `Hi team,\n\nPlease process the attached ${kind.toLowerCase()} for ${car}. Effective date is next Monday.\n\nThank you.`,
         attachments,
@@ -139,7 +139,9 @@ export function seedTasks(now: number): Task[] {
   doneBy.forEach(([p, tr], i) => {
     const st = now - 4 * H + i * 14 * M - Math.floor(r() * 20) * M;
     const d = 25 + Math.floor(r() * 65);
-    mk({ trade: tr, status: "done", assignee: p, startedAt: st, doneAt: st + d * M, ot: i === 2 || i === 7, rec: st - 2 * H });
+    const t = mk({ trade: tr, status: "done", assignee: p, startedAt: st, doneAt: st + d * M, ot: i === 2 || i === 7, rec: st - 2 * H });
+    // Sample complexity tagging (one over-productive ticket: 16 Complex at 3 a day).
+    t.cx = i === 5 ? { complex: 16 } : i % 3 === 0 ? { simple: 2, medium: 1 } : i % 3 === 1 ? { medium: 1 } : { simple: 1, complex: 1 };
   });
   const ot1 = mk({ trade: "fewb", status: "done", assignee: 9, startedAt: now - 4.2 * H, doneAt: now - 3.4 * H, ot: true, rec: now - 6 * H });
   return tasks;
@@ -147,11 +149,25 @@ export function seedTasks(now: number): Task[] {
 
 /** Sample emails used by "Check mailbox now" until Microsoft Graph intake is connected. */
 export const SAMPLE_MAIL: [string, string, string, string[]][] = [
-  ["sales.lcl@dsv.com", "LCL rate request – CMDU Manila to Singapore", "Hi team,\n\nCustomer needs LCL rates for next week. Details attached.", ["CMDU_LCL_request.xlsx"]],
-  ["pricing.eu@dsv.com", "URGENT: EU surcharge update – HLCU", "Please update the ENS surcharge for HLCU effective 1 October.", ["HLCU_surcharge.pdf"]],
-  ["kam.inas@dsv.com", "Contract amendment – ONEY INAS", "Amendment 3 for the ONEY contract is attached.", ["ONEY_amd3.pdf"]],
-  ["ops@dsv.com", "Question about last week’s filing", "Could someone confirm the filing reference?", []],
+  ["sales.consol@demobss.com", "Consolidation rate request – CRLN Port A to Port B", "Hi team,\n\nCustomer needs consolidation rates for next week. Details attached.", ["CRLN_consol_request.xlsx"]],
+  ["pricing.europe@demobss.com", "URGENT: Europe surcharge update – BLHR", "Please update the fuel surcharge for BLHR effective 1 October.", ["BLHR_surcharge.pdf"]],
+  ["kam.indianocean@demobss.com", "Contract amendment – EVRS Indian Ocean", "Amendment 3 for the EVRS contract is attached.", ["EVRS_amd3.pdf"]],
+  ["ops@demobss.com", "Question about last week’s filing", "Could someone confirm the filing reference?", []],
 ];
+
+/** Sample billed headcount: everyone 1 FTE from January, the manager not billed (as in Calendar › Headcount). */
+function sampleHc(now: number) {
+  const year = Number(dayKey(now).slice(0, 4));
+  return {
+    year,
+    rows: PEOPLE.map((p) => ({
+      pid: p.id,
+      name: p.name,
+      level: p.id === ADMIN_ID ? ("manager" as const) : ("member" as const),
+      billed: Array.from({ length: 12 }, () => (p.id === ADMIN_ID ? 0 : 1)),
+    })),
+  };
+}
 
 /**
  * A team's starting data: default settings and fields. Sample data (not `empty`)
@@ -166,19 +182,38 @@ export function initialData(now: number, empty = false): WorkloadData {
     holidays: [],
     activities: [],
     approvers: empty ? [] : [23],
-    fields: FIELDS0.map((f) => ({ ...f })),
+    // Sample data lists the fictional carriers.
+    fields: FIELDS0.map((f) => (!empty && f.key === "carrier" ? { ...f, options: DEMO_CARRIERS.join(", ") } : { ...f })),
     settings: {
       mode: "fifo",
       order: "priority",
       skipUnavail: true,
       autoFeed: true,
       sla: { high: 4, normal: 24, low: 72 },
-      mailbox: empty ? "" : "rm.requests@dsv.com",
+      mailbox: empty ? "" : "rm.requests@demobss.com",
       mailTrade: "",
       work: { shift: 9, b1: 60, b2: 30, prod: 6.8 },
       targets: empty ? {} : { fewb: 8, inas: 6, eu: 7, us: 6, asla: 6, lcl: 8 },
       memberTargets: {},
+      // Sample: the member persona may upload tasks (Intake › Who can upload tasks).
+      ...(empty ? {} : { uploaders: [0] }),
+      ...(empty ? {} : { billing: { mode: "fixed" as const, currency: "USD", roleRates: { member: 2400 }, unitRates: { "": 9 }, unit: "tasks", when: "resolved" as const } }),
+      ...(empty
+        ? {}
+        : {
+            complexity: {
+              on: true,
+              levels: [
+                { id: "simple", name: "Simple", target: 12, aht: 20 },
+                { id: "medium", name: "Medium", target: 6, aht: 45 },
+                { id: "complex", name: "Complex", target: 3, aht: 90 },
+              ],
+              tol: 50,
+              fast: 100,
+            },
+          }),
     },
+    ...(empty ? {} : { hc: sampleHc(now), pricers: [ADMIN_ID, 26] }),
     seq: 2000,
     mailCount: 0,
   };

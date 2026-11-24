@@ -23,8 +23,8 @@ import type { Settings, Task } from "./types";
 import { person } from "./constants";
 
 const NOW = Date.parse("2026-09-24T10:30:00+08:00");
-const ANA = 0; // LCL, available
-const ELI = 4; // EU, on leave
+const ANA = 0; // Consolidation, available
+const ELI = 4; // Europe, on leave
 
 const settings = (p: Partial<Settings> = {}): Settings => ({
   mode: "fifo",
@@ -32,7 +32,7 @@ const settings = (p: Partial<Settings> = {}): Settings => ({
   skipUnavail: true,
   autoFeed: true,
   sla: { high: 4, normal: 24, low: 72 },
-  mailbox: "rm.requests@dsv.com",
+  mailbox: "rm.requests@demobss.com",
   mailTrade: "",
   work: { shift: 9, b1: 60, b2: 30, prod: 6.8 },
   targets: { fewb: 8, inas: 6, eu: 7, us: 6, asla: 6, lcl: 8 },
@@ -129,17 +129,99 @@ describe("start work (FIFO)", () => {
     expect(get(startWork(d, ANA, NOW).data, a.id).status).toBe("assigned");
   });
 
-  it("pauses a task: the timer stops and the time counts as idle, not away", async () => {
-    const { startAway, backToWork, taskWorkMs, dayActivity } = await import("./engine");
-    const cur = task({ status: "in_progress", assignee: ANA, startedAt: NOW - 60 * M });
-    let d = data([cur]);
-    expect(startAway(data([]), ANA, "idle", NOW).message).toMatch(/no task in progress/);
-    d = startAway(d, ANA, "idle", NOW - 20 * M).data;
-    d = backToWork(d, ANA, NOW - 10 * M).data;
-    expect(taskWorkMs(d, cur, NOW)).toBe(50 * M);
-    const act = dayActivity(d, ANA, NOW);
-    expect(act.away.idle).toBe(10);
-    expect(act.awayMs).toBe(0); // idle stays in the time available
+  it("pauses a task in Members pick with several picks, so the member can work on another", async () => {
+    const { pauseTask, startTask, isPaused, taskWorkMs, startAway } = await import("./engine");
+    const multi = { mode: "self" as const, multiPick: true };
+    const a = task({ status: "in_progress", assignee: ANA, startedAt: NOW - 60 * M, history: [{ at: NOW - 60 * M, text: "Started by Ana" }] });
+    const b = task({ status: "assigned", assignee: ANA });
+    // Only in Members pick with several picks allowed.
+    expect(pauseTask(data([a, b]), a.id, ANA, NOW - 20 * M).message).toMatch(/Use Pending/);
+    expect(pauseTask(data([a, b], { mode: "self" }), a.id, ANA, NOW - 20 * M).message).toMatch(/Use Pending/);
+    let d = pauseTask(data([a, b], multi), a.id, ANA, NOW - 20 * M).data;
+    expect(get(d, a.id)).toMatchObject({ status: "assigned", startedAt: NOW - 60 * M });
+    expect(isPaused(get(d, a.id))).toBe(true);
+    // Not blocked: the other task on the list starts.
+    d = startTask(d, b.id, ANA, NOW - 15 * M).data;
+    expect(get(d, b.id).status).toBe("in_progress");
+    // Back to the paused one later: it carries on with its own start time; the pause isn't worked time.
+    d = { ...d, tasks: d.tasks.map((t) => (t.id === b.id ? { ...t, status: "done" as const, doneAt: NOW - 10 * M } : t)) };
+    d = startTask(d, a.id, ANA, NOW - 10 * M).data;
+    expect(get(d, a.id)).toMatchObject({ status: "in_progress", startedAt: NOW - 60 * M });
+    expect(isPaused(get(d, a.id))).toBe(false);
+    expect(taskWorkMs(d, get(d, a.id), NOW)).toBe(50 * M);
+    // Idle can't be logged by hand any more.
+    expect(startAway(d, ANA, "idle", NOW).data).toBe(d);
+  });
+
+  it("counts idle as shift time with no task running and not away", async () => {
+    const { idleMs, idleToday, startAway, backToWork } = await import("./engine");
+    const at = (hm: string) => Date.parse(`2026-09-24T${hm}:00+08:00`);
+    // Shift 08:00–17:00. Task 08:30–09:30, on hold 09:00–09:10; break 09:40–09:50; nothing since.
+    const t = task({
+      status: "done",
+      assignee: ANA,
+      startedAt: at("08:30"),
+      doneAt: at("09:30"),
+      history: [
+        { at: at("09:00"), text: "On hold: waiting" },
+        { at: at("09:10"), text: "Resumed" },
+      ],
+    });
+    let d = startAway(data([t]), ANA, "break", at("09:40")).data;
+    d = backToWork(d, ANA, at("09:50")).data;
+    // 08:00–10:30 = 150 min; running 50 min; break 10 min → 90 min idle.
+    expect(idleMs(d, ANA, at("08:00"), at("17:00"), at("10:30"))).toBe(90 * M);
+    expect(idleToday(d, d.people.find((p) => p.id === ANA)!, at("10:30"))).toBe(90 * M);
+    // A task in progress isn't idle: 150 min − 50 running − 40 on the current task (09:50–10:30).
+    const run = task({ status: "in_progress", assignee: ANA, startedAt: at("09:50") });
+    expect(idleMs(data([t, run]), ANA, at("08:00"), at("17:00"), at("10:30"))).toBe(60 * M);
+    // A paused task isn't running: paused at 10:00, so 10:00–10:30 is idle too.
+    const paused = task({ status: "assigned", assignee: ANA, startedAt: at("09:50"), history: [{ at: at("10:00"), text: "Paused" }] });
+    expect(idleMs(data([t, paused]), ANA, at("08:00"), at("17:00"), at("10:30"))).toBe(90 * M);
+    // On leave: no idle.
+    const off = { ...data([t]), people: data([]).people.map((p) => (p.id === ANA ? { ...p, avail: "leave" as const } : p)) };
+    expect(idleToday(off, off.people.find((p) => p.id === ANA)!, at("10:30"))).toBe(0);
+  });
+
+  it("lets a member ask for a teammate's task; the assignee lets them take it or keeps it", async () => {
+    const { claimTask, answerClaim, cancelClaim } = await import("./engine");
+    const { authorizeWl } = await import("./authz");
+    const mate = data([]).people.find((p) => p.id !== ANA && p.trades.includes("lcl"))!;
+    const t = task({ status: "in_progress", assignee: ANA, startedAt: NOW - M });
+    let d = data([t]);
+    // Members can't hand a task over (no transfer action); a teammate in the trade asks for it.
+    d = claimTask(d, t.id, mate.id, NOW).data;
+    expect(get(d, t.id).claim).toEqual({ by: mate.id, at: NOW });
+    expect(claimTask(d, t.id, ANA, NOW).message).toMatch(/someone else has/);
+    // Only the assignee answers.
+    expect(answerClaim(d, t.id, true, mate.id, NOW).data).toBe(d);
+    const kept = answerClaim(d, t.id, false, ANA, NOW).data;
+    expect(get(kept, t.id)).toMatchObject({ assignee: ANA, status: "in_progress", claim: null });
+    const moved = answerClaim(d, t.id, true, ANA, NOW).data;
+    expect(get(moved, t.id)).toMatchObject({ assignee: mate.id, status: "assigned", startedAt: null, claim: null });
+    expect(get(cancelClaim(d, t.id, mate.id, NOW).data, t.id).claim).toBeNull();
+    // The claim acts are always as the signed-in member.
+    expect(authorizeWl({ type: "answerClaim", id: t.id, ok: true, pid: mate.id }, d, ANA)).toEqual({ action: { type: "answerClaim", id: t.id, ok: true, pid: ANA } });
+  });
+
+  it("takes trade first, then the same system, then other systems", async () => {
+    const { canTake, canClaim, personOf } = await import("./engine");
+    const us = task({ trade: "us" }); // TariffPro, Ana's system (she works Consolidation)
+    const eu = task({ trade: "eu" }); // RateHub, another system
+    const lcl = task({ trade: "lcl" });
+    const ana = (d: ReturnType<typeof data>) => personOf(d, ANA)!;
+    let d = data([us, eu, lcl], { mode: "self" });
+    expect([lcl, us, eu].map((t) => canTake(d, ana(d), t))).toEqual([true, false, false]); // own trade waiting
+    d = data([us, eu], { mode: "self" });
+    expect([us, eu].map((t) => canTake(d, ana(d), t))).toEqual([true, false]); // own clear: same system first
+    d = data([eu], { mode: "self" });
+    expect(canTake(d, ana(d), eu)).toBe(true); // whole system clear: other systems
+    // Asking to take: a teammate in the same system can ask for an Consolidation task, another system can't.
+    const held = task({ trade: "us", status: "assigned", assignee: 25 });
+    const heldGpm = task({ trade: "eu", status: "assigned", assignee: 3 });
+    d = data([held, heldGpm], { mode: "self" });
+    expect(canClaim(d, ana(d), held)).toBe(true);
+    expect(canClaim(d, ana(d), heldGpm)).toBe(false);
   });
 
   it("does not give work to unavailable people unless the team allows it", () => {
@@ -233,7 +315,7 @@ describe("hold, resume, done", () => {
 
 describe("round-robin", () => {
   it("assigns new tasks to the least-loaded available member of the trade", () => {
-    // LCL: Ana (0), Kim (14), Leo (15), Mia (16), Nico (19, on leave).
+    // Consolidation: Ana (0), Kim (14), Leo (15), Mia (16), Nico (19, on leave).
     const busy = [0, 14, 15].map((a) => task({ status: "assigned", assignee: a }));
     const t = task();
     const o = addTasks(data(busy, { mode: "rr" }), [t], "", NOW);
@@ -266,12 +348,12 @@ describe("admin assign", () => {
 
 describe("upload validation", () => {
   it("checks system/trade, priority, number and list fields; required ones may be blank", () => {
-    const base = { Title: "A", System: "RCM", Trade: "LCL", "Ticket no.": "1", Carrier: "MSCU", "No. of contracts": "3" };
+    const base = { Title: "A", System: "TariffPro", Trade: "Consolidation", "Ticket no.": "1", Carrier: "MSCU", "No. of contracts": "3" };
     const res = checkRows(
       [
         base,
         { ...base, Title: "" },
-        { ...base, System: "GPM" },
+        { ...base, System: "RateHub" },
         { ...base, Priority: "urgent" },
         { ...base, "Ticket no.": "" },
         { ...base, "No. of contracts": "x" },
@@ -284,7 +366,7 @@ describe("upload validation", () => {
     expect(res.map((r) => r.msg)).toEqual([
       "Ready",
       "Title is missing",
-      "LCL isn’t under GPM",
+      "Consolidation isn’t under RateHub",
       "Priority must be High, Normal or Low",
       "Ready", // required fields are asked for when the task is marked done
       "No. of contracts must be a number",
@@ -328,7 +410,7 @@ describe("seed", () => {
 describe("upload rows follow the team's org", () => {
   const f: typeof FIELDS0 = [];
   it("needs no System or Trade when the team is its one unit", () => {
-    const org = { team: { id: "cs", name: "Customer Service" }, systems: [], trades: [{ id: "cs", name: "Customer Service", sys: "" }], teams: [] };
+    const org = { team: { id: "cs", name: "Customer Care" }, systems: [], trades: [{ id: "cs", name: "Customer Care", sys: "" }], teams: [] };
     const [r] = checkRows([{ Title: "Call back" }], f, org);
     expect(r).toMatchObject({ ok: true, task: { trade: "cs" } });
   });
@@ -336,18 +418,18 @@ describe("upload rows follow the team's org", () => {
     const org = {
       team: { id: "t", name: "T" },
       systems: [{ id: "a", name: "A" }, { id: "b", name: "B" }],
-      trades: [{ id: "a1", name: "EU", sys: "a" }, { id: "b1", name: "EU", sys: "b" }, { id: "b2", name: "US", sys: "b" }],
+      trades: [{ id: "a1", name: "Europe", sys: "a" }, { id: "b1", name: "Europe", sys: "b" }, { id: "b2", name: "Americas", sys: "b" }],
       teams: [],
     };
-    const res = checkRows([{ Title: "x", Trade: "EU" }, { Title: "x", System: "B", Trade: "EU" }, { Title: "x", Trade: "US" }, { Title: "x", System: "A", Trade: "US" }], f, org);
-    expect(res.map((r) => r.ok ? r.task!.trade : r.msg)).toEqual(["Add the System — that trade is in more than one", "b1", "b2", "US isn’t under A"]);
+    const res = checkRows([{ Title: "x", Trade: "Europe" }, { Title: "x", System: "B", Trade: "Europe" }, { Title: "x", Trade: "Americas" }, { Title: "x", System: "A", Trade: "Americas" }], f, org);
+    expect(res.map((r) => r.ok ? r.task!.trade : r.msg)).toEqual(["Add the System — that trade is in more than one", "b1", "b2", "Americas isn’t under A"]);
   });
 });
 
 describe("overtime, helping out, productivity basis and uploads", async () => {
   const { helpQueue, personMetrics, canTake } = await import("./engine");
   const { authorizeWl } = await import("./authz");
-  const ana = PEOPLE.find((p) => p.id === ANA)!; // LCL (RCM), day shift 08:00, 9 h
+  const ana = PEOPLE.find((p) => p.id === ANA)!; // Consolidation (TariffPro), day shift 08:00, 9 h
   const EVE = Date.parse("2026-09-24T18:30:00+08:00"); // 1 h 30 past her 17:00 end
 
   it("only the assignee can mark a task done", () => {
@@ -357,16 +439,16 @@ describe("overtime, helping out, productivity basis and uploads", async () => {
   });
 
   it("asks before giving work from other trades: same system first, then the team", () => {
-    const us = task({ trade: "us", received: NOW - H }); // RCM, same system as LCL
-    const eu = task({ trade: "eu", received: NOW - 5 * H }); // GPM, older
+    const us = task({ trade: "us", received: NOW - H }); // TariffPro, same system as Consolidation
+    const eu = task({ trade: "eu", received: NOW - 5 * H }); // RateHub, older
     const d = data([eu, us]);
     const r = startWork(d, ANA, NOW);
-    expect(r.ask).toEqual({ system: 1, systemNames: ["RCM"], team: 1 });
+    expect(r.ask).toEqual({ system: 1, systemNames: ["TariffPro"], team: 1 });
     expect(r.data).toBe(d);
     expect(helpQueue(d, ana).map((x) => x.t.id)).toEqual([us.id, eu.id]);
     const yes = startWork(d, ANA, NOW, true);
     expect(get(yes.data, us.id)).toMatchObject({ status: "in_progress", assignee: ANA });
-    expect(yes.message).toMatch(/helping US/);
+    expect(yes.message).toMatch(/helping Americas/);
     // Own trade has work: no offer, and other trades can't be taken.
     const own = task({ trade: "lcl" });
     expect(startWork(data([own, us]), ANA, NOW).ask).toBeUndefined();
@@ -385,11 +467,30 @@ describe("overtime, helping out, productivity basis and uploads", async () => {
 
   it("lets admins and approved members upload, with required fields left blank", () => {
     const d = { ...data([]), fields: FIELDS0 };
-    const rows = [{ Title: "Blank ticket", System: "RCM", Trade: "LCL" }];
+    const rows = [{ Title: "Blank ticket", System: "TariffPro", Trade: "Consolidation" }];
     expect("error" in authorizeWl({ type: "importRows", rows }, d, ANA)).toBe(true);
     expect("action" in authorizeWl({ type: "importRows", rows }, { ...d, settings: { ...d.settings, uploaders: [ANA] } }, ANA)).toBe(true);
     expect("action" in authorizeWl({ type: "importRows", rows }, d, 23)).toBe(true);
     expect(checkRows(rows, FIELDS0, DEMO_ORG)[0]).toMatchObject({ ok: true });
+  });
+
+  it("adds one task by hand with every required detail, for the same people as uploads", async () => {
+    const { addOneTask } = await import("./engine");
+    const d = { ...data([]), fields: FIELDS0 };
+    const row = { Title: "Rate check", System: "TariffPro", Trade: "Consolidation", Priority: "high", Received: "" };
+    expect(addOneTask(d, row, ANA, NOW).message).toBe("Fill in Ticket no., Carrier, No. of contracts.");
+    const full = { ...row, "Ticket no.": "RQ-1", Carrier: FIELDS0[1].options!.split(",")[0].trim(), "No. of contracts": "2" };
+    const r = addOneTask(d, full, ANA, NOW);
+    const t = r.data.tasks.at(-1)!;
+    expect(r.message).toBe(`${t.id} added to the queue.`);
+    expect(t).toMatchObject({ title: "Rate check", pr: "high", status: "new", source: "upload", received: NOW });
+    expect(t.fields).toMatchObject({ ticket: "RQ-1", contracts: "2" });
+    expect(t.history[0].text).toContain("Added by hand by");
+    expect(r.data.seq).toBe(d.seq + 1);
+    expect(addOneTask(d, { ...full, Trade: "Nowhere" }, ANA, NOW).data.tasks).toHaveLength(0);
+    expect("error" in authorizeWl({ type: "addTask", row: full, by: ANA }, d, ANA)).toBe(true);
+    const ok = authorizeWl({ type: "addTask", row: full, by: 23 }, { ...d, settings: { ...d.settings, uploaders: [ANA] } }, ANA);
+    expect("action" in ok && ok.action).toMatchObject({ by: ANA });
   });
 });
 
@@ -522,10 +623,10 @@ describe("uploads keep the actual received time", async () => {
     expect(parseReceived("")).toBeNull();
     expect(parseReceived("yesterday")).toBe("bad");
     const rows = [
-      { Title: "Old request", System: "RCM", Trade: "LCL", Received: "2026-09-23 08:30" },
-      { Title: "No date", System: "RCM", Trade: "LCL" },
-      { Title: "Future", System: "RCM", Trade: "LCL", Received: "2026-09-30 08:00" },
-      { Title: "Bad", System: "RCM", Trade: "LCL", Received: "soon" },
+      { Title: "Old request", System: "TariffPro", Trade: "Consolidation", Received: "2026-09-23 08:30" },
+      { Title: "No date", System: "TariffPro", Trade: "Consolidation" },
+      { Title: "Future", System: "TariffPro", Trade: "Consolidation", Received: "2026-09-30 08:00" },
+      { Title: "Bad", System: "TariffPro", Trade: "Consolidation", Received: "soon" },
     ];
     const chk = checkRows(rows, [], DEMO_ORG, NOW);
     expect(chk.map((r) => r.msg)).toEqual(["Ready", "Ready", "Received is in the future", "Received must be a date and time like 2026-09-24 08:30"]);
@@ -568,17 +669,17 @@ describe("task types with their own SLA, and holidays", async () => {
     const s = settings({ taskTypes: TYPES });
     expect(E.detectType(s, "Please DOC REVIEW for shipment", "lcl")).toBe("doc");
     expect(E.detectType(s, "New booking request", "eu")).toBe("bk");
-    expect(E.detectType(s, "New booking request", "lcl")).toBe(""); // Booking only covers EU
+    expect(E.detectType(s, "New booking request", "lcl")).toBe(""); // Booking only covers Europe
     expect(E.detectType(s, "Rate question", "eu")).toBe("");
   });
 
   it("uploads take the Task type column, or keywords, and fix the SLA", () => {
     const d = data([], { taskTypes: TYPES });
     const rows = [
-      { Title: "Check invoice", Trade: "EU", "Task type": "Booking" },
-      { Title: "documents for vessel", Trade: "LCL" },
-      { Title: "Plain", Trade: "LCL" },
-      { Title: "Bad", Trade: "LCL", "Task type": "Nope" },
+      { Title: "Check invoice", Trade: "Europe", "Task type": "Booking" },
+      { Title: "documents for vessel", Trade: "Consolidation" },
+      { Title: "Plain", Trade: "Consolidation" },
+      { Title: "Bad", Trade: "Consolidation", "Task type": "Nope" },
     ];
     const chk = checkRows(rows, d.fields, d.org, NOW, TYPES);
     expect(chk.map((c) => c.ok)).toEqual([true, true, true, false]);
@@ -645,7 +746,7 @@ describe("task type targets weight productivity", async () => {
     const d = data([mk("doc", 0), mk("doc", 1), mk("doc", 2), mk("bk", 3)], { taskTypes: TYPES });
     const m = E.personMetrics(d, { ...ana, shiftStart: 8 }, at);
     expect(m.prod).toBe(125);
-    // Without task types, the same tasks count 1 each against the member's target (8 for LCL).
+    // Without task types, the same tasks count 1 each against the member's target (8 for Consolidation).
     const plain = E.personMetrics(data(d.tasks), { ...ana, shiftStart: 8 }, at);
     expect(plain.prod).toBe(50);
   });
@@ -657,7 +758,7 @@ describe("upload keeps the Received date and time from the file", async () => {
   const at = (s: string) => Date.parse(s + "+08:00");
   it("an Excel date-and-time cell survives the trip to the server", () => {
     // ExcelJS reads a cell showing 25/09/2026 12:26 as a Date with those numbers in UTC.
-    const rows = rowsToObjects([["Title *", "Trade *", "Received"], ["Rate check", "LCL", new Date(Date.UTC(2026, 8, 25, 12, 26))]]);
+    const rows = rowsToObjects([["Title *", "Trade *", "Received"], ["Rate check", "Consolidation", new Date(Date.UTC(2026, 8, 25, 12, 26))]]);
     const sent = JSON.parse(JSON.stringify(rows));
     expect(sent[0].Received).toBe("2026-09-25 12:26:00");
     const d = data([]);
@@ -744,7 +845,7 @@ describe("dashboard metrics for any period", async () => {
 describe("overtime broken down by process", async () => {
   const E = await import("./engine");
   const at = (hm: string) => Date.parse(`2026-09-24T${hm}:00+08:00`);
-  // A member on two processes (GPM › FEWB and RCM › LCL), day shift 08:00–17:00.
+  // A member on two processes (RateHub › Far East and TariffPro › Consolidation), day shift 08:00–17:00.
   const two = { ...PEOPLE.find((p) => p.id === ANA)!, trades: ["fewb", "lcl"], shiftStart: 8 };
   const withTwo = (tasks: Task[] = [], p: Partial<Settings> = {}) => ({ ...data(tasks, p), people: data([]).people.map((x) => (x.id === ANA ? two : x)) });
 
@@ -780,7 +881,7 @@ describe("overtime broken down by process", async () => {
 describe("overtime: processes worked, task types per process, and the target", async () => {
   const E = await import("./engine");
   const at = (hm: string) => Date.parse(`2026-09-24T${hm}:00+08:00`);
-  // One process (RCM › LCL), day shift 08:00–17:00, target 4 a day in 6.8 productive hours.
+  // One process (TariffPro › Consolidation), day shift 08:00–17:00, target 4 a day in 6.8 productive hours.
   const one = { ...PEOPLE.find((p) => p.id === ANA)!, trades: ["lcl"], shiftStart: 8 };
   const mk = (tasks: Task[] = [], p: Partial<Settings> = {}) => ({
     ...data(tasks, { memberTargets: { [ANA]: "4" }, ...p }),
@@ -878,8 +979,40 @@ describe("complexity", async () => {
     const d = data([slow, ok, fast], cxs());
     expect(E.cxCheck(d, slow)).toMatchObject({ expMs: 90 * M, actMs: 4 * H, flag: "slow" });
     expect(E.cxCheck(d, ok)!.flag).toBeNull();
-    expect(E.cxCheck(d, fast)!.flag).toBeNull(); // quicker than expected isn't questioned
+    // Done quickly isn't a question by itself: 1 Complex (target 4 a day) is 25% of a day.
+    expect(E.cxCheck(d, fast)!.flag).toBeNull();
+    expect(E.cxOver(d, fast)).toMatchObject({ pct: 25, flag: false });
     expect(E.cxQuestions(d).map((t) => t.id)).toEqual([slow.id]);
+  });
+
+  it("flags over-productive tickets: more contracts in one ticket than a day's target", () => {
+    const cx3 = (fast?: number) => cxs({ complexity: { on: true, levels: levels.map((l) => (l.id === "complex" ? { ...l, target: 3 } : l)), tol: 50, ...(fast === undefined ? {} : { fast }) } });
+    // 16 Complex when the target is 3 Complex a day: 533% of a day in one ticket.
+    const big = task({ status: "done", assignee: ANA, startedAt: at("09:00"), doneAt: at("17:00"), cx: { complex: 16 }, fields: { contracts: 16 } });
+    const d = data([big], cx3());
+    expect(E.cxOver(d, big)).toEqual({ pct: 533, text: "16 Complex of 3 a day", flag: true });
+    expect(E.cxQuestions(d).map((t) => t.id)).toEqual([big.id]);
+    // Mixed levels add up: 6 Simple of 12 + 2 Complex of 3 = 50% + 67% = 117%.
+    expect(E.cxOver(d, { ...big, cx: { simple: 6, complex: 2 } })).toMatchObject({ pct: 117, flag: true });
+    expect(E.cxOver(d, { ...big, cx: { simple: 6, complex: 1 } })).toMatchObject({ pct: 83, flag: false });
+    // The limit is the admin's (default 100%); 0 turns it off.
+    expect(E.cxOver(data([big], cx3(600)), big)!.flag).toBe(false);
+    expect(E.cxOver(data([big], cx3(0)), big)!.flag).toBe(false);
+    // Levels without a target aren't counted; none with a target: no check.
+    const noT = cxs({ complexity: { on: true, levels: levels.map(({ target: _t, ...l }) => l), tol: 50 } });
+    expect(E.cxOver(data([big], noT), big)).toBeNull();
+    // Corrected to the right complexity (2 Complex, 14 Simple = 183%): productivity follows, and
+    // once an admin has checked it, it leaves the list.
+    const fixed = E.reviewCx(d, big.id, 23, at("17:30"), { complex: 2, simple: 14 }).data;
+    expect(get(fixed, big.id)).toMatchObject({ cx: { simple: 14, complex: 2 }, fields: { contracts: 16 }, cxReview: { verdict: "corrected", was: { complex: 16 } } });
+    expect(E.cxOver(fixed, get(fixed, big.id))).toMatchObject({ pct: 183 });
+    expect(E.cxQuestions(fixed)).toEqual([]);
+  });
+
+  it("lets an admin confirm or correct a questioned ticket", () => {
+    const slow = task({ status: "done", assignee: ANA, startedAt: at("09:00"), doneAt: at("13:00"), cx: { simple: 3 }, fields: { contracts: 3 } });
+    const fast = task({ status: "done", assignee: ANA, startedAt: at("15:00"), doneAt: at("15:10"), cx: { complex: 1 }, fields: { contracts: 1 } });
+    const d = data([slow, fast], cxs());
     // Confirm one, correct the other: both leave the list; the correction updates the contracts.
     const c1 = E.reviewCx(d, fast.id, 23, at("16:00")).data;
     expect(get(c1, fast.id).cxReview).toMatchObject({ by: 23, verdict: "ok" });
@@ -888,6 +1021,57 @@ describe("complexity", async () => {
     expect(E.cxQuestions(c2)).toEqual([]);
     // Only admins may check it.
     expect(authorizeWl({ type: "reviewCx", id: slow.id, by: 0 }, d, ANA)).toEqual({ error: "Only Workload admins can do that." });
+  });
+
+  it("Edit ticket changes everything on a resolved ticket, with checks and history", () => {
+    const types = [{ id: "doc", name: "Doc review", sla: 2, trades: ["lcl"], keywords: [] }];
+    const t = task({ status: "done", assignee: ANA, received: at("08:00"), startedAt: at("09:00"), doneAt: at("10:00"), cx: { complex: 4 }, fields: { ticket: "1", contracts: 4 } });
+    const d = data([t], cxs({ taskTypes: types }));
+    const mate = d.people.find((p) => p.id !== ANA && p.trades.includes("lcl"))!;
+    const o = E.editDone(d, t.id, { ticket: "1-A" }, 23, at("16:00"), {
+      title: "Fixed title",
+      pr: "high",
+      ttype: "doc",
+      received: at("08:30"),
+      startedAt: at("09:15"),
+      doneAt: at("10:15"),
+      assignee: mate.id,
+      otMin: 15,
+      delay: "Waited for the carrier",
+      cx: { complex: 1, simple: 3 },
+    });
+    const x = get(o.data, t.id);
+    expect(x).toMatchObject({
+      title: "Fixed title", pr: "high", ttype: "doc", slaH: 2, received: at("08:30"), startedAt: at("09:15"), doneAt: at("10:15"),
+      assignee: mate.id, otMin: 15, ot: true, delay: "Waited for the carrier", cx: { simple: 3, complex: 1 },
+      fields: { ticket: "1-A", contracts: 4 }, cxReview: { verdict: "corrected", was: { complex: 4 } },
+    });
+    const h = x.history.at(-1)!.text;
+    for (const part of ["Title: t → Fixed title", "Priority: Normal → High", "Task type: Standard request → Doc review", `Resolved by: ${d.people.find((p) => p.id === ANA)!.name} → ${mate.name}`, "Complexity: 4 Complex → 3 Simple · 1 Complex", "Ticket no.: 1 → 1-A"])
+      expect(h).toContain(part);
+    // Checks: times in order, a known person and trade, a type used in the trade.
+    expect(E.editDone(d, t.id, {}, 23, at("16:00"), { startedAt: at("07:00") }).message).toMatch(/Started must be between/);
+    expect(E.editDone(d, t.id, {}, 23, at("16:00"), { doneAt: at("17:00") }).message).toMatch(/future/);
+    expect(E.editDone(d, t.id, {}, 23, at("16:00"), { assignee: 999 }).message).toMatch(/Choose who/);
+    expect(E.editDone(d, t.id, {}, 23, at("16:00"), { trade: "nope" }).message).toMatch(/Choose a trade/);
+    expect(E.editDone(d, t.id, {}, 23, at("16:00"), { ttype: "doc", trade: "eu" }).message).toMatch(/isn’t used/);
+    expect(E.editDone(d, t.id, {}, 23, at("16:00"), { title: "  " }).message).toMatch(/empty/);
+    // Unchanged values aren't changes; open tickets aren't edited here.
+    expect(E.editDone(d, t.id, {}, 23, at("16:00"), { title: "t", pr: "normal", received: at("08:00") }).message).toBe("Nothing changed.");
+    const open = task({ status: "in_progress", assignee: ANA, startedAt: at("09:00") });
+    expect(E.editDone(data([open], cxs()), open.id, {}, 23, at("16:00"), { title: "x" }).data.tasks[0]).toBe(open);
+  });
+
+  it("lets an admin correct a resolved ticket's details, kept in its history", () => {
+    const t = task({ status: "done", assignee: ANA, startedAt: at("09:00"), doneAt: at("10:00"), cx: { simple: 2 }, fields: { ticket: "1", carrier: "MSK", contracts: 2 } });
+    const d = data([t], cxs());
+    const o = E.editDone(d, t.id, { ticket: "1", carrier: "CMA", contracts: 9 }, 23, at("16:00"));
+    const x = get(o.data, t.id);
+    expect(x.fields).toMatchObject({ carrier: "CMA", contracts: 2 }); // contracts follow the complexity counts
+    expect(x.history.at(-1)!.text).toMatch(/^Details corrected by .+ · Carrier: MSK → CMA$/);
+    expect(E.editDone(d, t.id, { carrier: "MSK" }, 23, at("16:00")).message).toBe("Nothing changed.");
+    expect(E.editDone(data([working("09:00")], cxs()), "nope", {}, 23, at("16:00")).data.tasks).toHaveLength(1);
+    expect(authorizeWl({ type: "editDone", id: t.id, vals: {}, by: 0 }, d, ANA)).toEqual({ error: "Only Workload admins can do that." });
   });
 });
 
@@ -900,7 +1084,7 @@ describe("average handling time", async () => {
   ];
   it("computes FTE needed from tickets received and AHT", async () => {
     const { fteStats } = await import("./aht");
-    // 2 h per ticket on LCL; 6 more LCL tickets received today → 6 × 2 h = 12 h of work.
+    // 2 h per ticket on Consolidation; 6 more Consolidation tickets received today → 6 × 2 h = 12 h of work.
     const a = task({ status: "done", assignee: ANA, trade: "lcl", startedAt: at("08:00"), doneAt: at("10:00"), received: at("07:00") });
     const more = Array.from({ length: 5 }, () => task({ trade: "lcl", received: at("09:00") }));
     const d = data([a, ...more]);
@@ -975,11 +1159,11 @@ describe("delay remarks and the due / overdue board", async () => {
     expect("error" in authorizeWl({ type: "setDelay", id: t.id, delay: "x" }, d, other.id)).toBe(true);
   });
   it("counts open tickets by due day and system", () => {
-    const over = task({ trade: "lcl", received: NOW - 100 * H }); // RCM, overdue
-    const soon = task({ trade: "fewb", received: NOW - H }); // GPM, still due
+    const over = task({ trade: "lcl", received: NOW - 100 * H }); // TariffPro, overdue
+    const soon = task({ trade: "fewb", received: NOW - H }); // RateHub, still due
     const b = dueBoard(data([over, soon]), [over, soon], NOW);
-    const rcm = b.groups.find((g) => g.name === "RCM")!;
-    const gpm = b.groups.find((g) => g.name === "GPM")!;
+    const rcm = b.groups.find((g) => g.name === "TariffPro")!;
+    const gpm = b.groups.find((g) => g.name === "RateHub")!;
     expect(rcm.overNow).toEqual([over.id]);
     expect(rcm.due.flat()).toEqual([]);
     expect(gpm.due.flat()).toEqual([soon.id]);
@@ -988,12 +1172,12 @@ describe("delay remarks and the due / overdue board", async () => {
     // Future days project overdue: still open and due by the end of that day.
     const later = task({ trade: "fewb", received: NOW + 30 * H }); // due a few days out
     const b2 = dueBoard(data([over, later]), [over, later], NOW);
-    const g2 = b2.groups.find((g) => g.name === "GPM")!;
+    const g2 = b2.groups.find((g) => g.name === "RateHub")!;
     const dueCol = g2.due.findIndex((x) => x.includes(later.id));
     expect(b2.cols[dueCol].future).toBe(true);
     expect(g2.over[dueCol]).toEqual([later.id]); // overdue by the end of its due day if not resolved
     expect(g2.over[dueCol - 1]).toEqual([]);
-    const r2 = b2.groups.find((g) => g.name === "RCM")!;
+    const r2 = b2.groups.find((g) => g.name === "TariffPro")!;
     expect(r2.over.slice(b2.cols.findIndex((c) => c.future)).every((x) => x.includes(over.id))).toBe(true); // stays overdue on every future day
   });
 });
@@ -1010,5 +1194,165 @@ describe("break and lunch over the allowance", async () => {
     const f = breakFlags(d, NOW - 10 * H, NOW + H, NOW);
     expect(f).toHaveLength(1);
     expect(f[0]).toMatchObject({ pid: ANA, min: 105, allowed: 90, over: 15 });
+  });
+});
+
+describe("business case: fixed against unit pricing", async () => {
+  const B = await import("./business");
+  const { applyAction } = await import("./actions");
+  const { authorizeWl } = await import("./authz");
+  const at = (d: string) => Date.parse(`2026-${d}T10:00:00+08:00`);
+  const types = [{ id: "doc", name: "Doc review", sla: 4, trades: [], keywords: [] }];
+  const hc = {
+    year: 2026,
+    rows: [
+      { pid: 0, name: "Ana", level: "member" as const, billed: Array(12).fill(1) },
+      { pid: 1, name: "Ben", level: "senior" as const, billed: [...Array(8).fill(1), 0.5, 1, 1, 1] },
+      { pid: 23, name: "Sam", level: "manager" as const, billed: Array(12).fill(0) },
+    ],
+  };
+  const bill = (p = {}) => ({ mode: "fixed" as const, currency: "USD", roleRates: { member: 2000, senior: 3000 }, unitRates: { "": 10, doc: 25 }, unit: "tasks", when: "resolved" as const, ...p });
+  const tasks = [
+    task({ status: "done", doneAt: at("09-02"), received: at("08-30"), fields: { contracts: 3 } }),
+    task({ status: "done", doneAt: at("09-03"), received: at("09-01"), ttype: "doc", fields: { contracts: 2 } }),
+    task({ status: "new", received: at("09-04"), ttype: "doc", fields: { contracts: 5 } }),
+    task({ status: "done", doneAt: at("08-20"), received: at("08-20"), ttype: "gone" }),
+  ];
+  const mk = (p = {}) => ({ ...data(tasks, { taskTypes: types, billing: bill(p) }), hc, pricers: [23] });
+
+  it("prices billed FTE per role per month and transactions per task type", () => {
+    const bc = B.businessCase(mk(), 2026, 9);
+    const sep = bc.months[8];
+    expect(bc.months).toHaveLength(9);
+    expect(sep).toMatchObject({ fte: 1.5, fixed: 2000 + 1500, units: 2, unit: 10 + 25 });
+    expect(sep.roles.map((r) => r.id)).toEqual(["member", "senior"]); // the manager isn't billed
+    expect(bc.months[7]).toMatchObject({ units: 1, unit: 0 }); // a removed type has no price
+    expect(bc.unpricedTypes).toEqual(["Removed task type"]);
+    expect(bc.total.fixed).toBe(8 * 5000 + 3500);
+  });
+
+  it("counts what the admin chooses: per ticket or a number field, when resolved or received", () => {
+    const rec = B.businessCase(mk({ when: "received" }), 2026, 9).months[8];
+    expect(rec).toMatchObject({ units: 2, unit: 25 + 25 }); // the open doc review counts; the August one doesn't
+    const field = B.businessCase(mk({ unit: "contracts" }), 2026, 9).months[8];
+    expect(field).toMatchObject({ units: 5, unit: 3 * 10 + 2 * 25 });
+  });
+
+  it("flags roles with billed FTE but no rate, and shows pricing to managers and above only", () => {
+    const bc = B.businessCase(mk({ roleRates: { member: 2000 } }), 2026, 9);
+    expect(bc.unpricedRoles).toEqual(["senior"]);
+    const d = mk();
+    expect(B.forViewer(d, 23)).toBe(d);
+    const emp = B.forViewer(d, ANA);
+    expect(emp.settings.billing).toBeUndefined();
+    expect(emp.hc).toBeUndefined();
+    expect(authorizeWl({ type: "setSettings", patch: { billing: bill() } }, d, ANA)).toHaveProperty("error");
+    // A team lead who is a Workload admin runs the team, but pricing is for managers and above.
+    const lead = { ...d, admins: [23, 9] };
+    expect(B.forViewer(lead, 9).settings.billing).toBeUndefined();
+    expect(authorizeWl({ type: "setSettings", patch: { billing: bill() } }, lead, 9)).toEqual({ error: "Only managers and directors can set pricing." });
+    expect(authorizeWl({ type: "setSettings", patch: { staleDays: 3 } }, lead, 9)).toHaveProperty("action");
+    expect(authorizeWl({ type: "setSettings", patch: { billing: bill() } }, lead, 23)).toHaveProperty("action");
+  });
+
+  it("cleans rates saved from the page", () => {
+    const r = applyAction(mk(), { type: "setSettings", patch: { billing: { ...bill(), mode: "x" as never, currency: " eur ", roleRates: { member: -5, senior: 2500 }, unitRates: { doc: Number.NaN, "": 12 } } } }, NOW);
+    expect(r.data.settings.billing).toEqual({ mode: "fixed", currency: "EUR", roleRates: { senior: 2500 }, unitRates: { "": 12 }, unit: "tasks", when: "resolved" });
+    // Other settings and every task stay as they were.
+    expect(r.data.tasks).toBe(mk().tasks);
+  });
+});
+
+describe("overtime pre-approval", async () => {
+  const E = await import("./engine");
+  const at = (hm: string) => Date.parse(`2026-09-24T${hm}:00+08:00`);
+  // Ana: Consolidation, shift 08:00–17:00. Ask 2 h before the end when ≥ 3 wait or ≥ 1 is due / overdue.
+  const on = { otPrompt: { on: true, before: 2, queue: 3, due: 1 } };
+  const waiting = (n: number, received: number) => Array.from({ length: n }, () => task({ status: "new", trade: "lcl", received, pr: "low" }));
+  const ana = (d: WorkloadData) => d.people.find((p) => p.id === ANA)!;
+
+  it("asks near the end of the shift only while the queue is busy, once a day", () => {
+    const busy = data(waiting(3, at("14:00")), on); // low priority: not due today
+    expect(E.otPromptNow(busy, ana(busy), at("14:30"))).toBeNull(); // too early (before 15:00)
+    expect(E.otPromptNow(busy, ana(busy), at("15:30"))).toMatchObject({ waiting: 3, due: 0, shiftEnd: at("17:00") });
+    expect(E.otPromptNow(busy, ana(busy), at("17:01"))).toBeNull(); // shift over
+    const quiet = data(waiting(2, at("14:00")), on);
+    expect(E.otPromptNow(quiet, ana(quiet), at("15:30"))).toBeNull();
+    // One due (high priority, 4 h SLA) is enough.
+    const due = data([task({ status: "new", trade: "lcl", pr: "high", received: at("12:00") })], on);
+    expect(E.otPromptNow(due, ana(due), at("15:30"))).toMatchObject({ waiting: 1, due: 1 });
+    // Off: never; answered: not again.
+    expect(E.otPromptNow(data(waiting(5, at("14:00"))), ana(busy), at("15:30"))).toBeNull();
+    const answered = E.planOt(busy, ANA, false, "", at("15:30")).data;
+    expect(E.otPromptNow(answered, ana(answered), at("16:00"))).toBeNull();
+  });
+
+  it("Yes (with remarks) lets them report overtime at End work; No ends the day without it", () => {
+    const d = data(waiting(3, at("14:00")), on);
+    expect(E.planOt(d, ANA, true, " ", at("15:30")).message).toMatch(/Add remarks/);
+    const yes = E.planOt(d, ANA, true, "Month-end Europe rates", at("15:30")).data;
+    expect(E.otPlanToday(yes, ANA, at("16:00"))).toMatchObject({ kind: "otplan", plan: "yes", note: "Month-end Europe rates" });
+    expect(E.otAllowed(yes, ana(yes), at("18:00"))).toBe(true);
+    expect(E.endWork(yes, ANA, 60, at("18:00")).data.activities.at(-1)).toMatchObject({ kind: "end", otMin: 60, otStatus: "pending" });
+    const no = E.planOt(d, ANA, false, "", at("15:30")).data;
+    expect(E.otAllowed(no, ana(no), at("18:00"))).toBe(false);
+    expect(E.endWork(no, ANA, 60, at("18:00")).data.activities.at(-1)).toMatchObject({ kind: "end", otMin: 0, otStatus: null });
+    // Not answered: no overtime either (the team uses the prompt); a holiday duty / rest day still can.
+    expect(E.otAllowed(d, ana(d), at("18:00"))).toBe(false);
+    expect(E.otAllowed(d, { ...ana(d), otDay: "restday" }, at("18:00"))).toBe(true);
+    // The answer isn't time away.
+    expect(E.dayActivity(yes, ANA, at("16:00")).awayMs).toBe(0);
+    expect(E.dayActivity(yes, ANA, at("16:00")).away.otplan).toBeUndefined();
+    // Without the prompt, End work works as before.
+    expect(E.otAllowed(data([]), ana(d), at("18:00"))).toBe(true);
+  });
+});
+
+describe("helping elsewhere before your own trades are clear", async () => {
+  const { canTake, clearEnough } = await import("./engine");
+  const ana = PEOPLE.find((p) => p.id === ANA)!;
+  // Due in 5 days (low priority, 72 h SLA plus the weekend): not due today.
+  const later = () => task({ trade: "lcl", pr: "low", received: NOW - H });
+  const dueToday = () => task({ trade: "lcl", pr: "high", received: NOW - H });
+  const us = () => task({ trade: "us", received: NOW - 2 * H }); // same system (TariffPro)
+  const eu = () => task({ trade: "eu", received: NOW - 3 * H }); // another system (RateHub)
+  const withLimit = (ts: Task[], n?: number) => ({ ...data(ts), settings: { ...data(ts).settings, helpBelow: n } });
+
+  it("is off by default: only once the member's own trades are empty", () => {
+    const d = withLimit([later(), us()]);
+    expect(canTake(d, ana, d.tasks[1], NOW)).toBe(false);
+    expect(clearEnough(d, [d.tasks[0]], NOW)).toBe(false);
+  });
+
+  it("allows it at or below the setting when none of their own is due today or overdue", () => {
+    const own = [later(), later()];
+    const d = withLimit([...own, us()], 2);
+    expect(canTake(d, ana, d.tasks[2], NOW)).toBe(true);
+    // Three waiting with a limit of 2: not yet.
+    const d3 = withLimit([later(), later(), later(), us()], 2);
+    expect(canTake(d3, ana, d3.tasks[3], NOW)).toBe(false);
+    // Within the limit but one is due today: not yet.
+    const dd = withLimit([later(), dueToday(), us()], 4);
+    expect(canTake(dd, ana, dd.tasks[2], NOW)).toBe(false);
+  });
+
+  it("goes to another system only when their own system is low too, and asks on Start work", () => {
+    const d = withLimit([later(), us(), eu()], 1);
+    const [, u, e] = d.tasks;
+    expect(canTake(d, ana, u, NOW)).toBe(true);
+    expect(canTake(d, ana, e, NOW)).toBe(false); // own + same system = 2 waiting, over the limit
+    const d2 = withLimit([later(), eu()], 1);
+    expect(canTake(d2, ana, d2.tasks[1], NOW)).toBe(true); // own system low, nothing else in it
+    // FIFO: Start work asks first; the member can carry on with their own or help.
+    const r = startWork(d, ANA, NOW);
+    expect(r.ask).toMatchObject({ own: 1, system: 1 });
+    expect(r.data).toBe(d);
+    const mine = startWork(d, ANA, NOW, "own");
+    expect(mine.data.tasks.find((t) => t.id === d.tasks[0].id)).toMatchObject({ status: "in_progress", assignee: ANA });
+    const help = startWork(d, ANA, NOW, true);
+    expect(help.data.tasks.find((t) => t.id === u.id)).toMatchObject({ status: "in_progress", assignee: ANA });
+    // Their own is due today: no question, their own comes first.
+    const due = withLimit([dueToday(), us()], 3);
+    expect(startWork(due, ANA, NOW).ask).toBeUndefined();
   });
 });

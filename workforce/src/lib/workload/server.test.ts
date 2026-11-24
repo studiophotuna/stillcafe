@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { Task } from "./types";
 
 /**
- * In-memory stand-in for the two Postgres functions (workforce_snapshot /
+ * In-memory stand-in for the two Postgres functions (workforce_snapshot_window /
  * workforce_apply) with the same guarantees: version checks and one task in
  * progress per person, all-or-nothing.
  */
@@ -14,6 +14,8 @@ const db = {
   /** Runs once just before the next apply — simulates someone else writing in between. */
   beforeApply: null as null | (() => void),
   applies: 0,
+  /** What workforce_my_busy returns: the person's tasks in progress in other teams. */
+  busy: [] as { pid: number; team: string; id: string; title: string }[],
 };
 
 function snapshot() {
@@ -58,7 +60,18 @@ vi.mock("@supabase/supabase-js", () => ({
     rpc: async (fn: string, args: { p_changes?: unknown; p_token?: string }) => {
       if (args.p_token !== TOKEN) return { data: null, error: { message: "workforce_unauthorized" } };
       if (fn === "workforce_cal_snapshot") return { data: { data: structuredClone(calendar), version: 1 }, error: null };
-      if (fn === "workforce_snapshot") return { data: structuredClone(snapshot()), error: null };
+      if (fn === "workforce_snapshot_window") {
+        // Open tasks, tasks finished in the window, and tasks asked for by id.
+        const w = args as unknown as { p_from: number; p_to: number | null; p_ids: string[] };
+        const s = structuredClone(snapshot());
+        if (s)
+          s.tasks = s.tasks.filter(
+            (t: { id: string; status: string; doneAt: number | null }) =>
+              t.status !== "done" || (t.doneAt !== null && t.doneAt >= w.p_from && (w.p_to === null || t.doneAt < w.p_to)) || w.p_ids.includes(t.id),
+          );
+        return { data: s, error: null };
+      }
+      if (fn === "workforce_my_busy") return { data: db.busy, error: null };
       if (fn === "workforce_activities") return { data: [...db.activities.values()].map(({ a, v }) => ({ ...a, version: v })), error: null };
       if (fn === "workforce_save_activities") {
         for (const r of structuredClone((args as { p_rows: ({ id: string; version: number; deleted?: boolean } & Record<string, unknown>)[] }).p_rows)) {
@@ -77,7 +90,7 @@ vi.mock("@supabase/supabase-js", () => ({
 
 process.env.SUPABASE_URL = "https://example.supabase.co";
 process.env.SUPABASE_SECRET_KEY = "test";
-const { getData: getData0, runAction: runAction0 } = await import("./server");
+const { getData: getData0, runAction: runAction0, getDone } = await import("./server");
 const { seedTasks } = await import("./seed");
 
 const TOKEN = "t";
@@ -99,13 +112,14 @@ beforeEach(() => {
   db.activities = new Map();
   db.beforeApply = null;
   db.applies = 0;
+  db.busy = [];
 });
 
 describe("server persistence", () => {
   it("creates the team once, empty, with people from the calendar", async () => {
     const d = await getData0(TOKEN, ADMIN);
     expect(d.tasks).toHaveLength(0);
-    expect(d.org.team).toEqual({ id: "rm", name: "Rate Management" });
+    expect(d.org.team).toEqual({ id: "rm", name: "Rate Desk" });
     expect(d.org.trades.map((t) => t.id)).toEqual(["fewb", "inas", "eu", "us", "asla", "lcl"]);
     expect(d.people.find((p) => p.id === ANA)?.trades).toEqual(["lcl"]);
     expect(d.people.map((p) => p.id)).toEqual(expect.arrayContaining([ANA, LEO]));
@@ -120,13 +134,13 @@ describe("server persistence", () => {
   });
 
   it("opens any team a person is in, with that team's org and people from the calendar", async () => {
-    // Customer Service has no systems or trades: the team itself is where tasks go.
+    // Customer Care has no systems or trades: the team itself is where tasks go.
     const d = await getData0(TOKEN, ANA, "cs");
-    expect(d.org.team.name).toBe("Customer Service");
-    expect(d.org.trades).toEqual([{ id: "cs", name: "Customer Service", sys: "" }]);
+    expect(d.org.team.name).toBe("Customer Care");
+    expect(d.org.trades).toEqual([{ id: "cs", name: "Customer Care", sys: "" }]);
     expect(d.people.find((p) => p.id === ANA)?.trades).toEqual(["cs"]);
     expect(d.org.teams.map((t) => t.id).sort()).toEqual(["cs", "rm"]);
-    // Leo is only in Rate Management.
+    // Leo is only in Rate Desk.
     await expect(getData0(TOKEN, LEO, "cs")).rejects.toThrow(/can’t open that team/);
     expect((await getData0(TOKEN, LEO)).org.team.id).toBe("rm");
   });
@@ -154,6 +168,16 @@ describe("server persistence", () => {
     expect(leo(r.data)).toEqual(leo(before));
   });
 
+  it("one task in progress at a time counts across teams", async () => {
+    await getData();
+    db.busy = [{ pid: ANA, team: "cs", id: "CS-1", title: "x" }];
+    const r = await runAction({ type: "startWork", pid: ANA }, ANA);
+    expect(r.message).toMatch(/already have CS-1 in progress in /);
+    expect(r.data.tasks.some((t) => t.assignee === ANA && t.status === "in_progress")).toBe(false);
+    expect(r.data.busyElsewhere?.[0]).toMatchObject({ id: "CS-1", teamName: expect.any(String) });
+    expect(db.applies).toBe(1); // only the team's creation
+  });
+
   it("saves only what an action changed", async () => {
     await getData();
     const r = await runAction({ type: "startWork", pid: ANA }, ANA);
@@ -167,7 +191,7 @@ describe("server persistence", () => {
 
   it("retries when someone else takes the same task first", async () => {
     const d = await getData();
-    // The task Ana would get next is taken by Leo (also LCL) just before her save lands.
+    // The task Ana would get next is taken by Leo (also Consolidation) just before her save lands.
     const { applyAction } = await import("./actions");
     const target = applyAction(d, { type: "startWork", pid: ANA }, Date.now()).data.tasks.find(
       (t) => t.assignee === ANA && t.status === "in_progress",
@@ -189,8 +213,8 @@ describe("server persistence", () => {
     const r = await runAction({
       type: "importRows",
       rows: [
-        { Title: "Good", System: "RCM", Trade: "LCL", "Ticket no.": "1", Carrier: "MSCU", "No. of contracts": "2" },
-        { Title: "Bad", System: "RCM", Trade: "Nope" },
+        { Title: "Good", System: "TariffPro", Trade: "Consolidation", "Ticket no.": "1", Carrier: "MSCU", "No. of contracts": "2" },
+        { Title: "Bad", System: "TariffPro", Trade: "Nope" },
       ],
     });
     expect(r.message).toBe("1 task added from upload.");
@@ -203,5 +227,22 @@ describe("server persistence", () => {
     await runAction({ type: "setSettings", patch: { mode: "rr", evil: 1 } as never });
     expect(db.team?.settings).toMatchObject({ mode: "rr" });
     expect(db.team?.settings).not.toHaveProperty("evil");
+  });
+
+  it("loads open and recent tasks only; older finished ones on request, and still editable", async () => {
+    await getData();
+    const day = 24 * 3600_000;
+    const done = (id: string, ago: number): Task => ({ ...db.tasks.values().next().value!.t, id, status: "done", assignee: ANA, startedAt: Date.now() - ago - 3600_000, doneAt: Date.now() - ago });
+    db.tasks.set("T-OLD", { t: done("T-OLD", 90 * day), v: 1 });
+    db.tasks.set("T-NEW", { t: done("T-NEW", 2 * day), v: 1 });
+    const d = await getData0(TOKEN, ADMIN);
+    expect(d.tasks.some((t) => t.id === "T-OLD")).toBe(false);
+    expect(d.tasks.some((t) => t.id === "T-NEW")).toBe(true);
+    expect(d.doneSince).toBeLessThanOrEqual(Date.now() - 34 * day);
+    const older = await getDone(TOKEN, ADMIN, null, Date.now() - 100 * day, Date.now() - 50 * day);
+    expect(older.map((t) => t.id)).toEqual(["T-OLD"]);
+    const r = await runAction({ type: "editDone", id: "T-OLD", vals: { remarks: "checked" }, by: ADMIN });
+    expect(r.data.tasks.find((t) => t.id === "T-OLD")?.fields.remarks).toBe("checked");
+    expect(db.tasks.get("T-OLD")?.t.fields.remarks).toBe("checked");
   });
 });

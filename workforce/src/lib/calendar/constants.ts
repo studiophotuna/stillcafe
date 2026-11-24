@@ -20,6 +20,9 @@ export const CODES: Record<Code, Chip & { label: string }> = {
   HDY: { label: "Holiday duty (OT)", bg: "var(--color-neutral-300)", fg: "var(--color-accent-800)", bd: "1px solid var(--color-accent-700)" },
   RD: { label: "Rest day", bg: "var(--color-neutral-200)", fg: "var(--color-neutral-700)", bd: T },
   RDOT: { label: "Rest day OT", bg: "var(--color-neutral-200)", fg: "var(--color-accent-800)", bd: "1px solid var(--color-accent-700)" },
+  ML: { label: "Maternity leave", bg: "#7a2e5b", fg: "#fff", bd: T },
+  PL: { label: "Paternity leave", bg: "#2e5b7a", fg: "#fff", bd: T },
+  SPL: { label: "Solo parent leave", bg: "#5b4a8a", fg: "#fff", bd: T },
 };
 export const CODE_KEYS = Object.keys(CODES) as Code[];
 /** Pending approval: amber with a dashed outline. */
@@ -35,28 +38,49 @@ export const BUCKETS: Record<Bucket, string> = { morning: "Morning", mid: "Midsh
 export const WORKING: Code[] = ["RTO", "WFH", "HDY", "RDOT"];
 export const OT_CODES: Code[] = ["HDY", "RDOT"];
 /** Out of office (drives Outlook reminders). */
-export const OOO: Code[] = ["VL", "SL", "EL", "HD", "BT"];
-/** Uses a leave balance. */
-export const ANNUAL: Code[] = ["VL", "SL", "EL", "HD"];
+export const OOO: Code[] = ["VL", "SL", "EL", "HD", "BT", "ML", "PL", "SPL"];
+/** Leave (uses a leave balance). */
+export const ANNUAL: Code[] = ["VL", "SL", "EL", "HD", "ML", "PL", "SPL"];
 /** Shares the VL + SL pool. */
 export const POOL: Code[] = ["VL", "SL", "HD"];
-export const REQ_TYPES: Code[] = ["VL", "SL", "EL", "HD", "BT", "WFH", "RTO"];
+export const REQ_TYPES: Code[] = ["VL", "SL", "EL", "HD", "BT", "WFH", "RTO", "ML", "PL", "SPL"];
+
+/**
+ * Leave rules (Philippine law), counted per request:
+ * - Maternity (RA 11210): 105 calendar days for a live birth, 120 for solo parents; 60 for a
+ *   miscarriage or emergency termination.
+ * - Paternity (RA 8187): 7 working days per delivery (first 4 deliveries of the spouse); up to
+ *   7 more when the mother transfers them from her maternity leave.
+ * - Solo parent (RA 11861): 7 working days a year.
+ */
+export const LAW = { ml: 105, mlSolo: 120, mlMiscarriage: 60, pl: 7, plTransfer: 7, spl: 7 };
+/** VL + SL carried into a new year: at most this many days. */
+export const CARRY_MAX = 5;
+/** The first year the app tracks: stored carry-over and "used before the app" apply to it. */
+export const LEDGER_START = 2026;
+/** Leave types a person can request (maternity for women, paternity for men, solo parent for solo parents; both when sex isn't set). */
+export const reqTypesFor = (p: { sex?: "F" | "M"; soloParent?: boolean }) =>
+  REQ_TYPES.filter((k) => (k === "ML" ? p.sex !== "M" : k === "PL" ? p.sex !== "F" : k === "SPL" ? !!p.soloParent : true));
 
 export const LEVELS: Record<Level, string> = {
   member: "Associate",
   specialist: "Specialist",
   senior: "Sr. Specialist",
   lead: "Team lead",
+  srlead: "Sr. Team Lead",
+  supervisor: "Supervisor",
   manager: "Manager",
   director: "Director",
 };
 /** Roles from the top down (for sorting and filters). */
-export const LEVEL_ORDER: Level[] = ["director", "manager", "lead", "senior", "specialist", "member"];
+export const LEVEL_ORDER: Level[] = ["director", "manager", "supervisor", "srlead", "lead", "senior", "specialist", "member"];
 export const LEVEL_RANK = Object.fromEntries(LEVEL_ORDER.map((l, i) => [l, i])) as Record<Level, number>;
-/** Team leads, managers and directors lead people (approve, see the management view). */
-export const isLeader = (l: Level) => l === "lead" || l === "manager" || l === "director";
+/** Team leads and above (Sr. Team Lead, Supervisor, Manager, Director) lead people (approve, see the management view). */
+export const isLeader = (l: Level) => l === "lead" || l === "srlead" || l === "supervisor" || l === "manager" || l === "director";
+/** Team-level leaders (Team lead, Sr. Team Lead, Supervisor): admins of their own teams by role. */
+export const TEAM_LEADS: Level[] = ["supervisor", "srlead", "lead"];
 /** Other names accepted for a role in uploads. */
-export const LEVEL_ALIAS: Record<string, Level> = { member: "member", "sr specialist": "senior", "senior specialist": "senior", "team leader": "lead" };
+export const LEVEL_ALIAS: Record<string, Level> = { member: "member", "sr specialist": "senior", "senior specialist": "senior", "team leader": "lead", "sr team lead": "srlead", "sr. team lead": "srlead", "senior team lead": "srlead", "sr team leader": "srlead", "senior team leader": "srlead" };
 export const TYPE_L: Record<NodeType, string> = { dept: "Department", tower: "Tower", branch: "Team", system: "System", trade: "Trade" };
 export const HTYPE: Record<HolidayType, string> = {
   regular: "Regular holiday",
@@ -122,6 +146,11 @@ export const NAMES = [
   "Kim Bautista", "Leo Aquino", "Mia Castillo", "Xandro Manalo", "Yna Galang", "Nico Salazar", "Zach Dela Rosa",
   "Arvin Tolentino", "Bettina Sison", "Sam Delgado", "Carlo Ignacio", "Olive Tan", "Diego Samonte", "Erika Valdez",
   "Felix Aguilar", "Paolo Lim", "Rhea Soriano", "Gwen Salcedo", "Hector Dimaculangan", "Iris Montemayor",
+  // Other towers (34+).
+  "Liza Mercado", "Marco Villareal", "Nina Pangilinan", "Oscar Bernardo", "Pia Alcantara", "Quentin Esguerra", "Rosa Dimalanta",
+  "Simon Cajucom", "Trina Velasco", "Ulysses Gatchalian", "Vera Lualhati", "Warren Magbanua", "Xyza Fernandez", "Yago Panganiban",
+  "Zara Quiambao", "Andre Macaraeg", "Bianca Roque", "Cesar Lagman", "Dina Saldana", "Emil Navarrete", "Faye Ilagan",
+  "Gabriel Sevilla", "Honey Tuazon", "Ian Valenzuela",
 ];
 export const ADMIN_ID = 23;
 export const EMPLOYEE_ID = 0;
@@ -129,6 +158,6 @@ export const EMPLOYEE_ID = 0;
 export const first = (n: string) => n.split(" ")[0];
 export const emailOf = (n: string) => {
   const w = n.toLowerCase().split(" ");
-  return `${w[0]}.${w[w.length - 1]}@dsv.com`;
+  return `${w[0]}.${w[w.length - 1]}@demobss.com`;
 };
 export const lc = (v: unknown) => String(v ?? "").trim().toLowerCase();

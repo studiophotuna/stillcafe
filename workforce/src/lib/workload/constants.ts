@@ -1,24 +1,27 @@
-import type { AllocationMode, Availability, Person, Priority, TaskField, TaskStatus, Trade, WlOrg } from "./types";
+import type { AllocationMode, Availability, Person, Priority, TaskField, TaskStatus, Trade, ViewAs, WlOrg } from "./types";
 
-/** Sample-data org (demo mode): Rate Management › GPM / RCM › trades. With a database the org comes from the Calendar. */
-const TEAM = { id: "rm", name: "Rate Management" };
+/**
+ * Sample-data org (demo mode; fictional, as the Calendar sample): Rate Desk › RateHub /
+ * TariffPro › trades. With a database the org comes from the Calendar.
+ */
+const TEAM = { id: "rm", name: "Rate Desk" };
 
-const SYS: Record<string, string> = { gpm: "GPM", rcm: "RCM" };
+const SYS: Record<string, string> = { gpm: "RateHub", rcm: "TariffPro" };
 
 const TRADES: Trade[] = [
-  { id: "fewb", name: "FEWB", sys: "gpm" },
-  { id: "inas", name: "INAS", sys: "gpm" },
-  { id: "eu", name: "EU", sys: "gpm" },
-  { id: "us", name: "US", sys: "rcm" },
-  { id: "asla", name: "ASLA", sys: "rcm" },
-  { id: "lcl", name: "LCL", sys: "rcm" },
+  { id: "fewb", name: "Far East", sys: "gpm" },
+  { id: "inas", name: "Indian Ocean", sys: "gpm" },
+  { id: "eu", name: "Europe", sys: "gpm" },
+  { id: "us", name: "Americas", sys: "rcm" },
+  { id: "asla", name: "Latin America", sys: "rcm" },
+  { id: "lcl", name: "Consolidation", sys: "rcm" },
 ];
 
 export const DEMO_ORG: WlOrg = {
   team: TEAM,
   systems: Object.entries(SYS).map(([id, name]) => ({ id, name })),
   trades: TRADES,
-  teams: [{ ...TEAM, tower: "A&S Support - Rate Management" }],
+  teams: [{ ...TEAM, tower: "Pricing & Rates" }],
 };
 
 export const tradeOf = (o: WlOrg, id: string) => o.trades.find((t) => t.id === id);
@@ -66,6 +69,16 @@ export const PEOPLE: Person[] = PEOPLE_SEED.map(([id, name, trades]) => ({
 export const ADMIN_ID = 23;
 export const EMPLOYEE_ID = 0;
 
+/** Sample-data personas for demos: who "view as" signs in as. */
+export const PERSONAS: { v: ViewAs; id: number; label: string }[] = [
+  { v: "director", id: 26, label: "Director (Diego Samonte)" },
+  { v: "admin", id: ADMIN_ID, label: "Manager (Sam Delgado)" },
+  { v: "lead", id: 14, label: "Team lead (Kim Bautista)" },
+  { v: "employee", id: EMPLOYEE_ID, label: "Employee (Ana Reyes)" },
+];
+export const personaId = (v: ViewAs) => PERSONAS.find((x) => x.v === v)?.id ?? ADMIN_ID;
+export const isViewAs = (v: unknown): v is ViewAs => PERSONAS.some((x) => x.v === v);
+
 export const person = (id: number) => PEOPLE.find((p) => p.id === id);
 
 export const AV: Record<Availability, [string, string]> = {
@@ -97,6 +110,8 @@ export const MODES: [AllocationMode, string, string][] = [
 export const modeLabel = (m: AllocationMode) => MODES.find((x) => x[0] === m)![1];
 
 export const CARRIERS = ["MSCU", "HLCU", "CMDU", "ONEY", "ZIMU", "MAEU", "COSU"];
+/** Fictional carriers for the sample data. */
+export const DEMO_CARRIERS = ["ATLS", "BLHR", "CRLN", "DLTM", "EVRS", "FJRD", "GLWY"];
 
 export const FIELDS0: TaskField[] = [
   { key: "ticket", label: "Ticket no.", type: "text", required: true },

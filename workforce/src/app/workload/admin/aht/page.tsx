@@ -1,6 +1,5 @@
 "use client";
 
-import Link from "next/link";
 import { AhtPanels, useAht } from "@/components/AhtPanels";
 import { DateRangePicker, useStoredRange } from "@/components/DateRangePicker";
 import { Blueprint, Icon, Kpi, PageHead } from "@/components/ui";
@@ -10,6 +9,7 @@ import { cxOn } from "@/lib/workload/engine";
 import { downloadSheets } from "@/lib/workload/excel";
 import { rangeLabel, rangeMs, todayRange } from "@/lib/workload/period";
 import { useWorkload } from "@/lib/workload/store";
+import { useTasksIn } from "@/lib/workload/useTasksIn";
 import { usePeriodInput } from "@/lib/workload/usePeriodInput";
 
 const t = (ms: number | null) => (ms === null ? "—" : dur(ms));
@@ -20,10 +20,12 @@ const min = (ms: number | null) => (ms === null ? null : Math.round(ms / 60000))
  * away excluded) by member, trade, task type and complexity level. Same dates as the Dashboard.
  */
 export default function AhtPage() {
-  const { data, now, toast } = useWorkload();
+  const { now, toast } = useWorkload();
   const [rg, setRg] = useStoredRange("perf", todayRange(now));
   const r = rg ?? todayRange(now);
   const [from, to] = rangeMs(r);
+  // Tasks finished in the period (older dates are fetched once).
+  const { data } = useTasksIn(from, Math.min(to, now + 60_000));
   const { input, error } = usePeriodInput(from, to);
   const d = input ? { ...data, activities: input.activities } : data;
   const st = useAht(d, from, Math.min(to, now + 1));
@@ -68,12 +70,7 @@ export default function AhtPage() {
     <>
       <PageHead
         title={`Average handling time · ${data.org.team.name}`}
-        sub={
-          <>
-            Time worked on resolved tickets, per ticket and per contract. The dates are shared with the <Link href="/workload/dashboard">Dashboard</Link>, which shows the
-            same figures.
-          </>
-        }
+        sub="Time worked on resolved tickets, per ticket and per contract, and the people needed."
       />
       <div className="row" style={{ justifyContent: "space-between" }}>
         <DateRangePicker value={r} onChange={setRg} today={dayKey(now)} id="aht" />
@@ -126,7 +123,7 @@ function FteTable({ rows, total, days, prodH, f1 }: { rows: FteRow[]; total: Fte
         </span>
       </div>
       {rows.length ? (
-        <div className="boxed-scroll">
+        <div className="boxed-scroll" tabIndex={0}>
           <table className="table">
             <thead>
               <tr>
@@ -148,10 +145,11 @@ function FteTable({ rows, total, days, prodH, f1 }: { rows: FteRow[]; total: Fte
       ) : (
         <span className="small">No tickets received or members allocated in this period.</span>
       )}
-      <span className="small">
+      <details className="howto small">
+        <summary>How this is worked out</summary>
         Allocated: members in each trade (someone in two trades counts ½ in each). Gap: allocated − needed; red means short of people. Trades with no resolved
         tickets in the period use the team’s AHT. Productive hours per day come from Targets.
-      </span>
+      </details>
     </Blueprint>
   );
 }

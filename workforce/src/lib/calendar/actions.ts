@@ -3,16 +3,22 @@
  * re-applied by the server (/api/cal/action) to the stored calendar.
  */
 import { fmtT } from "../workload/clock";
-import { ANNUAL, CODES, LEVELS, TYPE_L, first, isLeader } from "./constants";
-import { addDays, dowOf, fmtY, isWk, MONL } from "./dates";
+import { CARRY_MAX, CODES, LAW, LEVELS, TYPE_L, first, isLeader } from "./constants";
+import { addDays, dowOf, fmt, fmtY, isWk, MONL, rng2 } from "./dates";
 import { Cal, evState, logsDecision, logsSubmit } from "./engine";
+import { capHits, hitText, suggestDates } from "./leaveCap";
 import { allocProblem, hcTeamOf, mkOrg, primaryTeamOf, teamDefaults, withHcChange, type Org } from "./org";
 import { planOrgImport, type OrgRow } from "./orgImport";
 import { applyUpload, checkUpload, type UploadMode, type UploadRow } from "./uploads";
-import type { CalPerson, AppLinks, HcTag,
+import type { CalPerson, AppLinks, HcTag, KpiEntry, KpiIssue,
   BcpEvent, BcpStatus, CalendarData, Code, Holiday, LeaveRequest, Level, NodeType, NotifLog, OrgNode, Shift,
 } from "./types";
 import type { ReadyKey } from "./constants";
+
+/** Tracker entry changes: a string or number sets it, null clears it. */
+export type KpiPatch = Partial<Record<"remark" | "otRemark", string | null> & Record<"util" | "prod" | "time" | "acc" | "reg" | "rd" | "hol", number | null>>;
+/** An accuracy issue as entered (id only when editing one). */
+export type IssueForm = Pick<KpiIssue, "team" | "date" | "desc" | "root" | "preventive" | "corrective"> & { id?: string; ticket?: string };
 
 export interface RequestForm {
   type: Code;
@@ -31,7 +37,7 @@ export type CalAction =
   | { type: "setShiftDay"; pid: number; date: string; shift: string }
   | { type: "holidayWork"; pid: number; date: string; code: "RTO" | "WFH" | "HOL" | null; actor: number }
   | { type: "restDayWork"; pid: number; date: string; actor: number }
-  | { type: "teamSettings"; id: string; patch: Partial<Pick<OrgNode, "mode" | "notifyAdmin" | "notifyUser" | "invite" | "defaultScope" | "costCentre" | "schedPeriod">> }
+  | { type: "teamSettings"; id: string; patch: Partial<Pick<OrgNode, "mode" | "notifyAdmin" | "notifyUser" | "invite" | "defaultScope" | "costCentre" | "schedPeriod" | "leaveMax" | "leaveMaxSys">> }
   | { type: "setSchedule"; bid: string; pids: number[]; from: string; to: string; shift: string | null; days: Partial<Record<number, SchedDay>> }
   | { type: "setBilled"; pid: number; bid: string; months: string[]; value: number | null }
   | { type: "setLinks"; links: AppLinks }
@@ -41,11 +47,17 @@ export type CalAction =
   | { type: "importOrg"; dept: string; rows: OrgRow[] }
   | { type: "renameNode"; id: string; name: string }
   | { type: "deleteNode"; id: string }
-  | { type: "saveMember"; pid: number; level: Level; shift: string; adminHere: boolean; bid: string; assign: string[]; isNew: boolean; details?: MemberDetails; hcFrom?: string }
+  | { type: "saveMember"; pid: number; level: Level; shift: string; adminHere?: boolean; bid: string; assign: string[]; isNew: boolean; details?: MemberDetails; hcFrom?: string }
   | { type: "setHcHistory"; pid: number; history: HcTag[] }
   | { type: "bulkMembers"; pids: number[]; level?: Level; approver?: number; shift?: string; wfhDays?: number[] }
-  | { type: "addPerson"; details: MemberDetails & { name: string; email: string }; level: Level; shift: string; adminHere: boolean; bid: string; assign: string[] }
+  | { type: "addPerson"; details: MemberDetails & { name: string; email: string }; level: Level; shift: string; adminHere?: boolean; bid: string; assign: string[] }
   | { type: "removeFromTeam"; pid: number; bid: string }
+  | { type: "deleteMember"; pid: number; bid: string }
+  | { type: "setKpi"; team: string; period: string; patch: KpiPatch; actor: number }
+  | { type: "setCover"; id?: string; leader: number; standIn: number; from: string; to: string; actor: number }
+  | { type: "endCover"; id: string }
+  | { type: "saveIssue"; issue: IssueForm; actor: number }
+  | { type: "deleteIssue"; id: string }
   | { type: "setResign"; pid: number; date: string | null }
   | { type: "saveShift"; orig: string | null; rec: Shift }
   | { type: "deleteShift"; id: string }
@@ -67,10 +79,16 @@ export interface MemberDetails {
   email?: string;
   hire?: string;
   entitle?: number;
+  /** VL + SL for the hire year; null = pro-rated automatically. */
+  entitleFirst?: number | null;
   elEnt?: number;
-  carry?: number;
+  /** This year's carry-over; null = automatic (last year's VL + SL left, up to 5). */
+  carry?: number | null;
+  /** VL + SL / EL used this year before the app. */
   ytd?: number;
   ytdEl?: number;
+  sex?: "F" | "M" | "";
+  soloParent?: boolean;
   /** Weekdays worked from home by default, 1 = Mon … 5 = Fri. */
   wfhDays?: number[];
   /** Headcount team when allocated to several teams ("" = the first allocation's team). */
@@ -89,9 +107,17 @@ function fixPrimary<T extends CalPerson>(O: Cal["O"], p: T): T {
   return (bs.length > 1 ? { ...rest, primaryTeam: bs[0].id } : rest) as T;
 }
 
+/** Cleaned details, as stored on the person. */
+type PersonPatch = Omit<MemberDetails, "carry" | "entitleFirst" | "sex"> & Partial<Pick<CalPerson, "carry" | "carryYear" | "ytdYear" | "entitleFirst" | "sex">>;
+
 /** Clean and validate details; returns an error message or the cleaned patch. */
-export function cleanDetails(d: CalendarData, m: MemberDetails, selfId: number | null): { error: string } | { patch: MemberDetails } {
-  const out: MemberDetails = {};
+export function cleanDetails(
+  d: CalendarData,
+  m: MemberDetails,
+  selfId: number | null,
+  year = new Date().getFullYear(),
+): { error: string } | { patch: PersonPatch } {
+  const out: PersonPatch = {};
   if (m.name !== undefined) {
     const n = m.name.trim().replace(/\s+/g, " ");
     if (!n) return { error: "Enter the person’s name." };
@@ -115,17 +141,23 @@ export function cleanDetails(d: CalendarData, m: MemberDetails, selfId: number |
   try {
     const e1 = num(m.entitle, 0, 60, "VL + SL entitlement");
     const e2 = num(m.elEnt, 0, 30, "Emergency leave");
-    const e3 = num(m.carry, 0, 5, "Carry-over");
+    const e3 = m.carry === null ? null : num(m.carry, 0, CARRY_MAX, "Carry-over");
     const e4 = num(m.ytd, 0, 60, "VL + SL already used");
     const e5 = num(m.ytdEl, 0, 30, "EL already used");
+    const e6 = m.entitleFirst === null ? null : num(m.entitleFirst, 0, 60, "VL + SL in the hire year");
     if (e1 !== undefined) out.entitle = e1;
     if (e2 !== undefined) out.elEnt = e2;
-    if (e3 !== undefined) out.carry = e3;
-    if (e4 !== undefined) out.ytd = e4;
-    if (e5 !== undefined) out.ytdEl = e5;
+    // Carry-over set by an admin applies to this year; null goes back to automatic.
+    if (e3 === null) (out.carry = 0), (out.carryYear = 0);
+    else if (e3 !== undefined) (out.carry = e3), (out.carryYear = year);
+    if (e4 !== undefined) (out.ytd = e4), (out.ytdYear = year);
+    if (e5 !== undefined) (out.ytdEl = e5), (out.ytdYear = year);
+    if (e6 !== undefined) out.entitleFirst = e6 ?? undefined;
   } catch (e) {
     return { error: (e as Error).message };
   }
+  if (m.sex !== undefined) out.sex = m.sex === "F" || m.sex === "M" ? m.sex : undefined;
+  if (m.soloParent !== undefined) out.soloParent = !!m.soloParent || undefined;
   if (m.wfhDays !== undefined) out.wfhDays = [...new Set(m.wfhDays.filter((x) => x >= 1 && x <= 5))].sort();
   if (typeof m.primaryTeam === "string") out.primaryTeam = m.primaryTeam;
   if (m.approver !== undefined) {
@@ -156,6 +188,24 @@ const setNode = (d: CalendarData, id: string, patch: Partial<OrgNode>): Calendar
 });
 const plural = (n: number, w: string) => `${n} ${w}${n === 1 ? "" : "s"}`;
 
+/** Why a member can't request this maternity / paternity / solo parent leave, or "". */
+export function leaveRule(c: Cal, p: CalPerson, type: Code, n: number): string {
+  if (type === "ML") {
+    if (p.sex === "M") return "Maternity leave is for women. Ask an admin to check your profile.";
+    const max = p.soloParent ? LAW.mlSolo : LAW.ml;
+    if (n > max) return `Maternity leave is up to ${max} calendar days per delivery${p.soloParent ? " for solo parents" : ""}. For a longer leave, ask your admin.`;
+  }
+  if (type === "PL") {
+    if (p.sex === "F") return "Paternity leave is for men. Ask an admin to check your profile.";
+    if (n > LAW.pl) return `Paternity leave is up to ${LAW.pl} working days per delivery. Days transferred from maternity leave are added by an admin.`;
+  }
+  if (type === "SPL") {
+    if (!p.soloParent) return "Solo parent leave is for solo parents. Ask an admin to mark you as a solo parent.";
+    // Beyond the 7 days a year: filed as leave without pay (see lwopFor).
+  }
+  return "";
+}
+
 /** Record a decision: one approval decides the whole request (any other team still pending follows it). */
 function decideOne(q: LeaveRequest, bid: string, st: "approved" | "declined", actor: number, at: string): LeaveRequest {
   const approvals = { ...q.approvals };
@@ -164,16 +214,16 @@ function decideOne(q: LeaveRequest, bid: string, st: "approved" | "declined", ac
 }
 
 /** Create a request with per-team approvals; returns the new data, the request and its notifications. */
-export function createRequest(c: Cal, pid: number, f: RequestForm, adminBid: string | null, now: number) {
+export function createRequest(c: Cal, pid: number, f: RequestForm, adminBid: string | null, now: number, lwop = 0, extra: string[] = []) {
   const d = c.d;
   const approvals: LeaveRequest["approvals"] = {};
   const p = c.person(pid);
   // Team leads and above don't need approval; members' requests follow the team's setting
   // (approved when an admin enters them on the calendar).
   const lead = isLeader(p.level);
-  // One approval: the first team in the person's profile (admins entering it for their own
-  // team approve it there).
-  const home = (adminBid && c.O.branchesOf(p).find((b) => b.id === adminBid)) || c.O.branchesOf(p)[0];
+  // One approval: the person's main team (primary allocation; admins entering it for their own
+  // team approve it there). Once decided it shows the same in every team they're in.
+  const home = (adminBid && c.O.branchesOf(p).find((b) => b.id === adminBid)) || c.O.by[primaryTeamOf(c.O, p) ?? ""] || c.O.branchesOf(p)[0];
   if (home) approvals[home.id] = lead || home.id === adminBid || home.mode === "auto" ? "approved" : "pending";
   const q: LeaveRequest = {
     id: "LR" + String(d.seq).padStart(6, "0"),
@@ -185,9 +235,10 @@ export function createRequest(c: Cal, pid: number, f: RequestForm, adminBid: str
     reason: f.reason || "",
     created: c.today,
     approvals,
+    ...(lwop > 0 ? { lwop } : {}),
   };
   const next: CalendarData = { ...d, requests: [q].concat(d.requests), seq: d.seq + 1 };
-  return { data: pushLogs(next, logsSubmit(new Cal(next, c.today), q, fmtT(now), adminBid)), q };
+  return { data: pushLogs(next, logsSubmit(new Cal(next, c.today), q, fmtT(now), adminBid, extra)), q };
 }
 
 /**
@@ -207,8 +258,8 @@ const subsIn = (O: Org, p: CalPerson, team: string | undefined) =>
 
 export function recordHcChanges(before: CalendarData, after: CalendarData, month: string): CalendarData {
   if (before.people === after.people && before.nodes === after.nodes) return after;
-  const Ob = mkOrg(before.nodes);
-  const Oa = after.nodes === before.nodes ? Ob : mkOrg(after.nodes);
+  const Ob = mkOrg(before.nodes, before.people);
+  const Oa = after.nodes === before.nodes ? Ob : mkOrg(after.nodes, after.people);
   const prev = new Map(before.people.map((p) => [p.id, p]));
   let changed = false;
   const people = after.people.map((p) => {
@@ -230,17 +281,54 @@ function applyInner(d: CalendarData, a: CalAction, today: string, now: number): 
     case "submitRequest": {
       const f = a.form;
       if (!c.people.has(a.pid) || !CODES[f.type] || f.type === "HOL" || f.type === "HDY") return { data: d };
-      const n = f.type === "HD" ? (c.workdays(f.start, f.start) ? 0.5 : 0) : c.workdays(f.start, f.end);
-      if (!n || (f.type !== "HD" && f.end < f.start)) return { data: d };
-      const { data, q } = createRequest(c, a.pid, f, a.adminBid, now);
+      if (f.type !== "HD" && f.end < f.start) return { data: d };
+      const n = f.type === "HD" ? (c.workdays(f.start, f.start) ? 0.5 : 0) : c.reqDays(f);
+      if (!n) return { data: d };
+      // Maternity, paternity and solo parent leave: who may take them and how long (members' own
+      // requests; admins entering leave on the calendar can record longer, e.g. transferred days).
+      const who = c.person(a.pid);
+      const rule = leaveRule(c, who, f.type, n);
+      if (rule && !a.adminBid) return { data: d, error: rule };
+      // Beyond the balance: still filed, the extra days as leave without pay.
+      const lwop = c.lwopFor(who, f.type, f.start, n);
+      // Days where the team's leave limit is already reached: still filed, with a heads-up.
+      const hits = capHits(c, a.pid, f.start, f.type === "HD" ? f.start : f.end, f.type);
+      const full = [...new Set(hits.map((h) => h.date))];
+      const warn = full.length ? [`Leave limit already reached: ${[...new Set(hits.map(hitText))].join("; ")}. Approving goes past it.`] : [];
+      const { data: data0, q } = createRequest(c, a.pid, f, a.adminBid, now, lwop, warn);
+      // Tell the requester too (Notifications), with other dates to try.
+      const tries = full.length ? suggestDates(c, a.pid, f.start, f.type === "HD" ? f.start : f.end, f.type) : [];
+      const data = full.length
+        ? pushLogs(data0, [
+            {
+              kind: "email",
+              at: fmtT(now),
+              did: Object.keys(q.approvals)[0] ?? "",
+              toIds: [a.pid],
+              toLine: `${who.name} <${who.email}>`,
+              toShort: who.name,
+              subject: `Leave limit reached: ${CODES[f.type].label}, ${rng2(q.start, q.end)}`,
+              lines: [
+                `Hi ${first(who.name)},`,
+                `The most people allowed on leave is already reached on ${full.map(fmt).join(", ")} (${[...new Set(hits.map(hitText))].join("; ")}).`,
+                tries.length ? `Dates with room: ${tries.map((t) => (t.start === t.end ? fmt(t.start) : rng2(t.start, t.end))).join(", ")}. You can cancel this request and file for one of them.` : "There are no free dates nearby.",
+                "Your request was still sent; your approver can decide on it.",
+              ],
+            },
+          ])
+        : data0;
       const p = c.person(a.pid);
-      if (a.adminBid && q.approvals[a.adminBid] === "approved") return { data, message: `${CODES[f.type].label} recorded for ${first(p.name)}. Notifications sent.` };
+      const unpaid =
+        (lwop > 0 ? ` ${lwop === n ? "It’s" : `${lwop} of the ${n} days are`} leave without pay (no balance left).` : "") +
+        (full.length ? ` Heads-up: the most people allowed on leave is already reached on ${full.map(fmt).join(", ")}; your approver will see this.` : "");
+      if (a.adminBid && q.approvals[a.adminBid] === "approved") return { data, message: `${CODES[f.type].label} recorded for ${first(p.name)}. Notifications sent.${unpaid}` };
       const pend = Object.keys(q.approvals).filter((k) => q.approvals[k] === "pending").map((k) => c.O.by[k].name);
       return {
         data,
-        message: pend.length
-          ? `Request sent. The ${pend.join(" and ")} admin${pend.length > 1 ? "s" : ""} will get an email to approve it.`
-          : "Approved automatically. It’s on the calendar now.",
+        message:
+          (pend.length
+            ? `Request sent. The ${pend.join(" and ")} admin${pend.length > 1 ? "s" : ""} will get an email to approve it.`
+            : "Approved automatically. It’s on the calendar now.") + unpaid,
       };
     }
     case "decide": {
@@ -382,8 +470,128 @@ function applyInner(d: CalendarData, a: CalAction, today: string, now: number): 
       for (const k of ["notifyAdmin", "notifyUser", "invite"] as const) if (typeof p[k] === "boolean") patch[k] = p[k];
       if (typeof p.costCentre === "string") patch.costCentre = p.costCentre.trim().slice(0, 40);
       if (p.schedPeriod === "week" || p.schedPeriod === "month") patch.schedPeriod = p.schedPeriod;
+      // Leave limit per day: whole people, 0 = none; per system only for the team's own systems.
+      const cap = (x: unknown) => Math.max(0, Math.min(999, Math.round(Number(x) || 0)));
+      if (p.leaveMax !== undefined) patch.leaveMax = cap(p.leaveMax);
+      if (p.leaveMaxSys && typeof p.leaveMaxSys === "object") {
+        const mine = new Set(c.O.kids(a.id, "system").map((x) => x.id));
+        patch.leaveMaxSys = Object.fromEntries(Object.entries(p.leaveMaxSys).filter(([k]) => mine.has(k)).map(([k, v]) => [k, cap(v)]).filter(([, v]) => (v as number) > 0));
+      }
       if (!c.O.by[a.id] || !Object.keys(patch).length) return { data: d };
       return { data: setNode(d, a.id, patch), message: "Saved." };
+    }
+    case "setCover": {
+      // Leave cover: the stand-in approves and monitors for the leader on these dates.
+      const L = c.people.get(a.leader);
+      const S = c.people.get(a.standIn);
+      if (!L || !isLeader(L.level)) return { data: d, error: "Only team leads, managers and directors can have cover." };
+      if (!S || S.id === L.id || !c.alive(S, today)) return { data: d, error: "Choose who covers for you." };
+      const depts = (p: CalPerson) => new Set(p.assign.flatMap((x) => c.O.anc(x)).filter((n) => c.O.by[n]?.type === "dept"));
+      const ld = depts(L);
+      if (![...depts(S)].some((x) => ld.has(x))) return { data: d, error: `${S.name} isn’t in your department.` };
+      const okDate = (x: string) => /^\d{4}-\d{2}-\d{2}$/.test(x ?? "");
+      if (!okDate(a.from) || !okDate(a.to) || a.to < a.from) return { data: d, error: "Enter the first and last day of the cover." };
+      if (a.to < today) return { data: d, error: "The cover has to end today or later." };
+      if (Date.parse(a.to) - Date.parse(a.from) > 92 * 86_400_000) return { data: d, error: "A cover can be up to 3 months." };
+      const list = d.covers ?? [];
+      const clash = list.find((x) => x.leader === L.id && x.id !== a.id && x.to >= today && x.from <= a.to && a.from <= x.to);
+      if (clash) return { data: d, error: `You already have cover from ${fmtY(clash.from)} to ${fmtY(clash.to)}. Change or end that one.` };
+      const old = a.id ? list.find((x) => x.id === a.id && x.leader === L.id) : undefined;
+      if (a.id && !old) return { data: d };
+      const cover = { id: old?.id ?? `CV${d.seq}`, leader: L.id, standIn: S.id, from: a.from, to: a.to, by: a.actor, at: today };
+      // Drop covers that ended over 90 days ago.
+      const kept = list.filter((x) => x.id !== cover.id && x.to >= addDays(today, -90));
+      const next: CalendarData = { ...d, covers: kept.concat(cover), seq: old ? d.seq : d.seq + 1 };
+      const when = rng2(a.from, a.to);
+      return {
+        data: pushLogs(next, [
+          {
+            kind: "email",
+            at: fmtT(now),
+            did: primaryTeamOf(c.O, L) ?? "",
+            toIds: [S.id],
+            toLine: `${S.name} <${S.email}>`,
+            toShort: S.name,
+            subject: `You’re covering for ${L.name} · ${when}`,
+            lines: [
+              `Hi ${first(S.name)},`,
+              `${L.name} asked you to cover for them from ${fmtY(a.from)} to ${fmtY(a.to)}.`,
+              "During those days you can approve or decline their team’s leave, schedule, overtime and break requests, and see their dashboards, trackers and calendars (Admin).",
+              "Your access ends by itself after the last day.",
+            ],
+          },
+        ]),
+        message: `${S.name} covers for ${first(L.name)} ${when}.`,
+      };
+    }
+    case "endCover": {
+      // Ending early: from today the leader is back (a cover not started yet is removed).
+      const list = d.covers ?? [];
+      const x = list.find((y) => y.id === a.id);
+      if (!x || x.to < today) return { data: d };
+      const end = addDays(today, -1);
+      const covers = end < x.from ? list.filter((y) => y.id !== a.id) : list.map((y) => (y.id === a.id ? { ...y, to: end } : y));
+      return { data: { ...d, covers }, message: "Cover ended." };
+    }
+    case "setKpi": {
+      // OT / KPI trackers: remarks (up to 1,000 characters) and entered figures for a team and period.
+      if (!c.O.by[a.team] || !/^\d{4}-(W\d{2}|\d{2})$/.test(a.period)) return { data: d };
+      const k = `${a.team}|${a.period}`;
+      const cur: KpiEntry = { ...(d.kpi?.[k] ?? {}) };
+      const PCT = ["util", "prod", "time", "acc"] as const;
+      const HRS = ["reg", "rd", "hol"] as const;
+      for (const [key, v] of Object.entries(a.patch) as [keyof KpiPatch, string | number | null][]) {
+        if (key === "remark" || key === "otRemark") {
+          const t = typeof v === "string" ? v.trim().slice(0, 1000) : "";
+          if (t) cur[key] = t;
+          else delete cur[key];
+        } else if ((PCT as readonly string[]).includes(key) || (HRS as readonly string[]).includes(key)) {
+          if (v === null || v === "") delete cur[key];
+          else {
+            const n = Number(v);
+            const max = (PCT as readonly string[]).includes(key) ? 1000 : 5000;
+            if (!Number.isFinite(n) || n < 0 || n > max) return { data: d, error: (PCT as readonly string[]).includes(key) ? "Enter a % from 0 to 1000." : "Enter overtime hours from 0." };
+            cur[key] = Math.round(n * 100) / 100;
+          }
+        }
+      }
+      cur.by = a.actor;
+      cur.at = today;
+      const kpi = { ...(d.kpi ?? {}) };
+      if (Object.keys(cur).every((x) => x === "by" || x === "at")) delete kpi[k];
+      else kpi[k] = cur;
+      return { data: { ...d, kpi }, message: "Saved." };
+    }
+    case "saveIssue": {
+      const f = a.issue;
+      const t = (s: unknown, n: number) => (typeof s === "string" ? s.trim().slice(0, n) : "");
+      if (!c.O.by[f.team] || c.O.by[f.team].type !== "branch") return { data: d, error: "Choose a team." };
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(f.date ?? "") || f.date > today) return { data: d, error: "Enter the date it happened (not in the future)." };
+      const issue: KpiIssue = {
+        id: f.id ?? `I${Math.max(0, d.seq) + 1}-${now.toString(36)}`,
+        team: f.team,
+        date: f.date,
+        ...(t(f.ticket, 60) ? { ticket: t(f.ticket, 60) } : {}),
+        desc: t(f.desc, 2000),
+        root: t(f.root, 2000),
+        preventive: t(f.preventive, 2000),
+        corrective: t(f.corrective, 2000),
+        by: a.actor,
+        at: today,
+      };
+      if (!issue.desc) return { data: d, error: "Describe the issue." };
+      const list = d.issues ?? [];
+      const old = f.id ? list.find((x) => x.id === f.id) : undefined;
+      if (f.id && !old) return { data: d };
+      return {
+        data: { ...d, issues: old ? list.map((x) => (x.id === f.id ? { ...issue, by: old.by, at: old.at } : x)) : list.concat(issue) },
+        message: old ? "Issue updated." : "Issue logged.",
+      };
+    }
+    case "deleteIssue": {
+      const list = d.issues ?? [];
+      if (!list.some((x) => x.id === a.id)) return { data: d };
+      return { data: { ...d, issues: list.filter((x) => x.id !== a.id) }, message: "Issue deleted." };
     }
     case "setBilled": {
       // Headcount report: billed FTE for a person in a team for some months (null = back to the default).
@@ -417,6 +625,8 @@ function applyInner(d: CalendarData, a: CalAction, today: string, now: number): 
     case "addAdmin": {
       const b = c.O.by[a.id];
       if (!b || b.admins?.includes(a.pid)) return { data: d };
+      const ap = c.people.get(a.pid);
+      if (!ap || !isLeader(ap.level)) return { data: d, error: "Admins must be a team lead, manager or director." };
       return { data: setNode(d, a.id, { admins: (b.admins ?? []).concat(a.pid) }), message: `${c.person(a.pid).name} is now an admin of ${b.name}.` };
     }
     case "removeAdmin": {
@@ -474,15 +684,17 @@ function applyInner(d: CalendarData, a: CalAction, today: string, now: number): 
       if (!b || !LEVELS[a.level]) return { data: d, error: "Choose a role and team." };
       const bad = allocProblem(c.O, a.level, a.assign);
       if (bad) return { data: d, error: bad };
-      const cl = cleanDetails(d, { hire: today, entitle: 25, elEnt: 5, carry: 0, ytd: 0, ytdEl: 0, wfhDays: [], ...a.details }, null);
+      // Everyone gets 5 days of EL; VL + SL is pro-rated in the hire year; carry-over starts automatic.
+      const cl = cleanDetails(d, { hire: today, entitle: 25, elEnt: 5, carry: null, ytd: 0, ytdEl: 0, wfhDays: [], ...a.details }, null, Number(today.slice(0, 4)));
       if ("error" in cl) return { data: d, error: cl.error };
       if (!cl.patch.name || !cl.patch.email) return { data: d, error: "Enter the person’s name and email." };
-      const id = Math.max(0, ...d.people.map((p) => p.id)) + 1;
+      const id = Math.max(0, d.pidSeq ?? 0, ...d.people.map((p) => p.id)) + 1;
       const person = {
         id, name: cl.patch.name, email: cl.patch.email, level: a.level, assign: [...new Set(a.assign)], pattern: "A" as const,
         shift: d.shifts.some((x) => x.id === a.shift) ? a.shift : d.shifts[0]?.id ?? "D", hire: cl.patch.hire!, resign: null,
-        ytd: cl.patch.ytd ?? 0, ytdEl: cl.patch.ytdEl ?? 0, carry: cl.patch.carry ?? 0, entitle: cl.patch.entitle ?? 25,
-        elEnt: cl.patch.elEnt ?? 5, wfhDays: cl.patch.wfhDays ?? [],
+        ytd: cl.patch.ytd ?? 0, ytdEl: cl.patch.ytdEl ?? 0, ytdYear: cl.patch.ytdYear, carry: cl.patch.carry ?? 0, carryYear: cl.patch.carryYear,
+        entitle: cl.patch.entitle ?? 25, entitleFirst: cl.patch.entitleFirst ?? undefined, elEnt: cl.patch.elEnt ?? 5, wfhDays: cl.patch.wfhDays ?? [],
+        sex: cl.patch.sex || undefined, soloParent: cl.patch.soloParent,
         primaryTeam: cl.patch.primaryTeam,
       };
       let next: CalendarData = { ...d, people: d.people.concat(fixPrimary(c.O, person)) };
@@ -495,15 +707,18 @@ function applyInner(d: CalendarData, a: CalAction, today: string, now: number): 
       if (!p || !b || !LEVELS[a.level]) return { data: d, error: "Choose a role and team." };
       const bad = allocProblem(c.O, a.level, a.assign);
       if (bad) return { data: d, error: bad };
-      const cl = cleanDetails(d, a.details ?? {}, a.pid);
+      const cl = cleanDetails(d, a.details ?? {}, a.pid, Number(today.slice(0, 4)));
       if ("error" in cl) return { data: d, error: cl.error };
       let next: CalendarData = {
         ...d,
         people: d.people.map((x) => (x.id === a.pid ? fixPrimary(c.O, { ...x, ...cl.patch, assign: [...new Set(a.assign)], level: a.level, shift: a.shift || x.shift }) : x)),
       };
       const inHere = a.assign.some((x) => c.O.anc(x).includes(a.bid));
+      // Team admins are set in Team settings; without adminHere the member keeps their status here
+      // (while still allocated to the team).
+      const was = (b.admins ?? []).includes(a.pid);
       let na = (b.admins ?? []).filter((x) => x !== a.pid);
-      if (a.adminHere && inHere) na = na.concat(a.pid);
+      if ((a.adminHere ?? was) && inHere) na = na.concat(a.pid);
       if (na.join() !== (b.admins ?? []).join()) next = setNode(next, a.bid, { admins: na });
       return { data: next, message: p.name + (a.isNew ? " added." : " updated.") };
     }
@@ -564,6 +779,30 @@ function applyInner(d: CalendarData, a: CalAction, today: string, now: number): 
       return {
         data: { ...d, people: d.people.map((x) => (x.id === a.pid ? fixPrimary(c.O, { ...x, assign: left }) : x)) },
         message: `${p.name} removed from ${c.O.by[a.bid]?.name}. Their other allocations are unchanged.`,
+      };
+    }
+    case "deleteMember": {
+      // Permanently: the person, their requests, schedule entries, check-ins and billed
+      // FTE overrides; they're no longer an admin or anyone's approver. Their id isn't reused.
+      const p = c.people.get(a.pid);
+      if (!p) return { data: d };
+      const mine = (k: string) => k.split("|")[0] === String(a.pid);
+      const drop = <T,>(o: Record<string, T> | undefined) => (o ? Object.fromEntries(Object.entries(o).filter(([k]) => !mine(k))) : o);
+      const { [a.pid]: _r, ...bcpReady } = d.bcpReady;
+      return {
+        data: {
+          ...d,
+          pidSeq: Math.max(d.pidSeq ?? 0, ...d.people.map((x) => x.id)),
+          people: d.people.filter((x) => x.id !== a.pid).map((x) => (x.approver === a.pid ? { ...x, approver: undefined } : x)),
+          nodes: d.nodes.map((n) => (n.admins?.includes(a.pid) ? { ...n, admins: n.admins.filter((x) => x !== a.pid) } : n)),
+          requests: d.requests.filter((q) => q.pid !== a.pid),
+          overrides: drop(d.overrides)!,
+          roster: drop(d.roster)!,
+          billing: drop(d.billing),
+          bcpReady,
+          checkins: Object.fromEntries(Object.entries(d.checkins).map(([ev, m]) => [ev, Object.fromEntries(Object.entries(m).filter(([pid]) => pid !== String(a.pid)))])),
+        },
+        message: `${p.name} deleted.`,
       };
     }
     case "setResign": {

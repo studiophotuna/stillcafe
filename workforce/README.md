@@ -26,6 +26,12 @@ npm run typecheck
 npm run build
 ```
 
+**Browser checks (Playwright MCP).** `.mcp.json` at the repo root adds Microsoft's open-source
+Playwright MCP (`@playwright/mcp`, Apache-2.0, free; pinned to 0.0.83) for Claude Code: a local,
+headless browser that can only open `localhost:3300` and the two Vercel sites. Approve it when
+Claude Code asks. Where Playwright's own Chromium isn't installed (e.g. cloud sessions), set
+`PLAYWRIGHT_MCP_EXECUTABLE_PATH` to an existing Chromium, e.g. `/opt/pw-browsers/chromium`.
+
 With the database (the default) everyone signs in with **email and password** at `/login`.
 With `WORKFORCE_DB=off` the app runs on fictional sample data, and **Sample data · view as** at
 the bottom of the side menu switches between the admin (Sam Delgado) and a member (Ana Reyes).
@@ -92,19 +98,28 @@ adding rows. New teams start with admin approval and no team admin.
 
 ## Data and saving
 
-Both modules save to Supabase: schema `workforce` in the stillcafe project
-(`qepcyhgtyhjnxxlrjebk`), kept apart from the site's tables. Migrations in `supabase/migrations/`.
+Both modules save to Supabase: schema `workforce` in its own project
+(`ljzgqjxxwucscjitjlag`), kept apart from the site's tables. Migrations in `supabase/migrations/`.
 
 - **Rules run on the server.** The browser applies an action on screen straight away and posts it
   (`/api/wl/action`, `/api/cal/action`). The server re-runs the same rule on the stored data and
   saves with a version check; if someone else saved in between, it reloads and retries.
+- **Workload loads open tasks and the last 35 days of finished ones** (`workforce_snapshot_window`,
+  migration 0025). Pages that look further back — Task history, Completed, Dashboard, Handling
+  time, Business case, Data pull-out — fetch the finished tasks for the dates they show
+  (`/api/wl/done`, `useTasksIn`), once per period. "All dates" goes back a year.
 - **Workload** stores tasks as rows (`workforce.task`) and only writes rows that changed; the
   database also refuses a second in-progress task for one person, so two members pressing Start
   work never get the same task.
 - **Calendar** stores the whole calendar as one versioned document (`workforce.cal_state`) — an
   interim design so it is usable now; the normalized tables in the handoff data model replace it
   when real data moves in.
-- Each browser refreshes every 20 s and on focus.
+- **Background refresh is cheap.** An open page checks every 30 s whether anything changed,
+  sending the version it has (`?v=`); the server answers `{ same: true }` after one small read
+  (`workforce_cal_version`, `workforce_wl_stamp`, migration 0024) and only sends the full data
+  when it differs. Hidden tabs don't refresh at all, idle ones (5 min without input) every 2 min,
+  and a tab refreshes once when it comes back. Notices (BIPO, holiday, payroll) are one shared
+  request, every 10 min.
 - **The Calendar is Workload's source of truth.** Each Calendar team has its own Workload
   (queue, settings, targets), picked from the Team filter. Everything else comes from Calendar ›
   Organization and Members, read fresh on every load:

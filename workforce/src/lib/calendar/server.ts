@@ -17,6 +17,12 @@ export async function loadCalendar(token: string): Promise<{ data: CalendarData;
   return (data as { data: CalendarData; version: number } | null) ?? null;
 }
 
+/** The calendar's version number (one cheap read), or null if it can't be checked. */
+export async function calVersion(token: string): Promise<number | null> {
+  const { data, error } = await db().rpc("workforce_cal_version", { p_token: token, p_id: DOC });
+  return error ? null : (data as number);
+}
+
 async function save(token: string, data: CalendarData, version: number) {
   const { error } = await db().rpc("workforce_cal_save", { p_token: token, p_id: DOC, p_data: data, p_version: version });
   if (error) {

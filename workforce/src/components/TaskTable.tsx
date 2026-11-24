@@ -10,8 +10,10 @@ import { rowAction, type TaskRowVM } from "@/lib/workload/view";
  * highlighted; a Ticket column appears when the team has a ticket field.
  */
 export function TaskTable({ rows, variant }: { rows: TaskRowVM[]; variant: "mine" | "queue" | "history" }) {
-  const { run, me, setDialog, data } = useWorkload();
+  const { run, me, setDialog, data, isAdmin } = useWorkload();
   const q = variant === "queue";
+  // Received: for admins managing the queue; members see how long a task has been waiting.
+  const rc = q && isAdmin;
   const h = variant === "history";
   const tf = ticketField(data);
   // Delay remarks column: in the queue whenever the list has overdue tickets; in completed
@@ -25,7 +27,7 @@ export function TaskTable({ rows, variant }: { rows: TaskRowVM[]; variant: "mine
           <th>Task</th>
           <th>System › Trade</th>
           {!h && <th>Priority</th>}
-          {q && <th>Received</th>}
+          {rc && <th>Received</th>}
           {!h && <th>Waiting</th>}
           {!h && <th>Due</th>}
           {h && <th>Started</th>}
@@ -36,14 +38,14 @@ export function TaskTable({ rows, variant }: { rows: TaskRowVM[]; variant: "mine
           {!h && <th>Status</th>}
           {(q || h) && <th>{h ? "Done by" : "Assignee"}</th>}
           {dl && <th>Delay remarks</th>}
-          {!h && <th />}
+          {!h && <th><span className="sr-only">Actions</span></th>}
         </tr>
       </thead>
       <tbody>
         {rows.map((r) => (
           <tr key={r.id} className={!h && r.dueState ? "row-" + r.dueState : undefined}>
             {tf && <td className="nowrap" style={{ fontWeight: 500 }}>{r.ticket || "—"}</td>}
-            <td>
+            <td style={q || h ? { minWidth: 260 } : undefined}>
               <button className="task-link" onClick={() => setDialog({ kind: "task", id: r.id })}>
                 <span>{r.title}</span>
                 <span>
@@ -58,7 +60,7 @@ export function TaskTable({ rows, variant }: { rows: TaskRowVM[]; variant: "mine
                 <span className={"tag " + r.prCls}>{r.priority}</span>
               </td>
             )}
-            {q && (
+            {rc && (
               <td className="nowrap" style={{ color: "var(--color-neutral-800)" }}>
                 {r.receivedShort}
               </td>
@@ -77,7 +79,7 @@ export function TaskTable({ rows, variant }: { rows: TaskRowVM[]; variant: "mine
             {h && <td className="nowrap">{r.held || "—"}</td>}
             {h && <td>{r.onTime ? "Yes" : <span style={{ color: "var(--color-accent-800)", fontWeight: 600 }}>Late</span>}</td>}
             {!h && (
-              <td>
+              <td className="nowrap">
                 <span className={"tag " + r.stCls}>{r.status}</span>
               </td>
             )}
@@ -96,7 +98,7 @@ export function TaskTable({ rows, variant }: { rows: TaskRowVM[]; variant: "mine
               <td>
                 {r.action && (
                   <button
-                    className="btn btn-secondary btn-36"
+                    className="btn btn-secondary btn-36 nowrap"
                     disabled={r.action.disabled}
                     onClick={() => {
                       const a = r.action!;

@@ -2,7 +2,8 @@
 
 import { Chip, Seg } from "@/components/calendar/bits";
 import { Blueprint, Icon } from "@/components/ui";
-import { CODES, CODE_KEYS, POOL } from "@/lib/calendar/constants";
+import { CODES, CODE_KEYS, LEVELS, POOL, isLeader } from "@/lib/calendar/constants";
+import { roleAdminsOf } from "@/lib/calendar/org";
 import { useCalendar } from "@/lib/calendar/store";
 import { useCalView } from "@/lib/calendar/useCalView";
 import type { CalAction } from "@/lib/calendar/actions";
@@ -15,9 +16,34 @@ export default function SettingsPage() {
   const v = useCalView();
   const b = v.branch;
   const admins = b.admins ?? [];
+  // Admins by role: the team's leads, its tower's managers and its department's directors.
+  const byRole = [...new Set(s.cal.O.anc(b.id).flatMap((n) => roleAdminsOf(s.cal.O, n)))].map((i) => s.cal.people.get(i)).filter((p) => !!p);
   const set = (patch: TeamPatch) => s.run({ type: "teamSettings", id: b.id, patch });
+  const systems = s.cal.O.kids(b.id, "system");
+  const capInput = (id: string, label: string, val: number | undefined, save: (n: number) => void) => (
+    <div key={id + (val ?? "")} className="row" style={{ gap: 10, alignItems: "center" }}>
+      <label htmlFor={id} style={{ minWidth: 120 }}>
+        {label}
+      </label>
+      <input
+        id={id}
+        className="input"
+        type="number"
+        min={0}
+        step={1}
+        placeholder="No limit"
+        defaultValue={val || ""}
+        style={{ width: 110 }}
+        onBlur={(e) => {
+          const n = Math.max(0, Math.round(Number(e.target.value) || 0));
+          if (n !== (val ?? 0)) save(n);
+        }}
+      />
+      <span className="small">people a day</span>
+    </div>
+  );
   const cands = s.data.people
-    .filter((p) => s.cal.O.inN(p, b.id) && !admins.includes(p.id) && !(p.resign && p.resign < s.today))
+    .filter((p) => isLeader(p.level) && s.cal.O.inN(p, b.id) && !admins.includes(p.id) && !(p.resign && p.resign < s.today))
     .sort((x, y) => x.name.localeCompare(y.name));
   const check = (label: string, desc: string, on: boolean, key: keyof Pick<OrgNode, "notifyAdmin" | "notifyUser" | "invite">) => (
     <label className="rule">
@@ -41,7 +67,7 @@ export default function SettingsPage() {
     <>
       <div className="page-head">
         <h1>Settings · {b.name}</h1>
-        <span>Settings apply to the whole team, including its systems and trades. Changes save immediately.</span>
+        <span>For the whole team, its systems and trades. Changes save straight away.</span>
       </div>
       <div className="field" style={{ maxWidth: 320 }}>
         <label htmlFor="cc">Cost centre (headcount report)</label>
@@ -79,6 +105,11 @@ export default function SettingsPage() {
                 </span>
               ))}
             </div>
+            {byRole.length > 0 && (
+              <span className="small" style={{ fontSize: 12 }}>
+                Also admins by their role: {byRole.map((p) => `${p.name} (${LEVELS[p.level]})`).join(", ")}.
+              </span>
+            )}
             <select
               className="input"
               aria-label="Add an admin"
@@ -89,7 +120,7 @@ export default function SettingsPage() {
               <option value="">Add an admin…</option>
               {cands.map((p) => (
                 <option key={p.id} value={p.id}>
-                  {p.name}
+                  {p.name} · {LEVELS[p.level]}
                 </option>
               ))}
             </select>
@@ -115,11 +146,30 @@ export default function SettingsPage() {
           <div className="field">
             <label>Plan member schedules and shifts per</label>
             <Seg name="schedper" value={b.schedPeriod ?? "week"} options={[["week", "Week"], ["month", "Month"]]} onChange={(val) => set({ schedPeriod: val })} />
-            <span className="small">Update schedules (Calendar) opens on a week or a month. Admins can still switch for a single update.</span>
           </div>
         </Blueprint>
         <Blueprint as="section" className="panel" style={{ gap: 10 }}>
-          <h2 className="h2">Leave policy</h2>
+          <h2 className="h2">Leave limit per day</h2>
+          <span className="small" style={{ fontSize: 13 }}>
+            Most people on leave on the same day. Past it, people filing are warned and approvers too. Empty = no limit.
+          </span>
+          {capInput("lm-team", "Whole team", b.leaveMax, (n) => set({ leaveMax: n }))}
+          {systems.length > 0 && (
+            <>
+              <span className="small" style={{ fontSize: 12 }}>Per system (optional)</span>
+              {systems.map((sy) =>
+                capInput("lm-" + sy.id, sy.name, b.leaveMaxSys?.[sy.id], (n) => set({ leaveMaxSys: { ...(b.leaveMaxSys ?? {}), [sy.id]: n } })),
+              )}
+            </>
+          )}
+        </Blueprint>
+      </div>
+      {/* Company-wide reference, not team settings: folded away. */}
+      <details className="howto">
+        <summary>Leave policy and status codes</summary>
+        <div className="grid-2" style={{ marginTop: 10 }}>
+        <Blueprint as="section" className="panel" style={{ gap: 10 }}>
+          <h3 className="h2">Leave policy</h3>
           <div className="stat-grid">
             <div>
               <span>VL + SL</span>
@@ -142,7 +192,7 @@ export default function SettingsPage() {
           </span>
         </Blueprint>
         <Blueprint as="section" className="panel tight">
-          <h2 className="h2">Status codes</h2>
+          <h3 className="h2">Status codes</h3>
           <table className="table">
             <thead>
               <tr>
@@ -166,7 +216,8 @@ export default function SettingsPage() {
             </tbody>
           </table>
         </Blueprint>
-      </div>
+        </div>
+      </details>
     </>
   );
 }

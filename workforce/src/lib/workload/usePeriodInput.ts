@@ -36,7 +36,8 @@ export function usePeriodInput(from: number, to: number): { input: PeriodInput |
   }, [mode, team, from, to, key]);
   // Days count from when the team started using Workload (its first task), so earlier
   // months don't show as days worked with nothing done.
-  const start = useMemo(() => (data.tasks.length ? dayKey(Math.min(...data.tasks.map((t) => t.received))) : dayKey(now)), [data.tasks, now]);
+  const first = data.firstAt ?? (data.tasks.length ? Math.min(...data.tasks.map((t) => t.received)) : null);
+  const start = useMemo(() => (first !== null ? dayKey(first) : dayKey(now)), [first, now]);
   return useMemo(() => {
     const since = (w: PeriodInput["workDays"]) => Object.fromEntries(Object.entries(w).map(([k, v]) => [k, v.filter((x) => x >= start)]));
     if (mode !== "db") {

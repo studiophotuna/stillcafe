@@ -3,27 +3,30 @@
 import { useMemo } from "react";
 import { Blueprint, Icon, Kpi, PageHead, pct } from "@/components/ui";
 import { DateRangePicker, useStoredRange } from "@/components/DateRangePicker";
-import { H, dayKey, dur, fmtT } from "@/lib/workload/clock";
+import { dayKey, dur, fmtT } from "@/lib/workload/clock";
 import { AV, PR, tradeOf, trPathOf } from "@/lib/workload/constants";
-import { awayLabel, cxCheck, cxOn, cxText, basisUnit, due, fmtMin, isOverdue, slaOf, slaText, taskTypeOf, taskWorkMs, typeScope, ticketField, ticketOf, typeTargets } from "@/lib/workload/engine";
+import { awayLabel, cxCheck, cxOver, cxOn, cxText, basisUnit, due, fmtMin, isOverdue, slaOf, slaText, taskTypeOf, taskWorkMs, typeScope, ticketField, ticketOf, typeTargets } from "@/lib/workload/engine";
 import { downloadSheets } from "@/lib/workload/excel";
 import { ahtStats } from "@/lib/workload/aht";
-import { AhtPanels } from "@/components/AhtPanels";
+import Link from "next/link";
 import { BarList, ColumnChart, LineChart, VIZ } from "@/components/Charts";
 import { personPeriod, teamPeriod, typeLabel, type PersonPeriod } from "@/lib/workload/metrics";
 import { rangeBuckets, rangeGrain, rangeLabel, rangeMs, todayRange } from "@/lib/workload/period";
 import { useWorkload } from "@/lib/workload/store";
 import type { Task } from "@/lib/workload/types";
+import { useTasksIn } from "@/lib/workload/useTasksIn";
 import { useUnit } from "@/lib/workload/useUnit";
 import { usePeriodInput } from "@/lib/workload/usePeriodInput";
 
 export default function DashboardPage() {
-  const { data, now, toast } = useWorkload();
+  const { now, toast, isAdmin } = useWorkload();
   const { inUnit, unitTrades, people, unitLabel } = useUnit();
   // Shared with Handling time, so both pages show the same dates.
   const [rg, setRg] = useStoredRange("perf", todayRange(now));
   const r = rg ?? todayRange(now);
   const [from, to] = rangeMs(r);
+  // Every task finished since the start of the period (older dates are fetched once).
+  const { data } = useTasksIn(from, now + 60_000);
   const grain = rangeGrain(r);
   const live = now >= from && now < to;
   const { input, error } = usePeriodInput(from, to);
@@ -125,6 +128,7 @@ export default function DashboardPage() {
           ["Average time per task (min)", min(view.team.avgMs)],
           ["Approved overtime (min)", view.team.otMin],
           ["Time away (min)", view.team.awayMin],
+          ["Idle (min)", view.team.idleMin],
           ...metricF.map((f): Row => [f.label, sumF(view.doneTasks, f.key)]),
           ["Exported", fmtT(now)],
         ],
@@ -141,7 +145,7 @@ export default function DashboardPage() {
     sheets.push({
       name: "People",
       rows: [
-        ["Name", "Trades", "Days worked", "Done", weighted ? "Days of target done" : "Target for the days worked", "Productivity %", "Utilization %", "Timeliness %", "Avg time (min)", "Time away (min)", ...metricF.map((f) => f.label), "Overtime approved (min)", "Overtime pending (min)"],
+        ["Name", "Trades", "Days worked", "Done", weighted ? "Days of target done" : "Target for the days worked", "Productivity %", "Utilization %", "Timeliness %", "Avg time (min)", "Time away (min)", "Idle (min)", ...metricF.map((f) => f.label), "Overtime approved (min)", "Overtime pending (min)"],
         ...view.rows.map((r): Row => [
           r.p.name,
           r.p.trades.map((x) => tradeOf(data.org, x)?.name ?? x).join(", "),
@@ -153,6 +157,7 @@ export default function DashboardPage() {
           r.time,
           min(r.avgMs),
           r.awayMin,
+          r.idleMin,
           ...metricF.map((f) => sumF(r.done, f.key)),
           r.otMin,
           r.otPending,
@@ -218,7 +223,7 @@ export default function DashboardPage() {
                 return [
                   t.cx ? cxText(s, t.cx) : "",
                   c ? min(c.expMs) : "",
-                  r ? (r.verdict === "ok" ? "Confirmed" : "Corrected") : c?.flag ? "Question" : "",
+                  r ? (r.verdict === "ok" ? "Confirmed" : "Corrected") : c?.flag || cxOver(data, t)?.flag ? "Question" : "",
                 ];
               })()
             : []),
@@ -238,7 +243,12 @@ export default function DashboardPage() {
       <PageHead
         title={`Dashboard · ${unitLabel}`}
         style={{ maxWidth: "95ch" }}
-        sub="Productivity = work done ÷ target for the days worked (days scheduled in the Calendar since the team started using Workload; today so far), plus the tasks that fit in any overtime (whole tasks at the daily pace, e.g. 4 a day in 6.8 productive hours: 3 h adds 1). Utilization = time on tasks ÷ available time. Timeliness = tasks done within SLA ÷ tasks done. Targets and working time are set in Admin › Targets."
+        sub={
+          <details className="howto">
+            <summary>How these are calculated</summary>
+            Productivity = work done ÷ target for the days worked (days scheduled in the Calendar since the team started using Workload; today so far), plus the tasks that fit in any overtime (whole tasks at the daily pace, e.g. 4 a day in 6.8 productive hours: 3 h adds 1). Utilization = time on tasks ÷ available time. Timeliness = tasks done within SLA ÷ tasks done. Targets and working time are set in Admin › Targets.
+          </details>
+        }
       />
       <div className="row" style={{ justifyContent: "space-between", alignItems: "center" }}>
         <DateRangePicker value={r} onChange={setRg} today={dayKey(now)} id="dash" />
@@ -252,21 +262,27 @@ export default function DashboardPage() {
         !error && <div className="banner">Loading {label}…</div>
       ) : (
         <>
+          {/* The numbers people act on first; the rest folded away. */}
           <div className="grid-kpi dense">
             <Kpi k="Productivity" v={pct(view.team.prod)} m={`${label}`} />
-            <Kpi k="Utilization" v={pct(view.team.util)} m="task time ÷ available time" />
             <Kpi k="Timeliness" v={pct(view.team.time)} m={`${view.team.onTime} of ${view.team.done} within SLA`} />
-            <Kpi k="Received" v={view.team.received} m="tasks in the period" />
-            <Kpi k="Done" v={view.team.done} m="tasks in the period" />
-            <Kpi k="Average time" v={view.team.avgMs === null ? "—" : dur(view.team.avgMs)} m="worked per task" />
-            <Kpi k="Overtime" v={view.team.otMin ? fmtMin(view.team.otMin) : "—"} m="approved" />
-            <Kpi k="Time away" v={view.team.awayMin ? fmtMin(view.team.awayMin) : "—"} m="breaks, meetings, training…" />
-            {metricF.map((f) => (
-              <Kpi key={f.key} k={f.label.replace(/^No\. of /, "")} v={sumF(view.doneTasks, f.key)} m="completed" />
-            ))}
+            <Kpi k="Done" v={view.team.done} m={`of ${view.team.received} received in the period`} />
             {live && <Kpi k="In queue now" v={q.length} m={`oldest waiting ${oldest}`} />}
             {live && <Kpi k="Overdue now" v={ut.filter((t) => isOverdue(t, data, now)).length} m="open past their SLA" />}
           </div>
+          <details className="howto">
+            <summary>More numbers</summary>
+            <div className="grid-kpi dense" style={{ marginTop: 10 }}>
+              <Kpi k="Utilization" v={pct(view.team.util)} m="task time ÷ available time" />
+              <Kpi k="Average time" v={view.team.avgMs === null ? "—" : dur(view.team.avgMs)} m="worked per task" />
+              <Kpi k="Overtime" v={view.team.otMin ? dur(view.team.otMin * 60_000) : "—"} m="approved" />
+              <Kpi k="Time away" v={view.team.awayMin ? dur(view.team.awayMin * 60_000) : "—"} m="breaks, meetings, training…" />
+              <Kpi k="Idle" v={view.team.idleMin ? dur(view.team.idleMin * 60_000) : "—"} m="in shift, no task running and not away" />
+              {metricF.map((f) => (
+                <Kpi key={f.key} k={f.label.replace(/^No\. of /, "")} v={sumF(view.doneTasks, f.key)} m="completed" />
+              ))}
+            </div>
+          </details>
 
           <div className="chart-grid">
             <Blueprint as="section" className="panel">
@@ -341,25 +357,6 @@ export default function DashboardPage() {
                 />
               </Blueprint>
             )}
-            {view.aht.length > 0 && (
-              <Blueprint as="section" className="panel">
-                <div className="chart-head">
-                  <h2 className="h2">Handling time by complexity</h2>
-                  <span className="small">{label} · per contract</span>
-                </div>
-                <BarList
-                  rows={view.aht.map(({ level, row }) => ({
-                    key: level.id,
-                    label: level.name,
-                    value: row.contracts ? Math.round(row.ms / row.contracts / 60000) : null,
-                    note: `${row.contracts} contract${row.contracts === 1 ? "" : "s"}${level.aht ? ` · set ${level.aht} min` : ""}`,
-                  }))}
-                  fmt={(n) => fmtMin(Math.round(n))}
-                  empty="No tickets tagged with complexity in this period."
-                />
-                <span className="small">Details and the set AHT are in Handling time below.</span>
-              </Blueprint>
-            )}
             {view.byType.length > 0 && (
               <Blueprint as="section" className="panel">
                 <div className="chart-head">
@@ -377,7 +374,7 @@ export default function DashboardPage() {
           </div>
 
           {view.buckets.length > 0 && (
-            <Blueprint as="section" className="panel tight scroll-x">
+            <Blueprint as="section" className="panel tight scroll-x" tabIndex={0}>
               <details className="table-view">
                 <summary>{grain === "hour" ? "By hour" : grain === "month" ? "By month" : "By day"} · show the numbers</summary>
               <table className="table" style={{ minWidth: 560 }}>
@@ -408,8 +405,9 @@ export default function DashboardPage() {
             </Blueprint>
           )}
 
-          <Blueprint as="section" className="panel tight scroll-x">
-            <h2 className="h2">By trade</h2>
+          <Blueprint as="section" className="panel tight scroll-x" tabIndex={0}>
+            <details className="table-view">
+            <summary>By trade · show the numbers</summary>
             <table className="table" style={{ minWidth: 760 }}>
               <thead>
                 <tr>
@@ -442,11 +440,13 @@ export default function DashboardPage() {
                 ))}
               </tbody>
             </table>
+            </details>
           </Blueprint>
 
           {view.byType.length > 0 && (
-            <Blueprint as="section" className="panel tight scroll-x">
-              <h2 className="h2">By task type</h2>
+            <Blueprint as="section" className="panel tight scroll-x" tabIndex={0}>
+              <details className="table-view">
+              <summary>By task type · show the numbers</summary>
               <table className="table" style={{ minWidth: 680 }}>
                 <thead>
                   <tr>
@@ -475,10 +475,11 @@ export default function DashboardPage() {
                   ))}
                 </tbody>
               </table>
+              </details>
             </Blueprint>
           )}
 
-          <Blueprint as="section" className="panel tight scroll-x">
+          <Blueprint as="section" className="panel tight scroll-x" tabIndex={0}>
             <h2 className="h2">People</h2>
             <table className="table" style={{ minWidth: 1200 }}>
               <thead>
@@ -493,6 +494,7 @@ export default function DashboardPage() {
                   <th>Timeliness</th>
                   <th>Avg time</th>
                   <th>Time away</th>
+                  <th>Idle</th>
                   {metricF.map((f) => (
                     <th key={f.key}>{f.label.replace(/^No\. of /, "")}</th>
                   ))}
@@ -505,7 +507,7 @@ export default function DashboardPage() {
                   return (
                     <tr key={r.p.id}>
                       <td>
-                        <span style={{ fontWeight: 500 }}>{r.p.name}</span>
+                        <span className="nowrap" style={{ fontWeight: 500 }}>{r.p.name}</span>
                         <div className="small">{r.p.trades.map((x) => tradeOf(data.org, x)?.name ?? x).join(", ")}</div>
                       </td>
                       {live && grain === "hour" && (
@@ -515,7 +517,7 @@ export default function DashboardPage() {
                       )}
                       {live && grain === "hour" && <td style={{ fontSize: 13 }}>{w ? `${w.id} · ${dur(now - w.startedAt!)}` : "—"}</td>}
                       <td>{Math.round(r.days * 10) / 10}</td>
-                      <td title={r.mix || undefined}>
+                      <td title={r.mix || undefined} style={{ minWidth: 170 }}>
                         {r.done.length} · {shareText(r)}
                         {weighted && r.mix && <div className="small">{r.mix}</div>}
                       </td>
@@ -524,6 +526,7 @@ export default function DashboardPage() {
                       <td>{pct(r.time)}</td>
                       <td>{r.avgMs === null ? "—" : dur(r.avgMs)}</td>
                       <td title={Object.entries(r.away).map(([k, v]) => `${awayLabel(k as never)} ${fmtMin(v)}`).join(", ")}>{r.awayMin ? fmtMin(r.awayMin) : "—"}</td>
+                      <td title="Shift time with no task running and not away">{r.idleMin ? fmtMin(r.idleMin) : "—"}</td>
                       {metricF.map((f) => (
                         <td key={f.key}>{sumF(r.done, f.key)}</td>
                       ))}
@@ -538,7 +541,10 @@ export default function DashboardPage() {
             </table>
           </Blueprint>
 
-          <AhtPanels st={view.ahtAll} />
+          {/* Handling time has its own page (same dates); not repeated here. */}
+          {isAdmin && <span className="small">
+            Handling time per complexity level, member and trade, and the FTE needed: <Link href="/workload/admin/aht">Handling time</Link>.
+          </span>}
         </>
       )}
     </>

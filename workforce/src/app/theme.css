@@ -173,6 +173,8 @@ details.table-view[open] > summary { margin-bottom: 8px; }
    Associates stay plain so the other roles stand out. */
 .lv-director { --role: #6b3fa0; --role-bg: rgb(107 63 160 / 0.1); }
 .lv-manager { --role: #0b2265; --role-bg: rgb(11 34 101 / 0.09); }
+.lv-supervisor { --role: #0e7c86; --role-bg: rgb(14 124 134 / 0.1); }
+.lv-srlead { --role: #1d4fa3; --role-bg: rgb(29 79 163 / 0.1); }
 .lv-lead { --role: #2a78d6; --role-bg: rgb(42 120 214 / 0.1); }
 .lv-senior { --role: #138a60; --role-bg: rgb(27 175 122 / 0.1); }
 .lv-specialist { --role: #c4531f; --role-bg: rgb(235 104 52 / 0.1); }
@@ -233,3 +235,35 @@ tr.role-row > td { background: var(--role-bg); }
 .att-block li > span:last-child { text-align: right; }
 .qb-toggle { display: flex; align-items: center; gap: 8px; background: none; border: 0; padding: 0; font: inherit; color: inherit; cursor: pointer; text-align: left; }
 .bulk-bar { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; padding: 10px 14px; border: 1px solid var(--color-accent-200, var(--color-divider)); border-radius: var(--radius-md); background: var(--color-accent-100); font-size: 13.5px; }
+.claim-bar { border-color: #d99a1e; background: #fff8e8; }
+/* Calendar / Workload / Admin switch: three columns when the Admin area is available. */
+.side-switch:has(> :nth-child(3)) { grid-template-columns: 1fr 1fr 1fr; }
+.side-switch > * { position: relative; }
+.side-switch-dot { position: absolute; top: 7px; right: 8px; width: 7px; height: 7px; border-radius: 50%; background: #d99a1e; }
+.admin-hub { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 10px; }
+.admin-hub-card { display: flex; gap: 12px; align-items: flex-start; padding: 12px 14px; border: 1px solid var(--color-divider); border-radius: var(--radius-md); text-decoration: none; color: inherit; background: var(--color-card, transparent); }
+.admin-hub-card:hover { border-color: var(--color-accent-300); background: var(--color-accent-100); }
+.admin-hub-card > span { display: flex; flex-direction: column; gap: 2px; }
+.admin-hub-card strong { color: var(--color-accent-800); }
+.side-switch:has(> :nth-child(3)) > * { font-size: 12.5px; padding: 0 4px; }
+/* Calendar: role colour on each person's name cell (same colours as Members). */
+.grid-row.role-grid > .grid-name { box-shadow: inset 3px 0 0 var(--role); background: linear-gradient(var(--role-bg), var(--role-bg)), var(--color-card, var(--color-bg)); }
+.grid-row.role-grid > .grid-shift { background: linear-gradient(var(--role-bg), var(--role-bg)), var(--color-card, var(--color-bg)); }
+
+/* Admin: a section's pages as tabs at the top of the page. */
+.admin-tabs { display: flex; gap: 2px; flex-wrap: wrap; border-bottom: 1px solid var(--color-divider); margin-bottom: 4px; }
+.admin-tabs a { display: inline-flex; align-items: center; gap: 6px; padding: 8px 14px; text-decoration: none; color: var(--color-neutral-700); font-weight: 500; font-size: 14px; border-bottom: 3px solid transparent; margin-bottom: -1px; border-radius: var(--radius-md) var(--radius-md) 0 0; }
+.admin-tabs a:hover { background: var(--color-accent-100); color: var(--color-accent-800); }
+.admin-tabs a[aria-current="page"] { color: var(--color-accent-800); border-bottom-color: var(--color-accent-800); }
+.admin-tabs .tag { font-size: 11px; padding: 0 6px; }
+
+/* "More" menu of less-used row actions. */
+.more-menu { position: relative; display: inline-block; }
+.more-menu-list { position: absolute; right: 0; top: calc(100% + 4px); z-index: 30; min-width: 190px; display: flex; flex-direction: column; padding: 4px; background: var(--color-bg, #fff); border: 1px solid var(--color-divider); border-radius: var(--radius-md); box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12); }
+.more-menu-list button { text-align: left; padding: 8px 10px; border: 0; background: none; border-radius: var(--radius-md); cursor: pointer; font: inherit; color: inherit; white-space: nowrap; }
+.more-menu-list button:hover:not(:disabled) { background: var(--color-accent-100); }
+.more-menu-list button:disabled { opacity: 0.5; cursor: default; }
+.more-menu-list button.danger { color: #b3261e; }
+
+/* Demo site: no company logo. */
+html[data-demo] .side-brand img { display: none; }

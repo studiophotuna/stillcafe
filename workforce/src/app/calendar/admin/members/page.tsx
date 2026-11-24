@@ -2,10 +2,11 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { Modal } from "@/components/Dialogs";
+import { MoreMenu } from "@/components/MoreMenu";
 import { Blueprint, Icon } from "@/components/ui";
-import { LEVELS } from "@/lib/calendar/constants";
+import { LAW, LEVELS } from "@/lib/calendar/constants";
 import { leadersOf } from "@/lib/calendar/approvals";
-import { RoleFilter, RoleLegend, RoleTag } from "@/components/calendar/Roles";
+import { RoleFilter, RoleTag } from "@/components/calendar/Roles";
 import { fmtY } from "@/lib/calendar/dates";
 import { useCalendar } from "@/lib/calendar/store";
 import { useCalView } from "@/lib/calendar/useCalView";
@@ -54,12 +55,19 @@ export default function MembersPage() {
   };
   const mq = q.trim().toLowerCase();
   const shById = Object.fromEntries(s.data.shifts.map((x) => [x.id, x]));
-  // Directors and managers allocated to this team's department or tower are listed too.
-  const above = (p: CalPerson) => v.unitId === v.bid && !O.inN(p, v.bid) && p.assign.some((a) => O.by[a] && (O.by[a].type === "dept" || O.by[a].type === "tower") && O.anc(v.bid).includes(a));
+  // Directors and managers allocated to the tower or department above the teams are listed too.
+  const above = v.isAbove;
   const members = s.data.people
-    .filter((p) => (v.inUnit(p) || above(p)) && (!mq || p.name.toLowerCase().includes(mq)) && (role === "all" || p.level === role))
+    .filter((p) => v.inView(p) && (!mq || p.name.toLowerCase().includes(mq)) && (role === "all" || p.level === role))
     .sort((a, b) => Number(above(b)) - Number(above(a)) || a.name.localeCompare(b.name));
   // Team admins manage the people in their teams; system admins manage everyone.
+  // Several teams shown: edit a person from their own team (the filter switches to it).
+  const teamOf = (p: CalPerson) => O.branchesOf(p).find((b) => v.scopeBranches.some((x) => x.id === b.id))?.id ?? v.bid;
+  const openFor = (p: CalPerson, kind: "member" | "resign") => {
+    if (v.multi) s.setSel({ branch: teamOf(p), span: "team", system: "all", trade: "all" });
+    s.setDialog({ kind, pid: p.id });
+  };
+  const oneTeam = v.multi ? "Choose a team above first" : undefined;
   const canManage = (p: CalPerson) =>
     !!v.meP.sysAdmin || O.branchesOf(p).some((b) => isNodeAdmin(O, b.id, s.me)) || p.assign.some((a) => isNodeAdmin(O, a, s.me));
   // Selecting several members to update at once (only those I manage).
@@ -67,6 +75,10 @@ export default function MembersPage() {
   const [bulk, setBulk] = useState(false);
   const selectable = members.filter(canManage);
   const picked = sel.filter((id) => selectable.some((p) => p.id === id));
+  // Delete: someone in teams this admin runs only (system admins: anyone but themselves).
+  const [del, setDel] = useState<CalPerson | null>(null);
+  const canDelete = (p: CalPerson) =>
+    p.id !== s.me && (!!v.meP.sysAdmin || (!p.sysAdmin && O.branchesOf(p).length > 0 && O.branchesOf(p).every((b) => isNodeAdmin(O, b.id, s.me))));
   return (
     <>
       <div className="page-head-row">
@@ -77,7 +89,7 @@ export default function MembersPage() {
         <div className="row">
           <input className="input" type="search" aria-label="Find a member" placeholder="Find a member" value={q} onChange={(e) => setQ(e.target.value)} style={{ width: 220 }} />
           <RoleFilter value={role} onChange={setRole} />
-          <button className="btn btn-secondary btn-36" onClick={() => s.setDialog({ kind: "upload", mode: "members" })}>
+          <button className="btn btn-secondary btn-36" disabled={v.multi} title={oneTeam} onClick={() => s.setDialog({ kind: "upload", mode: "members" })}>
             <Icon name="upload" size={16} />
             Upload
           </button>
@@ -87,14 +99,13 @@ export default function MembersPage() {
           </button>
         </div>
       </div>
-      <RoleLegend />
       {picked.length > 0 && (
         <Blueprint as="section" className="panel" style={{ flexDirection: "row", alignItems: "center", gap: 10, padding: "10px 16px", flexWrap: "wrap" }}>
           <strong>{picked.length} selected</strong>
           <Blueprint as="button" className="btn btn-primary btn-36" style={{ padding: "0 14px" }} onClick={() => setBulk(true)}>
             Update selected
           </Blueprint>
-          <button className="btn btn-secondary btn-36" onClick={() => s.setDialog({ kind: "schedule", pids: picked })}>
+          <button className="btn btn-secondary btn-36" disabled={v.multi} title={oneTeam} onClick={() => s.setDialog({ kind: "schedule", pids: picked })}>
             Update their schedules
           </button>
           <button className="btn btn-ghost" onClick={() => setSel([])}>
@@ -130,7 +141,7 @@ export default function MembersPage() {
               const sh = shById[p.shift];
               const pool = c.poolOf(p);
               return (
-                <tr key={p.id} className={"role-row lv-" + p.level} style={{ opacity: gone ? 0.6 : 1 }}>
+                <tr key={p.id} className={"role-row lv-" + p.level} style={gone ? { background: "var(--color-neutral-100)" } : undefined}>
                   <td>
                     {canManage(p) && (
                       <input
@@ -152,7 +163,7 @@ export default function MembersPage() {
                     <div style={{ display: "flex", flexDirection: "column" }}>
                       <span style={{ display: "flex", gap: 6, alignItems: "center" }}>
                         <RoleTag level={p.level} />
-                        {(v.branch.admins ?? []).includes(p.id) && (
+                        {v.scopeBranches.some((b) => (b.admins ?? []).includes(p.id)) && (
                           <span className="tag tag-accent" style={{ padding: "0 6px", fontSize: 10.5 }}>
                             Admin
                           </span>
@@ -172,7 +183,7 @@ export default function MembersPage() {
                         const n = O.by[a];
                         const primary = !!b && O.branchesOf(p).length > 1 && primaryTeamOf(O, p) === b.id;
                         return (
-                          <span key={a} className={"tag " + (O.anc(a).includes(v.bid) ? "tag-accent" : "tag-neutral")}>
+                          <span key={a} className={"tag " + (O.anc(a).includes(v.scopeId) ? "tag-accent" : "tag-neutral")}>
                             {b ? b.name + (sb ? " › " + sb.replace(/ · /g, " › ") : "") : n ? `${n.name} · whole ${n.type === "dept" ? "department" : "tower"}` : "—"}
                             {primary && <strong title="Counted in this team on the headcount report"> · primary</strong>}
                           </span>
@@ -182,6 +193,7 @@ export default function MembersPage() {
                   </td>
                   <td className="nowrap">
                     VL/SL {pool - c.usedOf(p)} of {pool} · EL {(p.elEnt ?? 5) - c.elUsedOf(p)} of {p.elEnt ?? 5}
+                    {p.soloParent ? ` · SPL ${LAW.spl - c.splUsedOf(p)} of ${LAW.spl}` : ""}
                   </td>
                   <td>
                     <span className={"tag " + (gone ? "tag-neutral" : p.resign ? "tag-outline" : "tag-accent")}>
@@ -209,27 +221,22 @@ export default function MembersPage() {
                         </span>
                       ) : (
                         <>
-                          <button className="btn btn-ghost" onClick={() => s.setDialog({ kind: "member", pid: p.id })}>
+                          <button className="btn btn-ghost" onClick={() => openFor(p, "member")}>
                             Edit
                           </button>
-                          <button className="btn btn-ghost" onClick={() => s.setDialog({ kind: "resign", pid: p.id })}>
-                            {p.resign ? "Edit resignation" : "Resignation"}
-                          </button>
-                          {logins && !gone && p.id !== s.me && (
-                            <button className="btn btn-ghost" disabled={busy === p.id} onClick={() => resetPw(p.id)}>
-                              {logins[p.id] ? "Reset password" : "Create sign-in"}
-                            </button>
-                          )}
-                          {logins && gone && logins[p.id] && (
-                            <button className="btn btn-ghost" disabled={busy === p.id} onClick={() => resetPw(p.id, true)}>
-                              Remove sign-in
-                            </button>
-                          )}
-                          {!above(p) && (
-                            <button className="btn btn-ghost" style={{ color: "var(--color-neutral-700)" }} onClick={() => s.run({ type: "removeFromTeam", pid: p.id, bid: v.bid })}>
-                              Remove
-                            </button>
-                          )}
+                          <MoreMenu
+                            items={[
+                              { label: p.resign ? "Edit resignation" : "Resignation", onClick: () => openFor(p, "resign") },
+                              ...(logins && !gone && p.id !== s.me
+                                ? [{ label: logins[p.id] ? "Reset password" : "Create sign-in", disabled: busy === p.id, onClick: () => resetPw(p.id) }]
+                                : []),
+                              ...(logins && gone && logins[p.id] ? [{ label: "Remove sign-in", disabled: busy === p.id, onClick: () => resetPw(p.id, true) }] : []),
+                              ...(!above(p) && !v.multi && p.assign.some((a) => !O.anc(a).includes(v.bid))
+                                ? [{ label: `Remove from ${v.branch.name}`, onClick: () => s.run({ type: "removeFromTeam", pid: p.id, bid: v.bid }) }]
+                                : []),
+                              ...(canDelete(p) ? [{ label: "Delete member…", danger: true, onClick: () => setDel(p) }] : []),
+                            ]}
+                          />
                         </>
                       )}
                     </div>
@@ -239,6 +246,7 @@ export default function MembersPage() {
             })}
           </tbody>
         </table>
+        {del && <DeleteDialog p={del} bid={teamOf(del)} onClose={() => setDel(null)} />}
         {bulk && <BulkDialog pids={picked} onClose={() => setBulk(false)} onDone={() => setSel([])} />}
         {!members.length && <div style={{ padding: "24px 14px", color: "var(--color-neutral-700)" }}>{role === "all" && !mq ? "No members here yet." : "No members match."}</div>}
       </Blueprint>
@@ -257,7 +265,7 @@ function BulkDialog({ pids, onClose, onDone }: { pids: number[]; onClose: () => 
   const [shift, setShift] = useState("");
   const [wfhOn, setWfhOn] = useState(false);
   const [wfh, setWfh] = useState<number[]>([1, 2]);
-  const leaders = leadersOf(s.cal, v.bid);
+  const leaders = [...new Map(v.scopeBranches.flatMap((b) => leadersOf(s.cal, b.id)).map((p) => [p.id, p])).values()];
   const names = pids.map((id) => s.cal.people.get(id)?.name ?? "").filter(Boolean);
   const nothing = !level && approver === "keep" && !shift && !wfhOn;
   return (
@@ -345,6 +353,50 @@ function BulkDialog({ pids, onClose, onDone }: { pids: number[]; onClose: () => 
           >
             Update {pids.length}
           </Blueprint>
+        </div>
+      </div>
+    </Modal>
+  );
+}
+
+/** Delete a member permanently (after a mistake, e.g. added twice); leavers get a resignation instead. */
+function DeleteDialog({ p, bid, onClose }: { p: CalPerson; bid: string; onClose: () => void }) {
+  const s = useCalendar();
+  const [sure, setSure] = useState(false);
+  const reqs = s.data.requests.filter((q) => q.pid === p.id).length;
+  return (
+    <Modal onClose={onClose} width={520}>
+      <div className="dialog-scroll" style={{ padding: 20, gap: 12 }}>
+        <div className="dialog-title" style={{ fontSize: 24 }}>
+          Delete {p.name}?
+        </div>
+        <span>
+          This permanently removes {p.name} from every team and calendar, with their {reqs} leave request{reqs === 1 ? "" : "s"}, schedule changes, BCP check-ins,
+          billed FTE overrides and sign-in. It can’t be undone.
+        </span>
+        <span className="small">
+          If they’re leaving the company, close this and use <strong>Resignation</strong> instead: that keeps their history in reports and headcount. Workload tasks
+          still assigned to them can be reassigned in Manage queue.
+        </span>
+        <label className="check-row">
+          <input type="checkbox" className="check" checked={sure} onChange={() => setSure(!sure)} />
+          <span>I understand {p.name} and their records will be deleted.</span>
+        </label>
+        <div className="dialog-actions" style={{ gap: 10 }}>
+          <button className="btn btn-secondary btn-40" onClick={onClose}>
+            Cancel
+          </button>
+          <button
+            className="btn btn-primary btn-40"
+            style={{ padding: "0 18px", background: sure ? "#b3261e" : undefined, borderColor: sure ? "#b3261e" : undefined }}
+            disabled={!sure}
+            onClick={() => {
+              s.run({ type: "deleteMember", pid: p.id, bid });
+              onClose();
+            }}
+          >
+            Delete permanently
+          </button>
         </div>
       </div>
     </Modal>

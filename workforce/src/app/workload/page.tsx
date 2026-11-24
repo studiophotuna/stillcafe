@@ -1,11 +1,12 @@
 "use client";
 
+import Link from "next/link";
 import { EmailBox } from "@/components/Dialogs";
 import { TaskTable } from "@/components/TaskTable";
 import { Blueprint, Icon, Kpi, PageHead, pct } from "@/components/ui";
-import { dur } from "@/lib/workload/clock";
+import { M, dur } from "@/lib/workload/clock";
 import { AV, trPathOf } from "@/lib/workload/constants";
-import { AWAY, awayLabel, basisUnit, typeTargets, canWork, currentAway, doneToday, endedToday, fmtMin, helpQueue, missingRequired, ownQueue, personMetrics, sortTasks } from "@/lib/workload/engine";
+import { personOf, busyOther, AWAY, canPause, otAllowed, awayLabel, basisUnit, typeTargets, canWork, currentAway, doneToday, endedToday, fmtMin, helpQueue, missingRequired, ownQueue, personMetrics, sortTasks } from "@/lib/workload/engine";
 import { fmtT } from "@/lib/workload/clock";
 import { TaskTimer } from "@/components/WorkloadBits";
 import { useWorkload } from "@/lib/workload/store";
@@ -13,7 +14,7 @@ import { breakAllowance } from "@/lib/workload/breaks";
 import { taskDetail, taskRow } from "@/lib/workload/view";
 
 export default function MyWorkPage() {
-  const { data, now, run, me, setDialog, setHolidayWork, mode } = useWorkload();
+  const { data, now, run, me, setDialog, setHolidayWork, mode, isAdmin, isApprover, setTeam } = useWorkload();
   const hol = me.holiday;
   const s = data.settings;
   const trades = me.trades.map((x) => trPathOf(data.org, x)).join(", ");
@@ -24,25 +25,29 @@ export default function MyWorkPage() {
   const mm = personMetrics(data, me, now);
   const brkOver = breakAllowance(data) ? Math.max(0, Math.round((mm.away.break ?? 0) + (mm.away.lunch ?? 0)) - breakAllowance(data)) : 0;
 
+  const waitingAll = data.tasks.filter((t) => t.status === "new").length;
   const kpis = me.trades.length
     ? [
         {
           k: "Productivity",
           v: pct(mm.prod),
           m: typeTargets(data)
-            ? `${Math.round(mm.share * 100)}% of a day’s target done${mm.mix ? ` · ${mm.mix}` : ""} (so far ${Math.round(mm.exp * 100)}%${mm.otDays ? `, incl. ${Math.round(mm.otDays * 100)}% for overtime` : ""})`
-            : `${mm.out} ${basisUnit(data)} of ${mm.target}${mm.otTarget ? ` + ${mm.otTarget} for overtime` : ""} target (so far ${mm.tgt.toFixed(1)})`,
+            ? `${Math.round(mm.share * 100)}% of today’s target done${mm.mix ? ` · ${mm.mix}` : ""}`
+            : `${mm.out} of ${mm.target}${mm.otTarget ? ` + ${mm.otTarget} overtime` : ""} ${basisUnit(data)} today`,
         },
-        { k: "Utilization", v: pct(mm.util), m: `${dur(mm.handle)} on tasks of ${dur(mm.avail)} available (shift so far minus time away)` },
+        {
+          k: "Utilization",
+          v: pct(mm.util),
+          m: `${dur(mm.handle)} on tasks of ${dur(mm.avail)} available${mm.idle >= M ? ` · ${dur(mm.idle)} with no task running` : ""}`,
+        },
         {
           k: "Time away",
           v: fmtMin(Object.entries(mm.away).reduce((a, [k, v]) => a + (k === "idle" ? 0 : v), 0)),
           m:
             (Object.entries(mm.away).map(([k, v]) => `${awayLabel(k as never)} ${fmtMin(v)}`).join(" · ") || "nothing logged today") +
-            (mm.away.idle ? " · idle time counts in utilization" : "") +
             (brkOver > 0 ? ` · break + lunch ${fmtMin(brkOver)} over the ${fmtMin(breakAllowance(data))} allowance (your lead is notified)` : ""),
         },
-        { k: "Timeliness", v: pct(mm.time), m: `${mm.onTime} of ${mm.done} done within SLA` },
+        { k: "On time", v: pct(mm.time), m: `${mm.onTime} of ${mm.done} done in time` },
         { k: "Average time", v: avg, m: "per task today" },
         { k: "Overtime", v: mm.otMin ? fmtMin(mm.otMin) : "—", m: mm.otPending ? `${fmtMin(mm.otPending)} waiting for approval` : "approved today" },
         ...metricF.map((f) => ({
@@ -51,22 +56,36 @@ export default function MyWorkPage() {
           m: "completed today",
         })),
       ]
-    : [{ k: "Waiting in queue", v: data.tasks.filter((t) => t.status === "new").length, m: "all trades" }];
+    : [];
+  // Productivity, on time, average time and time away first; the rest folded away.
+  const MAIN = ["Productivity", "On time", "Average time", "Time away"];
+  const mainK = kpis.filter((k) => MAIN.includes(k.k)).sort((a, b) => MAIN.indexOf(a.k) - MAIN.indexOf(b.k));
+  const moreK = kpis.filter((k) => !MAIN.includes(k.k));
 
   const assignedMine = sortTasks(data.tasks.filter((t) => t.assignee === me.id && (t.status === "assigned" || t.status === "on_hold")), data);
-  // Members pick: own trades; when those are empty, other trades (same system first, then the team) to help with.
-  const own = s.mode === "self" ? ownQueue(data, me) : [];
-  const help = s.mode === "self" && !own.length && me.trades.length ? helpQueue(data, me).map((x) => x.t) : [];
-  const pickable = own.length ? own : help;
-  const myList = assignedMine.concat(pickable);
+  // Only my own tasks here; tasks to pick are in the Queue.
+  const myList = assignedMine;
+  const waitingToPick = s.mode === "self" ? ownQueue(data, me).length || (me.trades.length ? helpQueue(data, me).length : 0) : 0;
+  // Others asking to take one of my tasks.
+  const claims = data.tasks.filter((t) => t.assignee === me.id && t.claim && t.status !== "done");
   const unavailable = !canWork(me, s);
   const hasAssigned = assignedMine.some((t) => t.status === "assigned");
 
   let idleTitle = "You’re free";
   let idleText = "";
-  if (!me.trades.length) {
+  // Admins and approvers without a trade manage the team rather than take tasks.
+  const manager = !me.trades.length && (isAdmin || isApprover);
+  // One task at a time across all your teams.
+  const elsewhere = busyOther(data, me.id);
+  if (elsewhere) {
+    idleTitle = `You’re working in ${elsewhere.teamName}`;
+    idleText = `${elsewhere.id} · ${elsewhere.title} is in progress there. Resolve it, pause it or set it to pending before you start a task here.`;
+  } else if (manager) {
+    idleTitle = "Team at a glance";
+    idleText = `${waitingAll} task${waitingAll === 1 ? "" : "s"} waiting in the queue. Manage it, or see today’s numbers on the dashboard.`;
+  } else if (!me.trades.length) {
     idleTitle = "No trades allocated";
-    idleText = "You aren’t allocated to a system and trade, so no tasks come to you. Ask an admin to allocate you in the Calendar › Admin › Members.";
+    idleText = "You aren’t allocated to a system and trade, so no tasks come to you. Ask an admin to allocate you (Admin › Members).";
   } else if (hol && !hol.working) {
     idleTitle = `Today is ${hol.name}`;
     idleText = "It’s a holiday, so tasks aren’t given to you. Working today? Tell us above and you can take tasks as usual.";
@@ -76,9 +95,9 @@ export default function MyWorkPage() {
   } else if (s.mode === "fifo")
     idleText = `Click Start work to get the next task in ${trades}. You get one task at a time, highest priority and oldest first.`;
   else if (s.mode === "self")
-    idleText = s.multiPick
-      ? `Pick tasks from the list below to put them on your list (you can pick several), then start them one at a time. Only tasks in ${trades} are shown.`
-      : `Pick a task from the list below. Only tasks in ${trades} are shown.`;
+    idleText =
+      (waitingToPick ? `${waitingToPick} task${waitingToPick === 1 ? "" : "s"} waiting. ` : "Nothing is waiting right now. ") +
+      (s.multiPick ? "Pick tasks from the Queue (you can pick several), then start them here one at a time." : "Take a task from the Queue to start it.");
   else
     idleText = hasAssigned
       ? "You have tasks assigned to you. Click Start work to begin the next one."
@@ -96,14 +115,26 @@ export default function MyWorkPage() {
       <PageHead
         title="My work"
         sub={me.trades.length ? `You work on ${trades} · shift ${me.shift}.` : mode === "db"
-            ? "You aren’t allocated to a system and trade in this team, so no tasks come to you. To take tasks, allocate yourself in Calendar › Admin › Members."
+            ? "You manage this team. To take tasks yourself, add yourself to a trade in Admin › People."
             : "Admin view. Switch to employee (bottom of the menu) to see a member’s screen."}
       />
-      <div className="grid-kpi">
-        {kpis.map((k) => (
-          <Kpi key={k.k} {...k} />
-        ))}
-      </div>
+
+      {claims.map((t) => (
+        <Blueprint as="section" key={t.id} className="panel status-bar claim-bar">
+          <span>
+            <strong>{personOf(data, t.claim!.by)?.name ?? "A teammate"} wants to take {t.id}</strong> · {t.title}
+            {t.status === "in_progress" ? " (in progress)" : ""}. Let them take it, or keep it?
+          </span>
+          <div className="row" style={{ gap: 6 }}>
+            <button className="btn btn-secondary btn-36" onClick={() => run({ type: "answerClaim", id: t.id, ok: false, pid: me.id })}>
+              Keep it
+            </button>
+            <Blueprint as="button" className="btn btn-primary btn-36" style={{ padding: "0 16px" }} onClick={() => run({ type: "answerClaim", id: t.id, ok: true, pid: me.id })}>
+              Let them take it
+            </Blueprint>
+          </div>
+        </Blueprint>
+      ))}
 
       {onTeam && hol && (
         <Blueprint as="section" className="panel status-bar holiday-bar">
@@ -158,12 +189,11 @@ export default function MyWorkPage() {
           ) : away ? (
             <>
               <span>
-                <strong>{away.kind === "idle" ? "Task paused" : `On ${awayLabel(away.kind).toLowerCase()}`}</strong> since {fmtT(away.start).split(", ").pop()} ·{" "}
-                {fmtMin(Math.max(0, Math.round((now - away.start) / 60000)))}
-                {away.kind === "idle" ? " idle · the task timer is stopped and the time counts as idle" : cur ? " · the time isn’t counted on your task" : ""}
+                <strong>On {awayLabel(away.kind).toLowerCase()}</strong> since {fmtT(away.start).split(", ").pop()} · {fmtMin(Math.max(0, Math.round((now - away.start) / 60000)))}
+                {cur ? " · the time isn’t counted on your task" : ""}
               </span>
               <Blueprint as="button" className="btn btn-primary btn-36" style={{ padding: "0 16px" }} onClick={() => run({ type: "back", pid: me.id })}>
-                {away.kind === "idle" ? "Resume task" : "Back to work"}
+                Back to work
               </Blueprint>
             </>
           ) : (
@@ -173,7 +203,7 @@ export default function MyWorkPage() {
                   ? `Today is ${me.otDay === "holiday" ? "holiday duty" : "a rest day"}: the time you work counts as ${me.otDay === "holiday" ? "holiday duty" : "rest day"} overtime. Report it at End work.`
                   : me.avail === "offshift" && me.onToday
                   ? "Your shift is over. You can keep taking tasks as overtime and report it at End work."
-                  : "Away from tasks? Log it so utilization stays accurate."}
+                  : "Stepping away? Tap what you’re doing:"}
               </span>
               <div className="row" style={{ gap: 6 }}>
                 {AWAY.map(([k, l]) => (
@@ -181,7 +211,7 @@ export default function MyWorkPage() {
                     {l}
                   </button>
                 ))}
-                <button className="btn btn-secondary btn-36" style={{ marginLeft: 10 }} disabled={!!cur} title={cur ? "Resolve your ticket or set it to pending first" : undefined} onClick={() => setDialog({ kind: "endWork" })}>
+                <button className="btn btn-secondary btn-36" style={{ marginLeft: 10 }} disabled={!!cur} title={cur ? "Resolve your ticket or set it to pending first" : undefined} onClick={() => (otAllowed(data, me, now) ? setDialog({ kind: "endWork" }) : run({ type: "endWork", otMin: 0, pid: me.id }))}>
                   End work
                 </button>
               </div>
@@ -195,7 +225,7 @@ export default function MyWorkPage() {
           <div className="current-top">
             <div>
               <div className="task-meta">
-                {away?.kind === "idle" ? <span className="tag tag-amber">Paused</span> : <span className="tag tag-accent">In progress</span>}
+                <span className="tag tag-accent">In progress</span>
                 <span className={"tag " + c.prCls}>{c.priority}</span>
                 <span>
                   {cur.id} · {c.path} · {c.sourceLabel}
@@ -213,17 +243,11 @@ export default function MyWorkPage() {
               )}
             </div>
             <div className="row">
-              {away?.kind === "idle" ? (
-                <button className="btn btn-secondary btn-md" onClick={() => run({ type: "back", pid: me.id })}>
-                  <Icon name="play" size={16} />
-                  Resume
-                </button>
-              ) : (
+              {canPause(s) && (
                 <button
                   className="btn btn-secondary btn-md"
-                  disabled={!!away}
-                  title="Stop the timer for a moment; the time counts as idle"
-                  onClick={() => run({ type: "away", kind: "idle", pid: me.id })}
+                  title="Stop this task’s timer and put it back on your list, so you can work on another one"
+                  onClick={() => run({ type: "pauseTask", id: cur.id, pid: me.id })}
                 >
                   Pause
                 </button>
@@ -244,7 +268,9 @@ export default function MyWorkPage() {
           </div>
           <div className="current-body">
             <div className="kv">
-              {c.fieldRows.map((f) => [<span key={f.label + "k"}>{f.label}</span>, <span key={f.label + "v"}>{f.value}</span>])}
+              {c.fieldRows
+                .filter((f) => f.value !== "—" && f.label !== "Finished" && f.label !== "Time worked")
+                .map((f) => [<span key={f.label + "k"}>{f.label}</span>, <span key={f.label + "v"}>{f.value}</span>])}
             </div>
             {cur.email && <EmailBox email={cur.email} received={c.receivedText} />}
           </div>
@@ -255,24 +281,56 @@ export default function MyWorkPage() {
             <h2>{idleTitle}</h2>
             <span>{idleText}</span>
           </div>
-          {showStart && (
+          {elsewhere ? (
+            <Blueprint as="button" className="btn btn-primary btn-lg" onClick={() => setTeam(elsewhere.team)}>
+              Go to {elsewhere.teamName}
+            </Blueprint>
+          ) : showStart ? (
             <Blueprint as="button" className="btn btn-primary btn-lg" disabled={unavailable || !!away || !!ended} onClick={() => run({ type: "startWork", pid: me.id })}>
               <Icon name="play" size={20} />
               Start work
             </Blueprint>
-          )}
+          ) : s.mode === "self" && me.trades.length > 0 ? (
+            <Link className="btn btn-primary btn-lg" href="/workload/queue">
+              Go to Queue
+            </Link>
+          ) : manager ? (
+            <span className="row">
+              <Link className="btn btn-primary btn-lg" href={isAdmin ? "/workload/admin/queue" : "/workload/queue"}>
+                Open the queue
+              </Link>
+              <Link className="btn btn-secondary btn-lg" href="/workload/dashboard">
+                Dashboard
+              </Link>
+            </span>
+          ) : null}
         </Blueprint>
+      )}
+
+      {mainK.length > 0 && (
+        <section style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+          <h2 className="h2">Your day so far</h2>
+          <div className="grid-kpi">
+            {mainK.map((k) => (
+              <Kpi key={k.k} {...k} />
+            ))}
+          </div>
+          {moreK.length > 0 && (
+            <details className="howto">
+              <summary>More numbers</summary>
+              <div className="grid-kpi" style={{ marginTop: 10 }}>
+                {moreK.map((k) => (
+                  <Kpi key={k.k} {...k} />
+                ))}
+              </div>
+            </details>
+          )}
+        </section>
       )}
 
       {myList.length > 0 && (
         <section className="panel" style={{ padding: 0, gap: 8 }}>
-          <h2 className="h2">
-            {s.mode !== "self"
-              ? "Assigned to you and pending"
-              : help.length
-                ? "Your trades are clear — help with other trades (your system first)"
-                : "Assigned to you and available to pick"}
-          </h2>
+          <h2 className="h2">Assigned to you and pending</h2>
           <Blueprint className="scroll-x">
             <TaskTable variant="mine" rows={myList.map((t) => taskRow(data, t, me.id, false, now))} />
           </Blueprint>

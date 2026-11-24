@@ -8,8 +8,10 @@ import { useWorkload } from "@/lib/workload/store";
 import type { Settings, WorkingTime } from "@/lib/workload/types";
 
 /** Number input that commits on blur, so typing isn't interrupted by clamping. */
-function NumInput({ id, value, onCommit, step, min, width, placeholder }: {
+function NumInput({ id, label, value, onCommit, step, min, width, placeholder }: {
   id?: string;
+  /** For inputs in a table, which have no visible label of their own. */
+  label?: string;
   value: number | string;
   onCommit: (raw: string) => void;
   step?: number;
@@ -20,6 +22,7 @@ function NumInput({ id, value, onCommit, step, min, width, placeholder }: {
   return (
     <input
       id={id}
+      aria-label={label}
       key={String(value)}
       className="input"
       type="number"
@@ -76,6 +79,40 @@ export default function TargetsPage() {
           </div>
         </div>
       </Blueprint>
+      <Blueprint as="section" className="panel" style={{ gap: 10 }}>
+        <h2 className="h2">Overtime pre-approval</h2>
+        <label className="check-row">
+          <input
+            type="checkbox"
+            className="check"
+            checked={!!s.otPrompt?.on}
+            onChange={() => set({ otPrompt: { before: 2, queue: 5, due: 1, ...s.otPrompt, on: !s.otPrompt?.on } })}
+          />
+          <span>
+            <strong>Ask members before the end of their shift whether they expect overtime</strong>
+            <span className="small">
+              When their queue is still busy, a pop-up asks Yes or No with remarks. Only after a Yes can they report overtime at End work (holiday duty and rest days
+              always can); with No, End work just ends the day. Leads see the answers on the Overtime page.
+            </span>
+          </span>
+        </label>
+        {s.otPrompt?.on && (
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(190px,1fr))", gap: 12, alignItems: "end" }}>
+            <div className="field">
+              <label htmlFor="ot-before">Ask this many hours before the shift ends</label>
+              <NumInput id="ot-before" step={0.5} value={s.otPrompt.before} onCommit={(v) => set({ otPrompt: { ...s.otPrompt!, before: Math.min(8, Math.max(0.5, Number(v) || 2)) } })} />
+            </div>
+            <div className="field">
+              <label htmlFor="ot-queue">…when at least this many tasks wait in their trades</label>
+              <NumInput id="ot-queue" value={s.otPrompt.queue} onCommit={(v) => set({ otPrompt: { ...s.otPrompt!, queue: Math.max(1, Math.round(Number(v) || 5)) } })} />
+            </div>
+            <div className="field">
+              <label htmlFor="ot-due">…or this many are due by the end of the shift or overdue</label>
+              <NumInput id="ot-due" value={s.otPrompt.due} onCommit={(v) => set({ otPrompt: { ...s.otPrompt!, due: Math.max(1, Math.round(Number(v) || 1)) } })} />
+            </div>
+          </div>
+        )}
+      </Blueprint>
       <Blueprint as="section" className="panel">
         <h2 className="h2">Productivity is measured by</h2>
         <div style={{ display: "flex", gap: 12, alignItems: "end", flexWrap: "wrap" }}>
@@ -121,6 +158,7 @@ export default function TargetsPage() {
                   <td>{data.people.filter((p) => p.trades[0] === t.id).length}</td>
                   <td>
                     <NumInput
+                      label={`${trPathOf(data.org, t.id)} target per day`}
                       min={0}
                       width={100}
                       value={s.targets[t.id] ?? 0}
@@ -135,7 +173,7 @@ export default function TargetsPage() {
         <Blueprint as="section" className="panel tight">
           <h2 className="h2">Member overrides</h2>
           <span style={{ fontSize: 13, color: "var(--color-neutral-700)" }}>Leave blank to use the trade target, e.g. for new joiners on a lower target.</span>
-          <div style={{ maxHeight: 420, overflow: "auto" }}>
+          <div style={{ maxHeight: 420, overflow: "auto" }} tabIndex={0}>
             <table className="table">
               <thead>
                 <tr>
@@ -155,6 +193,7 @@ export default function TargetsPage() {
                       </td>
                       <td>
                         <NumInput
+                          label={`${p.name} own target`}
                           min={0}
                           width={100}
                           placeholder="—"

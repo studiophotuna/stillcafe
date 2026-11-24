@@ -5,7 +5,7 @@ export type AllocationMode = "fifo" | "self" | "manual" | "rr";
 export type OrderRule = "priority" | "received";
 export type Availability = "available" | "leave" | "offshift";
 export type FieldType = "text" | "number" | "date" | "select";
-export type ViewAs = "admin" | "employee";
+export type ViewAs = "admin" | "employee" | "lead" | "director";
 
 /**
  * A unit tasks are routed to: a trade, or a system / team that has no trades
@@ -18,7 +18,7 @@ export interface Trade {
 }
 
 /** Time away from tasks, or the end of the working day. */
-export type ActivityKind = "break" | "lunch" | "meeting" | "adhoc" | "training" | "idle" | "end";
+export type ActivityKind = "break" | "lunch" | "meeting" | "adhoc" | "training" | "idle" | "end" | "otplan";
 export type OtStatus = "pending" | "approved" | "declined";
 
 /**
@@ -40,6 +40,9 @@ export interface Activity {
   otSplit?: OtPart[] | null;
   /** The whole day was overtime: holiday duty or rest day OT (weekend / rest day worked). */
   otKind?: "holiday" | "restday" | null;
+  /** "otplan": the member's answer to the overtime pre-approval prompt, and their remarks. */
+  plan?: "yes" | "no" | null;
+  note?: string | null;
 }
 
 /** Part of a day's overtime: a process (trade id) and optionally a task type. */
@@ -138,6 +141,8 @@ export interface Task {
   cxReview?: CxReview | null;
   /** Why it was late: required when a ticket is resolved after its due time. */
   delay?: string | null;
+  /** Another member asking to take this task (the assignee lets them, or keeps it). */
+  claim?: { by: number; at: number } | null;
 }
 
 /** A complexity level: its own daily target (put first) and average handling time per contract. */
@@ -155,6 +160,12 @@ export interface Complexity {
   levels: CxLevel[];
   /** How far (in %) the handling time may differ from the expected time before it's questioned. Default 50. */
   tol?: number;
+  /**
+   * Over-productivity: flag a ticket when its contracts reach this % of a day's target or
+   * more (each level's count ÷ its daily target), e.g. 16 Complex at 3 a day = 533%.
+   * Default 100 (one ticket worth a full day); 0 = off.
+   */
+  fast?: number;
   /** Number field set to the total contracts (e.g. "No. of contracts"); default: the productivity field when it's a number. "" = none. */
   field?: string;
 }
@@ -205,6 +216,12 @@ export interface Settings {
   autoFeed: boolean;
   /** Members pick mode: members may pick several waiting tasks into their own list (still one in progress at a time). */
   multiPick?: boolean;
+  /**
+   * Helping other trades / systems before their own is clear: a member may take work
+   * elsewhere once this many tickets or fewer wait in their own trades (or system), as long as
+   * none of those is due today or overdue. 0 / missing: only once their own is empty.
+   */
+  helpBelow?: number;
   sla: Record<Priority, number>;
   mailbox: string;
   mailTrade: string;
@@ -228,8 +245,44 @@ export interface Settings {
   slaHolidays?: boolean;
   /** Request types with their own SLA. Tasks without a type use the standard SLA (by priority). */
   taskTypes?: TaskType[];
+  /**
+   * Overtime pre-approval: `before` hours before a member's shift ends, while the queue is
+   * still busy (at least `queue` tasks waiting in their trades, or `due` tasks due by the end
+   * of the shift or overdue), they're asked whether they expect overtime, with remarks.
+   * Only a Yes lets them report overtime at End work.
+   */
+  otPrompt?: { on: boolean; before: number; queue: number; due: number };
   /** Complexity of contracts in a ticket (Simple / Medium / Complex …), each with its own target and handling time. */
   complexity?: Complexity;
+  /** Business case: how the team bills (fixed per role and month, or per transaction) and the agreed rates. Admins only. */
+  billing?: Billing;
+}
+
+/** Roles as in the Calendar (rates for the fixed model are set per role). */
+export type BillRole = "member" | "specialist" | "senior" | "lead" | "srlead" | "supervisor" | "manager" | "director";
+
+export interface Billing {
+  /** How the team bills: "fixed" (billed FTE × monthly rate per role) or "unit" (transactions × price per task type). */
+  mode: "fixed" | "unit";
+  /** Currency of the rates, e.g. USD, EUR, PHP. */
+  currency: string;
+  /** Fixed: monthly rate per billed FTE, by role. */
+  roleRates: Partial<Record<BillRole, number>>;
+  /** Unit: price per transaction by task type id ("" = standard requests without a type). */
+  unitRates: Record<string, number>;
+  /** What one transaction is: "tasks" (each ticket counts 1) or a number field summed per ticket (e.g. contracts). */
+  unit: string;
+  /** The month a transaction counts in: when it was resolved (resolved tickets only) or when it was received (all tickets). */
+  when: "resolved" | "received";
+}
+
+/** A person's billed FTE per month of a year (Calendar › Headcount, with admin overrides). */
+export interface BillRow {
+  pid: number;
+  name: string;
+  level: BillRole;
+  /** 12 months; null = not in the team that month. */
+  billed: (number | null)[];
 }
 
 export interface Toast {

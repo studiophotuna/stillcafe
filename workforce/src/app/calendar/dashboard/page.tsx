@@ -10,6 +10,7 @@ import { addDays, dayOf, daysInMonth, fmt, fmtY, isWk, isoOf, rng2 } from "@/lib
 import type { Cell } from "@/lib/calendar/engine";
 import { useCalendar } from "@/lib/calendar/store";
 import { useCalView } from "@/lib/calendar/useCalView";
+import { waitsOn } from "@/lib/calendar/approvals";
 import type { Code } from "@/lib/calendar/types";
 
 export default function CalDashboardPage() {
@@ -17,7 +18,9 @@ export default function CalDashboardPage() {
   const v = useCalView();
   const c = s.cal;
   const { O } = c;
-  const { bid, unitId, unitLabel } = v;
+  const { unitId, unitLabel } = v;
+  // One team: its own approval status; several teams: the overall status.
+  const bid = v.cellBid;
   const mStart = isoOf(s.y, s.m, 1);
   const dates = Array.from({ length: daysInMonth(s.y, s.m) }, (_, i) => isoOf(s.y, s.m, i + 1));
   const act = s.data.people.filter((p) => v.inUnit(p) && c.alive(p, mStart));
@@ -26,13 +29,13 @@ export default function CalDashboardPage() {
   const ref = inMonth ? s.today : wdays.find((d) => !c.hols[d]) || wdays[0];
   const today = act.map((p) => ({ p, c: c.raw(p, ref, bid) }));
   const cnt = (f: (x: { c: Cell }) => boolean) => today.filter(f).length;
-  const pendingN = s.data.requests.filter((q) => q.approvals[bid] === "pending" && act.some((p) => p.id === q.pid)).length;
+  const pendingN = s.data.requests.filter((q) => v.scopeBranches.some((b) => waitsOn(c, q, b.id)) && act.some((p) => p.id === q.pid)).length;
   const kpis = [
     { k: "Headcount", v: act.length, m: unitLabel },
     { k: "In office", v: cnt((x) => x.c.code === "RTO"), m: fmt(ref) },
     { k: "Working from home", v: cnt((x) => x.c.code === "WFH"), m: fmt(ref) },
     { k: "Out", v: cnt((x) => OOO.includes(x.c.code as Code) && !x.c.pending), m: "Leave or business trip, " + fmt(ref) },
-    { k: "Pending approvals", v: pendingN, m: O.by[bid].name },
+    { k: "Pending approvals", v: pendingN, m: unitLabel },
   ];
   const grid = act.map((p) => ({ p, cells: wdays.map((d) => c.raw(p, d, bid)) }));
   let peak = 1;
@@ -54,7 +57,16 @@ export default function CalDashboardPage() {
     return tot ? Math.round((cells.filter((x) => x.code === code && !x.pending).length / tot) * 100) : 0;
   };
   const u = O.by[unitId];
-  const children = u.type === "branch" ? O.kids(unitId, "system").concat(O.kids(unitId, "trade")) : u.type === "system" ? O.kids(unitId, "trade") : [];
+  const children =
+    u.type === "branch"
+      ? O.kids(unitId, "system").concat(O.kids(unitId, "trade"))
+      : u.type === "system"
+        ? O.kids(unitId, "trade")
+        : u.type === "tower"
+          ? v.scopeBranches
+          : u.type === "dept"
+            ? O.kids(unitId, "tower").filter((t) => v.scopeBranches.some((b) => O.anc(b.id).includes(t.id)))
+            : [];
   const brk = children.map((n) => {
     const g = grid.filter((x) => O.inN(x.p, n.id));
     const all = g.flatMap((x) => x.cells);
@@ -66,7 +78,7 @@ export default function CalDashboardPage() {
   });
   const horizon = addDays(ref, 13);
   const upcoming = s.data.requests
-    .filter((q) => q.approvals[bid] && q.approvals[bid] !== "declined" && q.end >= ref && q.start <= horizon && act.some((p) => p.id === q.pid) && OOO.includes(q.type))
+    .filter((q) => (bid ? q.approvals[bid] && q.approvals[bid] !== "declined" : Object.values(q.approvals).some((x) => x !== "declined")) && q.end >= ref && q.start <= horizon && act.some((p) => p.id === q.pid) && OOO.includes(q.type))
     .sort((a, b) => a.start.localeCompare(b.start))
     .slice(0, 12);
   const leaving = act.filter((p) => p.resign && p.resign >= mStart);
@@ -169,7 +181,7 @@ export default function CalDashboardPage() {
         <Blueprint as="section" className="panel tight">
           <h2 className="h2">Out in the next two weeks</h2>
           {upcoming.map((q) => {
-            const pend = q.approvals[bid] === "pending";
+            const pend = bid ? q.approvals[bid] === "pending" : Object.values(q.approvals).includes("pending");
             return (
               <div key={q.id} className="list-row">
                 <Chip s={pend ? PEND : CODES[q.type]}>{q.type}</Chip>

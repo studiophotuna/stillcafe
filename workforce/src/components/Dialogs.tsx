@@ -2,8 +2,8 @@
 
 import { useEffect, useState } from "react";
 import { fieldOptions, trPathOf } from "@/lib/workload/constants";
-import { fmtT, nowMs } from "@/lib/workload/clock";
-import { due, fmtMin, missingRequired, otAvailMin, OT_KIND, type AssistOffer, slaText, otProcesses, suggestOtSplit, asksOtSplit, typesFor, cxLevels, cxTotal, cxField } from "@/lib/workload/engine";
+import { H, TZ_OFFSET_H, fmtT, nowMs } from "@/lib/workload/clock";
+import { checkRows, due, fmtMin, missingRequired, ticketField, otAvailMin, OT_KIND, type AssistOffer, slaText, otProcesses, suggestOtSplit, asksOtSplit, typesFor, cxLevels, cxTotal, cxField, cxOn, cxOver, personOf, otAllowed } from "@/lib/workload/engine";
 import { useWorkload } from "@/lib/workload/store";
 import type { Priority, Task, OtPart } from "@/lib/workload/types";
 import { assignOptions, taskDetail } from "@/lib/workload/view";
@@ -59,8 +59,8 @@ export function EmailBox({ email, received }: { email: NonNullable<Task["email"]
 }
 
 function TaskDialog({ id }: { id: string }) {
-  const { data, now, run, me, isAdmin, setDialog } = useWorkload();
-  const t = data.tasks.find((x) => x.id === id);
+  const { data, now, run, me, isAdmin, setDialog, taskById } = useWorkload();
+  const t = taskById(id);
   if (!t) return null;
   const v = taskDetail(data, t, now);
   const close = () => setDialog(null);
@@ -191,6 +191,11 @@ function TaskDialog({ id }: { id: string }) {
               Resume
             </button>
           )}
+          {isAdmin && t.status === "done" && (
+            <button className="btn btn-secondary btn-40" onClick={() => setDialog({ kind: "editTicket", id })}>
+              Edit ticket
+            </button>
+          )}
           <button className="btn btn-secondary btn-40" onClick={close}>
             Close
           </button>
@@ -253,8 +258,8 @@ function HoldDialog({ id }: { id: string }) {
 }
 
 function DelayDialog({ id }: { id: string }) {
-  const { run, setDialog, data } = useWorkload();
-  const t = data.tasks.find((x) => x.id === id);
+  const { run, setDialog, data, taskById } = useWorkload();
+  const t = taskById(id);
   const [delay, setDelay] = useState(t?.delay ?? "");
   const close = () => setDialog(null);
   return (
@@ -302,8 +307,8 @@ function DelayDialog({ id }: { id: string }) {
 }
 
 function DoneDialog({ id }: { id: string }) {
-  const { data, run, me, setDialog } = useWorkload();
-  const t = data.tasks.find((x) => x.id === id);
+  const { data, run, me, setDialog, taskById } = useWorkload();
+  const t = taskById(id);
   const [vals, setVals] = useState<Task["fields"]>(() => ({ ...(t?.fields ?? {}) }));
   // Complexity: contracts per level; with a number field as the productivity basis, that field is their total.
   const levels = cxLevels(data.settings);
@@ -350,7 +355,7 @@ function DoneDialog({ id }: { id: string }) {
         {levels.length > 0 && (
           <div className="ot-split">
             <strong>Contracts by complexity *</strong>
-            <span className="small">How many contracts of each complexity this ticket had, e.g. 1 Simple and 2 Complex. Each counts toward its own target.</span>
+            <span className="small">How many of each did this ticket have? e.g. 1 Simple, 2 Complex.</span>
             <div style={{ display: "grid", gridTemplateColumns: `repeat(${Math.min(levels.length, 4)}, 1fr)`, gap: 10 }}>
               {levels.map((l) => (
                 <div className="field" key={l.id}>
@@ -437,9 +442,13 @@ function AssistDialog({ offer }: { offer: AssistOffer }) {
     <Modal onClose={close} width={500}>
       <div className="dialog-scroll" style={{ gap: 12, padding: 20 }}>
         <div className="dialog-title" style={{ fontSize: 26 }}>
-          Your trades are clear
+          {offer.own ? "Help other trades?" : "Your trades are clear"}
         </div>
-        <span>Nothing is waiting in your trades right now. Will you help with other trades’ volume?</span>
+        <span>
+          {offer.own
+            ? `Only ${offer.own} ${offer.own === 1 ? "task waits" : "tasks wait"} in your trades and none is due today. You can help with other trades’ volume or carry on with yours.`
+            : "Nothing is waiting in your trades right now. Will you help with other trades’ volume?"}
+        </span>
         <ul style={{ margin: 0, paddingLeft: 18, fontSize: 14, lineHeight: 1.6 }}>
           {offer.system > 0 && (
             <li>
@@ -449,8 +458,14 @@ function AssistDialog({ offer }: { offer: AssistOffer }) {
           {offer.team > 0 && <li>{offer.team} waiting elsewhere in the team</li>}
         </ul>
         <div className="dialog-actions" style={{ gap: 10 }}>
-          <button className="btn btn-secondary btn-40" onClick={close}>
-            Not now
+          <button
+            className="btn btn-secondary btn-40"
+            onClick={() => {
+              close();
+              if (offer.own) run({ type: "startWork", pid: me.id, assist: "own" });
+            }}
+          >
+            {offer.own ? "Carry on with mine" : "Not now"}
           </button>
           <Blueprint
             as="button"
@@ -477,7 +492,7 @@ function EndWorkDialog() {
   const { data, run, me, setDialog } = useWorkload();
   const [nowAt] = useState(() => nowMs());
   // Holiday duty / rest day: all time worked today; otherwise the time past the shift.
-  const past = otAvailMin(data, me, nowAt);
+  const past = otAllowed(data, me, nowAt) ? otAvailMin(data, me, nowAt) : 0;
   const [h, setH] = useState(() => String(Math.floor(past / 60)));
   const [m, setM] = useState(() => String(past % 60));
   const close = () => setDialog(null);
@@ -610,8 +625,10 @@ export function Dialogs() {
   const { dialog } = useWorkload();
   if (!dialog) return null;
   if (dialog.kind === "endWork") return <EndWorkDialog />;
+  if (dialog.kind === "addTask") return <AddTaskDialog />;
   if (dialog.kind === "assist") return <AssistDialog offer={dialog.offer} />;
   if (dialog.kind === "task") return <TaskDialog key={dialog.id} id={dialog.id} />;
+  if (dialog.kind === "editTicket") return <EditTicketDialog key={dialog.id} id={dialog.id} />;
   if (dialog.kind === "hold") return <HoldDialog key={dialog.id} id={dialog.id} />;
   if (dialog.kind === "delay") return <DelayDialog key={dialog.id} id={dialog.id} />;
   return <DoneDialog key={dialog.id} id={dialog.id} />;
@@ -628,5 +645,343 @@ export function Toasts() {
         </Blueprint>
       ))}
     </div>
+  );
+}
+
+/** datetime-local value in team time, and back. */
+const toLocal = (ms: number | null) => (ms === null ? "" : new Date(ms + TZ_OFFSET_H * H).toISOString().slice(0, 16));
+const fromLocal = (v: string) => (v ? Date.parse(v + ":00Z") - TZ_OFFSET_H * H : NaN);
+
+/**
+ * Edit ticket (Workload admins, resolved tickets): everything on the ticket. Changes are
+ * recorded in its history; the original email can't be changed.
+ */
+function EditTicketDialog({ id }: { id: string }) {
+  const { data, run, me, isAdmin, setDialog, taskById } = useWorkload();
+  const t = taskById(id);
+  const s = data.settings;
+  const levels = cxOn(s) ? cxLevels(s) : [];
+  const [f, setF] = useState(() => ({
+    title: t?.title ?? "",
+    trade: t?.trade ?? "",
+    pr: (t?.pr ?? "normal") as Priority,
+    ttype: t?.ttype ?? "",
+    received: toLocal(t?.received ?? null),
+    startedAt: toLocal(t?.startedAt ?? null),
+    doneAt: toLocal(t?.doneAt ?? null),
+    assignee: t?.assignee === null || t?.assignee === undefined ? "" : String(t.assignee),
+    otMin: String(t?.otMin ?? 0),
+    delay: t?.delay ?? "",
+  }));
+  const [cx, setCx] = useState<Record<string, string>>(() => Object.fromEntries(levels.map((l) => [l.id, t?.cx?.[l.id] ? String(t.cx[l.id]) : ""])));
+  const [vals, setVals] = useState<Record<string, string>>(() => Object.fromEntries(data.fields.map((x) => [x.key, String(t?.fields[x.key] ?? "")])));
+  if (!t || !isAdmin || t.status !== "done") return null;
+  const up = (patch: Partial<typeof f>) => setF((x) => ({ ...x, ...patch }));
+  const close = () => setDialog({ kind: "task", id });
+  const counts = Object.fromEntries(levels.map((l) => [l.id, Math.max(0, Math.round(Number(cx[l.id]) || 0))]));
+  const cf = levels.length && cxTotal(counts) > 0 ? cxField(data) : undefined;
+  const types = typesFor(s, f.trade);
+  const over = levels.length ? cxOver(data, { ...t, cx: counts }) : null;
+  const people = data.people.some((p) => p.id === t.assignee) ? data.people : data.people.concat(t.assignee !== null ? [{ id: t.assignee, name: "Former member" } as never] : []);
+  const grid = { display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(min(100%,220px),1fr))", gap: 10 } as const;
+  const head = (x: string) => <strong style={{ fontSize: 13, marginTop: 6 }}>{x}</strong>;
+  const save = () => {
+    const edit = {
+      title: f.title,
+      trade: f.trade,
+      pr: f.pr,
+      ttype: f.ttype,
+      // Times only when changed (the picker has no seconds).
+      ...(f.received !== toLocal(t.received) ? { received: fromLocal(f.received) } : {}),
+      ...(f.startedAt && f.startedAt !== toLocal(t.startedAt) ? { startedAt: fromLocal(f.startedAt) } : {}),
+      ...(f.doneAt !== toLocal(t.doneAt) ? { doneAt: fromLocal(f.doneAt) } : {}),
+      ...(f.assignee !== "" && personOf(data, Number(f.assignee)) ? { assignee: Number(f.assignee) } : {}),
+      otMin: Math.max(0, Math.round(Number(f.otMin) || 0)),
+      delay: f.delay,
+      ...(levels.length ? { cx: counts } : {}),
+    };
+    run({ type: "editDone", id, vals, by: me.id, edit });
+    close();
+  };
+  return (
+    <Modal onClose={close} width={760}>
+      <div className="dialog-scroll" style={{ padding: 20, gap: 10 }}>
+        <div className="dialog-title" style={{ fontSize: 24 }}>
+          Edit ticket · {t.id}
+        </div>
+        <span className="small">Every change is recorded in the ticket’s history. The SLA follows the priority and task type.</span>
+        {head("Ticket")}
+        <div className="field">
+          <label htmlFor="et-title">Title</label>
+          <input id="et-title" className="input" maxLength={300} value={f.title} onChange={(e) => up({ title: e.target.value })} />
+        </div>
+        <div style={grid}>
+          <div className="field">
+            <label htmlFor="et-trade">System › Trade</label>
+            <select id="et-trade" className="input" value={f.trade} onChange={(e) => up({ trade: e.target.value, ttype: typesFor(s, e.target.value).some((y) => y.id === f.ttype) ? f.ttype : "" })}>
+              {data.org.trades.map((o) => (
+                <option key={o.id} value={o.id}>
+                  {trPathOf(data.org, o.id)}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div className="field">
+            <label htmlFor="et-pr">Priority</label>
+            <select id="et-pr" className="input" value={f.pr} onChange={(e) => up({ pr: e.target.value as Priority })}>
+              <option value="high">High</option>
+              <option value="normal">Normal</option>
+              <option value="low">Low</option>
+            </select>
+          </div>
+          <div className="field">
+            <label htmlFor="et-tt">Task type</label>
+            <select id="et-tt" className="input" value={f.ttype} onChange={(e) => up({ ttype: e.target.value })}>
+              <option value="">Standard request · SLA by priority</option>
+              {types.map((o) => (
+                <option key={o.id} value={o.id}>
+                  {o.name} · {slaText(o.sla)}
+                </option>
+              ))}
+            </select>
+          </div>
+        </div>
+        {head("Times and people")}
+        <div style={grid}>
+          <div className="field">
+            <label htmlFor="et-rec">Received</label>
+            <input id="et-rec" className="input" type="datetime-local" value={f.received} onChange={(e) => up({ received: e.target.value })} />
+          </div>
+          <div className="field">
+            <label htmlFor="et-st">Started</label>
+            <input id="et-st" className="input" type="datetime-local" value={f.startedAt} onChange={(e) => up({ startedAt: e.target.value })} />
+          </div>
+          <div className="field">
+            <label htmlFor="et-done">Resolved</label>
+            <input id="et-done" className="input" type="datetime-local" value={f.doneAt} onChange={(e) => up({ doneAt: e.target.value })} />
+          </div>
+          <div className="field">
+            <label htmlFor="et-by">Resolved by</label>
+            <select id="et-by" className="input" value={f.assignee} onChange={(e) => up({ assignee: e.target.value })}>
+              {people.map((p) => (
+                <option key={p.id} value={p.id} disabled={!personOf(data, p.id)}>
+                  {p.name}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div className="field">
+            <label htmlFor="et-ot">Overtime on this ticket (min)</label>
+            <input id="et-ot" className="input" type="number" min={0} max={960} value={f.otMin} onChange={(e) => up({ otMin: e.target.value })} />
+          </div>
+        </div>
+        <div className="field">
+          <label htmlFor="et-delay">Delay remarks</label>
+          <textarea id="et-delay" className="input" rows={2} maxLength={500} value={f.delay} onChange={(e) => up({ delay: e.target.value })} placeholder="Why it was resolved after its due time" />
+        </div>
+        {levels.length > 0 && (
+          <>
+            {head("Complexity")}
+            <div style={{ display: "grid", gridTemplateColumns: `repeat(${Math.min(levels.length, 4)}, 1fr)`, gap: 10 }}>
+              {levels.map((l) => (
+                <div className="field" key={l.id}>
+                  <label htmlFor={"et-cx-" + l.id}>
+                    {l.name}
+                    {l.target ? <span className="muted"> · {l.target} a day</span> : null}
+                  </label>
+                  <input id={"et-cx-" + l.id} className="input" type="number" min={0} value={cx[l.id] ?? ""} placeholder="0" onChange={(e) => setCx((x) => ({ ...x, [l.id]: e.target.value }))} />
+                </div>
+              ))}
+            </div>
+            {over && (
+              <span className="small">
+                {over.pct}% of a day’s target in this ticket{over.flag ? " · over the limit" : ""}
+              </span>
+            )}
+          </>
+        )}
+        {data.fields.length > 0 && head("Details")}
+        <div style={grid}>
+          {data.fields.map((x) => (
+            <div className="field" key={x.key}>
+              <label htmlFor={"et-f-" + x.key}>{x.label}</label>
+              {x.key === cf?.key ? (
+                <input id={"et-f-" + x.key} className="input" value={String(cxTotal(counts))} disabled title="Follows the complexity counts" />
+              ) : x.type === "select" && fieldOptions(x).length ? (
+                <select id={"et-f-" + x.key} className="input" value={vals[x.key] ?? ""} onChange={(e) => setVals((y) => ({ ...y, [x.key]: e.target.value }))}>
+                  <option value="">—</option>
+                  {fieldOptions(x).map((o) => (
+                    <option key={o} value={o}>
+                      {o}
+                    </option>
+                  ))}
+                  {vals[x.key] && !fieldOptions(x).includes(vals[x.key]) && <option value={vals[x.key]}>{vals[x.key]}</option>}
+                </select>
+              ) : (
+                <input
+                  id={"et-f-" + x.key}
+                  className="input"
+                  type={x.type === "number" ? "number" : x.type === "date" ? "date" : "text"}
+                  value={vals[x.key] ?? ""}
+                  onChange={(e) => setVals((y) => ({ ...y, [x.key]: e.target.value }))}
+                />
+              )}
+            </div>
+          ))}
+        </div>
+        {t.email && (
+          <>
+            {head("Original email (can’t be changed)")}
+            <EmailBox email={t.email} />
+          </>
+        )}
+        <div className="dialog-actions" style={{ gap: 10 }}>
+          <button className="btn btn-secondary btn-40" onClick={close}>
+            Cancel
+          </button>
+          <Blueprint as="button" className="btn btn-primary btn-40" style={{ padding: "0 18px" }} disabled={!f.title.trim() || !f.received || !f.doneAt} onClick={save}>
+            Save changes
+          </Blueprint>
+        </div>
+      </div>
+    </Modal>
+  );
+}
+
+/** Add task: one task typed in by hand, with every detail the queue shows. Same access as Upload tasks. */
+function AddTaskDialog() {
+  const { data, run, me, setDialog, now } = useWorkload();
+  const { org } = data;
+  const close = () => setDialog(null);
+  const [title, setTitle] = useState("");
+  const [trade, setTrade] = useState(org.trades.length === 1 ? org.trades[0].id : "");
+  const [pr, setPr] = useState<Priority>("normal");
+  const [ttype, setTtype] = useState("");
+  const [received, setReceived] = useState("");
+  const [vals, setVals] = useState<Task["fields"]>({});
+  const tr = org.trades.find((t) => t.id === trade);
+  const types = trade ? typesFor(data.settings, trade) : [];
+  // The same row an upload would carry, so the server checks it the same way.
+  const row = {
+    Title: title,
+    System: tr?.sys ? (org.systems.find((x) => x.id === tr.sys)?.name ?? "") : "",
+    Trade: tr?.name ?? "",
+    Priority: pr,
+    "Task type": types.find((x) => x.id === ttype)?.name ?? "",
+    Received: received.replace("T", " "),
+    ...Object.fromEntries(data.fields.map((f) => [f.label, vals[f.key] ?? ""])),
+  };
+  const [chk] = checkRows([row], data.fields, org, now, data.settings.taskTypes);
+  const miss = (title.trim() ? [] : ["Title"]).concat(trade ? [] : ["Trade"]).concat(missingRequired(data.fields, vals));
+  const err = miss.length ? "" : chk && !chk.ok ? chk.msg : "";
+  // Same ticket already in the list: warn, as it may be a duplicate.
+  const tf = ticketField(data);
+  const ref = tf ? String(vals[tf.key] ?? "").trim().toLowerCase() : "";
+  const dupe = ref ? data.tasks.find((t) => String(t.fields[tf!.key] ?? "").trim().toLowerCase() === ref) : undefined;
+  return (
+    <Modal onClose={close} width={560}>
+      <div className="dialog-scroll" style={{ gap: 12, padding: 20 }}>
+        <div className="dialog-title" style={{ fontSize: 26 }}>
+          Add task
+        </div>
+        <span className="muted">Type in a task that isn’t in the queue. It goes into the list like any uploaded task, with the same SLA.</span>
+        <div className="field">
+          <label htmlFor="add-title">Title *</label>
+          <input id="add-title" className="input" autoFocus value={title} maxLength={300} onChange={(e) => setTitle(e.target.value)} placeholder="What needs doing" />
+        </div>
+        <div className="field">
+          <label htmlFor="add-trade">{org.systems.length ? "System › Trade *" : "Trade *"}</label>
+          <select
+            id="add-trade"
+            className="input"
+            value={trade}
+            onChange={(e) => {
+              setTrade(e.target.value);
+              setTtype("");
+            }}
+          >
+            <option value="">Choose</option>
+            {org.trades.map((t) => (
+              <option key={t.id} value={t.id}>
+                {trPathOf(org, t.id)}
+              </option>
+            ))}
+          </select>
+        </div>
+        <div style={{ display: "grid", gridTemplateColumns: types.length ? "1fr 1fr" : "1fr", gap: 10 }}>
+          <div className="field">
+            <label htmlFor="add-pr">Priority *</label>
+            <select id="add-pr" className="input" value={pr} onChange={(e) => setPr(e.target.value as Priority)}>
+              <option value="high">High</option>
+              <option value="normal">Normal</option>
+              <option value="low">Low</option>
+            </select>
+          </div>
+          {types.length > 0 && (
+            <div className="field">
+              <label htmlFor="add-tt">Task type</label>
+              <select id="add-tt" className="input" value={ttype} onChange={(e) => setTtype(e.target.value)}>
+                <option value="">From the title (or standard)</option>
+                {types.map((x) => (
+                  <option key={x.id} value={x.id}>
+                    {x.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
+        </div>
+        <div className="field">
+          <label htmlFor="add-rec">Received (team time)</label>
+          <input id="add-rec" className="input" type="datetime-local" value={received} onChange={(e) => setReceived(e.target.value)} />
+          <span className="small">When the request actually came in; the due time counts from it. Leave blank for now.</span>
+        </div>
+        {data.fields.map((f) => {
+          const fid = "add-" + f.key;
+          const val = String(vals[f.key] ?? "");
+          const set = (v: string) => setVals((x) => ({ ...x, [f.key]: v }));
+          return (
+            <div className="field" key={f.key}>
+              <label htmlFor={fid}>{f.label + (f.required ? " *" : "")}</label>
+              {f.type === "select" ? (
+                <select id={fid} className="input" value={val} onChange={(e) => set(e.target.value)}>
+                  <option value="">Choose</option>
+                  {fieldOptions(f).map((o) => (
+                    <option key={o} value={o}>
+                      {o}
+                    </option>
+                  ))}
+                </select>
+              ) : (
+                <input id={fid} className="input" type={f.type === "number" ? "number" : f.type === "date" ? "date" : "text"} value={val} onChange={(e) => set(e.target.value)} />
+              )}
+            </div>
+          );
+        })}
+        {dupe && (
+          <span className="small" style={{ color: "var(--color-accent-800)" }}>
+            {tf!.label} {String(dupe.fields[tf!.key])} is already on {dupe.id}. Add it only if it’s a separate task.
+          </span>
+        )}
+        {(miss.length > 0 || err) && <span className="small">{err || `Still needed: ${miss.join(", ")}`}</span>}
+        <div className="dialog-actions" style={{ gap: 10 }}>
+          <button className="btn btn-secondary btn-40" onClick={close}>
+            Cancel
+          </button>
+          <Blueprint
+            as="button"
+            className="btn btn-primary btn-40"
+            style={{ padding: "0 18px" }}
+            disabled={miss.length > 0 || !!err}
+            onClick={() => {
+              run({ type: "addTask", row, by: me.id });
+              close();
+            }}
+          >
+            Add to queue
+          </Blueprint>
+        </div>
+      </div>
+    </Modal>
   );
 }
